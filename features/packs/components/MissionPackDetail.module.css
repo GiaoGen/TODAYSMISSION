@@ -1,0 +1,167 @@
+.root {
+  --detail-card-width: clamp(172px, 16vw, 236px);
+  --mission-card-width: clamp(160px, 16vw, 240px);
+  --detail-gap: clamp(20px, 2vw, 32px);
+
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  background: #f2f2f2;
+  color: #111;
+  cursor: grab;
+  overscroll-behavior: none;
+  touch-action: none;
+  user-select: none;
+}
+
+.root[data-dragging="true"] {
+  cursor: grabbing;
+}
+
+.root[data-phase="closing"] {
+  cursor: default;
+}
+
+.root:focus-visible {
+  outline: 2px solid #111;
+  outline-offset: -6px;
+}
+
+.hero {
+  position: absolute;
+  z-index: 20;
+  top: 50%;
+  left: 50%;
+  width: var(--detail-card-width);
+  aspect-ratio: var(--card-ratio);
+  opacity: 1;
+  transform: translate3d(-50%, -50%, 0) scale(1);
+  transform-origin: center;
+}
+
+.track {
+  position: absolute;
+  z-index: 10;
+  top: 50%;
+  left: 0;
+  display: flex;
+  width: max-content;
+  margin: 0;
+  padding: 0;
+  align-items: center;
+  gap: var(--detail-gap);
+  list-style: none;
+  transform: translate3d(0, -50%, 0);
+}
+
+.missionCard {
+  position: relative;
+  flex: 0 0 auto;
+  width: var(--mission-card-width);
+  aspect-ratio: var(--card-ratio);
+  opacity: 0;
+  transform: translate3d(var(--mission-collapsed-x, 0), 0, 0) scale(0.8);
+  transform-origin: center;
+}
+
+.root[data-phase="collapsed"] .hero,
+.root[data-phase="collapsed"] .missionCard,
+.root[data-phase="expanding"] .hero,
+.root[data-phase="expanding"] .missionCard,
+.root[data-phase="closing"] .hero,
+.root[data-phase="closing"] .missionCard {
+  will-change: transform, opacity;
+}
+
+.root[data-phase="expanding"] .hero {
+  opacity: 0;
+  transform: translate3d(-50%, -50%, 0) scale(0.88);
+  transition:
+    opacity 180ms ease-out 520ms,
+    transform 180ms cubic-bezier(0.4, 0, 1, 1) 520ms;
+  pointer-events: none;
+}
+
+.root[data-phase="expanding"] .missionCard {
+  opacity: 1;
+  transform: translate3d(0, 0, 0) scale(1);
+  transition:
+    transform 620ms cubic-bezier(0.2, 0.75, 0.24, 1),
+    opacity 260ms ease-out;
+  transition-delay: calc(700ms + var(--mission-delay));
+}
+
+.root[data-phase="settled"] .hero {
+  visibility: hidden;
+  opacity: 0;
+  transform: translate3d(-50%, -50%, 0) scale(0.88);
+  pointer-events: none;
+}
+
+.root[data-phase="settled"] .missionCard {
+  opacity: 1;
+  transform: translate3d(0, 0, 0) scale(1);
+}
+
+.root[data-phase="closing"] .hero {
+  visibility: visible;
+  opacity: 1;
+  transform: translate3d(-50%, -50%, 0) scale(1);
+  transition:
+    opacity 180ms ease-out 320ms,
+    transform 180ms cubic-bezier(0.2, 0.75, 0.24, 1) 320ms;
+  pointer-events: none;
+}
+
+.root[data-phase="closing"] .missionCard {
+  opacity: 0;
+  transform: translate3d(var(--mission-collapsed-x, 0), 0, 0) scale(0.8);
+  transition:
+    transform 540ms cubic-bezier(0.32, 0, 0.22, 1),
+    opacity 220ms ease-in 280ms;
+}
+
+.root[data-moving="true"] .track,
+.root[data-dragging="true"] .track {
+  will-change: transform;
+}
+
+@media (max-width: 899px) {
+  .root {
+    --detail-card-width: clamp(148px, 46vw, 196px);
+    --mission-card-width: clamp(210px, 70vw, 300px);
+    --detail-gap: clamp(18px, 5.5vw, 24px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root[data-phase="expanding"] .hero {
+    transform: translate3d(-50%, -50%, 0);
+    transition: opacity 120ms linear;
+  }
+
+  .root[data-phase="expanding"] .missionCard {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+    transition: opacity 120ms linear 120ms;
+  }
+
+  .root[data-phase="settled"] .missionCard {
+    transform: translate3d(0, 0, 0);
+  }
+
+  .root[data-phase="closing"] .hero {
+    transform: translate3d(-50%, -50%, 0);
+    transition: opacity 80ms linear 80ms;
+  }
+
+  .root[data-phase="closing"] .missionCard {
+    opacity: 0;
+    transform: translate3d(var(--mission-collapsed-x, 0), 0, 0);
+    transition:
+      opacity 80ms linear,
+      transform 120ms linear;
+  }
+}

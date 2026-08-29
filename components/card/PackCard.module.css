@@ -1,0 +1,17 @@
+.frame {
+  position: absolute;
+  inset: 0;
+  display: block;
+  overflow: hidden;
+  border: 1px solid rgb(0 0 0 / 16%);
+  border-radius: clamp(10px, 1.15vw, 16px);
+  background: #d8d8d8;
+  box-shadow:
+    0 20px 46px rgb(0 0 0 / 18%),
+    0 5px 14px rgb(0 0 0 / 12%);
+}
+
+.image {
+  object-fit: cover;
+  user-select: none;
+}
