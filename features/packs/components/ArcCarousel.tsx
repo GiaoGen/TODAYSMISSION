@@ -27,10 +27,11 @@ import {
 import {
   getPackCarouselReturnState,
   getInitialCarouselState,
-  type PackCarouselSnapshot,
   type InitialCarouselState,
 } from "@/features/packs/model/pack-carousel-return-state";
 import { COLLECTION_LABELS, type PackCollection } from "@/features/packs/model/home-carousel-state";
+import type { CarouselHandle } from "@/features/packs/model/carousel-handle";
+import { CAROUSEL_SNAP_SECONDS, CAROUSEL_SPRING_DAMPING_RATIO } from "@/features/packs/model/carousel-spring";
 import {
   getPackTransitionName,
   PACK_CLOSE_TRANSITION_TYPE,
@@ -44,9 +45,9 @@ const MAX_COUNT = 24;
 const DRAG_SPEED = 1;
 const DAMPING = 0.94;
 const MAX_ANGULAR_SPEED = 12;
-const SNAP_TIME_SECONDS = 0.8;
+const SNAP_TIME_SECONDS = CAROUSEL_SNAP_SECONDS;
 const SNAP_FROM_ANGULAR_SPEED = 1;
-const SNAP_SPRING_DAMPING_RATIO = 0.64;
+const SNAP_SPRING_DAMPING_RATIO = CAROUSEL_SPRING_DAMPING_RATIO;
 const PICK_TIME_MS = 550;
 const SCROLL_SPEED = 0.0022;
 const DRAG_CAPTURE_THRESHOLD = 5;
@@ -62,11 +63,7 @@ type ArcCarouselProps = {
   ref?: Ref<ArcCarouselHandle>;
 };
 
-export type ArcCarouselHandle = {
-  freezeAndSnapshot: () => PackCarouselSnapshot | null;
-  resume: () => void;
-  getElement: () => HTMLElement | null;
-};
+export type ArcCarouselHandle = CarouselHandle;
 
 type StageBounds = {
   left: number;

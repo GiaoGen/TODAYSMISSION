@@ -3,8 +3,8 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import {
   COLLECTION_LABELS,
-  getCarouselAssignments,
-  type PackCollection,
+  getSpareCollection,
+  type CarouselAssignments,
 } from "@/features/packs/model/home-carousel-state";
 import type { HomePreferences } from "@/features/packs/model/home-preferences";
 
@@ -14,9 +14,11 @@ type HomeUserMenuProps = {
   busy: boolean;
   loginName: string;
   theme: HomePreferences["theme"];
-  topCollection: PackCollection;
+  assignments: CarouselAssignments;
   onMenuChange: (open: boolean) => boolean;
-  onSwap: () => void;
+  onChangeTop: () => void;
+  onChangeBottom: () => void;
+  onReplaceTop: () => void;
   onThemeChange: () => void;
   onLogout: () => void;
 };
@@ -25,9 +27,11 @@ export function HomeUserMenu({
   busy,
   loginName,
   theme,
-  topCollection,
+  assignments,
   onMenuChange,
-  onSwap,
+  onChangeTop,
+  onChangeBottom,
+  onReplaceTop,
   onThemeChange,
   onLogout,
 }: HomeUserMenuProps) {
@@ -37,7 +41,7 @@ export function HomeUserMenu({
   const firstActionRef = useRef<HTMLButtonElement>(null);
   const wasOpenRef = useRef(false);
   const outsidePointerRef = useRef(false);
-  const assignments = getCarouselAssignments(topCollection);
+  const spareCollection = getSpareCollection(assignments);
 
   useLayoutEffect(() => {
     const dialog = dialogRef.current;
@@ -115,25 +119,33 @@ export function HomeUserMenu({
         <button
           className={styles.row}
           disabled={busy || phase === "closing"}
-          onClick={onSwap}
+          onClick={onChangeTop}
           ref={firstActionRef}
           type="button"
-          aria-label={`上轮盘：${COLLECTION_LABELS[assignments.top]}，点击与下轮盘交换 / Swap top carousel`}
+          aria-label={`上轮盘设置：${COLLECTION_LABELS[assignments.top]}，切换为${COLLECTION_LABELS[spareCollection]}并保存 / Change saved top carousel`}
         >
           <span>上轮盘</span>
           <span className={styles.value}>{COLLECTION_LABELS[assignments.top]}</span>
-          <span aria-hidden="true" className={styles.chevron} />
         </button>
         <button
           className={styles.row}
           disabled={busy || phase === "closing"}
-          onClick={onSwap}
+          onClick={onChangeBottom}
           type="button"
-          aria-label={`下轮盘：${COLLECTION_LABELS[assignments.bottom]}，点击与上轮盘交换 / Swap bottom carousel`}
+          aria-label={`下轮盘设置：${COLLECTION_LABELS[assignments.bottom]}，切换为${COLLECTION_LABELS[spareCollection]}并保存 / Change saved bottom carousel`}
         >
           <span>下轮盘</span>
           <span className={styles.value}>{COLLECTION_LABELS[assignments.bottom]}</span>
-          <span aria-hidden="true" className={styles.chevron} />
+        </button>
+        <button
+          className={styles.row}
+          disabled={busy || phase === "closing"}
+          onClick={onReplaceTop}
+          type="button"
+          aria-label={`临时将上轮盘切换为${COLLECTION_LABELS[spareCollection]}，不保存设置 / Temporarily preview on top carousel`}
+        >
+          <span>切换上轮盘</span>
+          <span className={styles.value}>{COLLECTION_LABELS[spareCollection]}</span>
         </button>
         <button
           aria-label="深色模式 / Dark mode"

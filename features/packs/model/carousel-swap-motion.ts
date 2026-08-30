@@ -17,9 +17,10 @@ export function animateCarouselPair(
   elements: Record<CarouselPlacement, HTMLElement>,
   phase: "exiting" | "entering",
   reducedMotion: boolean,
+  placements: readonly CarouselPlacement[] = ["top", "bottom"],
 ) {
   const startTime = elements.top.ownerDocument.timeline.currentTime;
-  const animations = (["top", "bottom"] as const).map((placement) => {
+  const animations = placements.map((placement) => {
     const animation = elements[placement].animate(
       getCarouselSwapKeyframes(placement, phase, reducedMotion),
       {

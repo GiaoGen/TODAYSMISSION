@@ -29,6 +29,22 @@ function wrapAngle(angle) {
 }
 
 for (const viewport of viewports) {
+  test(`${viewport.name}: gentler tilt opens inner corners without moving cards`, () => {
+    for (const placement of ["top", "bottom"]) {
+      const metrics = getCarouselMetrics({ ...viewport, placement });
+      const { stepAngle, radius, cardWidth, cardHeight, verticalDirection } = metrics;
+      const pose = getCarouselCardPose(1, metrics);
+
+      near(pose.x, metrics.centerX + Math.sin(stepAngle) * radius);
+      near(pose.y, metrics.centerY - verticalDirection * Math.cos(stepAngle) * radius);
+      near(pose.rotation, verticalDirection * stepAngle * 0.75);
+
+      const inwardReach = (tilt) =>
+        (cardWidth * Math.cos(tilt) + cardHeight * Math.sin(tilt)) / 2;
+      assert.ok(inwardReach(Math.abs(pose.rotation)) < inwardReach(stepAngle));
+    }
+  });
+
   test(`${viewport.name}: top is the exact horizontal-axis reflection`, () => {
     const bottom = getCarouselMetrics(viewport);
     const top = getCarouselMetrics({ ...viewport, placement: "top" });
@@ -117,4 +133,15 @@ test("the existing bottom card size and position are unchanged", () => {
   const tablet = getCarouselMetrics(viewports[3]);
   near(tablet.cardWidth, 246);
   near(getCarouselCardPose(0, tablet).y, 847.2);
+});
+
+test("card angular spacing is 15 percent tighter, including clamped layouts", () => {
+  const previousAngles = [0.42, 0.6, 308 / 540, 356.7 / 944, 0.54, 355.4 / 774, 0.42];
+
+  for (const [index, viewport] of viewports.entries()) {
+    for (const placement of ["top", "bottom"]) {
+      const metrics = getCarouselMetrics({ ...viewport, placement });
+      near(metrics.stepAngle, previousAngles[index] * 0.85);
+    }
+  }
 });

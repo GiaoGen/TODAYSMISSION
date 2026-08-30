@@ -6,11 +6,15 @@ import ts from "typescript";
 const componentFiles = {
   RootLayout: "app/layout.tsx",
   Home: "app/page.tsx",
+  HomeCarouselEntry: "features/packs/components/HomeCarouselEntry.tsx",
   HomePackCarousels: "features/packs/components/HomePackCarousels.tsx",
   HomeUserMenu: "features/packs/components/HomeUserMenu.tsx",
   ArcCarousel: "features/packs/components/ArcCarousel.tsx",
+  CalendarCarousel: "features/calendar/components/CalendarCarousel.tsx",
   PackDetailPage: "app/pack/[slug]/page.tsx",
   MissionPackDetail: "features/packs/components/MissionPackDetail.tsx",
+  MissionGallery: "features/packs/components/MissionGallery.tsx",
+  CompletedMissionsPage: "app/completed/[date]/page.tsx",
 };
 
 function readComponent(name) {
@@ -56,8 +60,12 @@ function routeBoundaries(componentName, route = []) {
   const branch = [...route, { name: componentName }];
 
   function visit(node, path) {
+    if (node.kind === ts.SyntaxKind.NullKeyword) return [];
     if (ts.isJsxText(node)) return [];
     if (ts.isJsxExpression(node) && !node.expression) return [];
+    if (ts.isJsxExpression(node)) return visit(node.expression, path);
+    if (ts.isParenthesizedExpression(node)) return visit(node.expression, path);
+    if (ts.isConditionalExpression(node)) return [...visit(node.whenTrue, path), ...visit(node.whenFalse, path)];
     if (ts.isJsxFragment(node)) return node.children.flatMap((child) => visit(child, path));
     assert.ok(ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node));
     const element = ts.isJsxElement(node) ? node.openingElement : node;
@@ -93,12 +101,16 @@ function hostElements(root, tagName) {
 
 test("home exposes both wheel boundaries before any route-owned DOM wrapper", () => {
   const boundaries = routeBoundaries("Home");
-  assert.equal(boundaries.length, 2);
-  assert.deepEqual(boundaries.map((boundary) => boundary.owner), ["ArcCarousel", "ArcCarousel"]);
-  const invocations = boundaries.map(({ path }) =>
+  // Both alternatives at each placement must expose their own boundary directly.
+  assert.equal(boundaries.length, 4);
+  assert.deepEqual(boundaries.map((boundary) => boundary.owner), ["CalendarCarousel", "ArcCarousel", "CalendarCarousel", "ArcCarousel"]);
+  const invocations = boundaries.filter(({ owner }) => owner === "ArcCarousel").map(({ path }) =>
     path.find((part) => part.name === "ArcCarousel invocation"));
   assert.deepEqual(invocations.map((call) => call.placement ?? "bottom"), ["top", "bottom"]);
   assert.deepEqual(invocations.map((call) => call.onOpenPack), ["{openPack}", "{openPack}"]);
+  const calendarCalls = boundaries.filter(({ owner }) => owner === "CalendarCarousel").map(({ path }) =>
+    path.find((part) => part.name === "CalendarCarousel invocation"));
+  assert.deepEqual(calendarCalls.map((call) => call.placement), ["top", "bottom"]);
   for (const { element } of boundaries) {
     assert.ok(attribute(element, "enter"));
     assert.ok(attribute(element, "exit"));
@@ -108,7 +120,14 @@ test("home exposes both wheel boundaries before any route-owned DOM wrapper", ()
 test("detail keeps its exit boundary above the content", () => {
   const boundaries = routeBoundaries("PackDetailPage");
   assert.equal(boundaries.length, 1);
-  assert.equal(boundaries[0].owner, "MissionPackDetail");
+  assert.equal(boundaries[0].owner, "MissionGallery");
+  assert.ok(attribute(boundaries[0].element, "exit"));
+});
+
+test("calendar day route shares the same gallery and exposes its exit boundary", () => {
+  const boundaries = routeBoundaries("CompletedMissionsPage");
+  assert.equal(boundaries.length, 1);
+  assert.equal(boundaries[0].owner, "MissionGallery");
   assert.ok(attribute(boundaries[0].element, "exit"));
 });
 

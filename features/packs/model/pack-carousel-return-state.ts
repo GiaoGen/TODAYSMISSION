@@ -1,6 +1,6 @@
 import type { PackSummary } from "@/data/contracts/pack-summary";
 import type { CarouselPlacement } from "./arc-carousel-geometry";
-import type { PackCollection } from "./home-carousel-state";
+import type { PackCollection, CarouselContent, CarouselSnapshot, HomeCarouselState } from "./home-carousel-state";
 
 export type PackCarouselSnapshot = {
   activeIndex: number;
@@ -10,10 +10,13 @@ export type PackCarouselSnapshot = {
 };
 
 export type PackCarouselReturnState = {
+  completedDate?: string;
   source: CarouselPlacement;
-  topCollection?: PackCollection;
+  topCollection?: CarouselContent;
+  bottomCollection?: CarouselContent;
+  snapshots?: HomeCarouselState["snapshots"];
   packId: string;
-  carousels: Record<CarouselPlacement, PackCarouselSnapshot | null>;
+  carousels: Record<CarouselPlacement, CarouselSnapshot | null>;
 };
 
 let returnState: PackCarouselReturnState | null = null;
@@ -35,6 +38,11 @@ export function subscribePackCarouselReturnState(listener: () => void) {
 export function setPackCarouselReturnState(state: PackCarouselReturnState) {
   returnState = {
     ...state,
+    snapshots: state.snapshots ? {
+      joined: state.snapshots.joined ? { ...state.snapshots.joined } : null,
+      all: state.snapshots.all ? { ...state.snapshots.all } : null,
+      calendar: state.snapshots.calendar ? { ...state.snapshots.calendar } : null,
+    } : undefined,
     carousels: {
       top: state.carousels.top ? { ...state.carousels.top } : null,
       bottom: state.carousels.bottom ? { ...state.carousels.bottom } : null,
@@ -73,9 +81,10 @@ export function resolveCarouselState(
   packs: readonly PackSummary[],
   maximumCount: number,
   collection: PackCollection,
-  saved: PackCarouselSnapshot | null,
+  snapshot: CarouselSnapshot | null,
   requestedPackId?: string,
 ): InitialCarouselState {
+  const saved = snapshot && "packId" in snapshot ? snapshot : null;
   const defaultCount = collection === "joined" ? maximumCount : Math.min(12, maximumCount);
   const defaultIndex = collection === "joined" && defaultCount < 6
     ? Math.floor(defaultCount / 2)

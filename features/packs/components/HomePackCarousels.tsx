@@ -4,7 +4,9 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import type { PackSummary } from "@/data/contracts/pack-summary";
+import type { MissionCalendarData } from "@/data/contracts/mission-calendar";
 import type { CarouselPlacement } from "@/features/packs/model/arc-carousel-geometry";
+import type { CarouselHandle } from "@/features/packs/model/carousel-handle";
 import {
   getPackCarouselReturnState,
   setPackCarouselReturnState,
@@ -12,11 +14,15 @@ import {
 } from "@/features/packs/model/pack-carousel-return-state";
 import {
   createHomeCarouselState,
-  exchangeHomeCarousels,
+  captureHomeCarousels,
+  selectHomeCarousel,
+  getChangedCarouselPlacements,
   getCarouselAssignments,
   type CarouselSwapPhase,
-  type HomeCarouselState,
+  type HomeCarouselSelection,
+  type CarouselSelectionAction,
 } from "@/features/packs/model/home-carousel-state";
+import { carouselSettingsStore } from "@/features/packs/model/carousel-settings";
 import { animateCarouselPair } from "@/features/packs/model/carousel-swap-motion";
 import {
   getHomePreferences,
@@ -24,33 +30,37 @@ import {
   type HomePreferences,
 } from "@/features/packs/model/home-preferences";
 import { PACK_OPEN_TRANSITION_TYPE } from "@/features/packs/model/pack-transition";
-import { ArcCarousel, type ArcCarouselHandle } from "./ArcCarousel";
+import { ArcCarousel } from "./ArcCarousel";
 import { HomeUserMenu } from "./HomeUserMenu";
+import { CalendarCarousel } from "@/features/calendar/components/CalendarCarousel";
+import { getDayGalleryHref, getDayGalleryId } from "@/features/calendar/model/calendar-day-transition";
 
-type HomePackCarouselsProps = {
+export type HomePackCarouselsProps = {
   packs: readonly PackSummary[];
   joinedPacks: readonly PackSummary[];
   mockLoginName: string;
+  calendar: MissionCalendarData;
 };
 
-type CarouselView = HomeCarouselState & { phase: CarouselSwapPhase };
+type CarouselView = HomeCarouselSelection & { phase: CarouselSwapPhase; changing: readonly CarouselPlacement[] };
 
-export function HomePackCarousels({ packs, joinedPacks, mockLoginName }: HomePackCarouselsProps) {
+export function HomePackCarousels({ packs, joinedPacks, mockLoginName, calendar }: HomePackCarouselsProps) {
   const router = useRouter();
   const [returnState] = useState(getPackCarouselReturnState);
-  const [view, setView] = useState<CarouselView>(() => ({
-    ...createHomeCarouselState(returnState), phase: "idle",
-  }));
+  const [view, setView] = useState<CarouselView>(() => {
+    const settings = carouselSettingsStore.read();
+    return { ...createHomeCarouselState(returnState, settings), settings, phase: "idle", changing: [] };
+  });
   const [preferences, setPreferences] = useState(getHomePreferences);
   const [ready, setReady] = useState(returnState === null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const topRef = useRef<ArcCarouselHandle>(null);
-  const bottomRef = useRef<ArcCarouselHandle>(null);
+  const topRef = useRef<CarouselHandle>(null);
+  const bottomRef = useRef<CarouselHandle>(null);
   const navigationLockRef = useRef(false);
   const swapLockRef = useRef(false);
   const menuOpenRef = useRef(false);
-  const pendingSwapRef = useRef<HomeCarouselState | null>(null);
-  const assignments = getCarouselAssignments(view.topCollection);
+  const pendingSwapRef = useRef<HomeCarouselSelection | null>(null);
+  const assignments = getCarouselAssignments(view.topCollection, view.bottomCollection);
   const collections = { joined: joinedPacks, all: packs };
   const busy = !ready || view.phase !== "idle";
 
@@ -92,11 +102,14 @@ export function HomePackCarousels({ packs, joinedPacks, mockLoginName }: HomePac
     let disposed = false;
     const phase = view.phase;
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const motion = animateCarouselPair({ top, bottom }, phase, reducedMotion);
+    const motion = animateCarouselPair(
+      { top, bottom }, phase, reducedMotion, view.changing,
+    );
     void motion.finished.then(() => {
       if (disposed) return;
       if (phase === "exiting" && pendingSwapRef.current) {
-        setView({ ...pendingSwapRef.current, phase: "entering" });
+        const next = pendingSwapRef.current;
+        setView((current) => ({ ...next, phase: "entering", changing: current.changing }));
         pendingSwapRef.current = null;
       } else {
         setView((current) => ({ ...current, phase: "idle" }));
@@ -106,7 +119,7 @@ export function HomePackCarousels({ packs, joinedPacks, mockLoginName }: HomePac
       disposed = true;
       motion.cancel();
     };
-  }, [view.phase, view.topCollection]);
+  }, [view.phase, view.topCollection, view.bottomCollection, view.changing]);
 
   const changeMenu = (open: boolean) => {
     if (open && (navigationLockRef.current || swapLockRef.current)) return false;
@@ -122,14 +135,23 @@ export function HomePackCarousels({ packs, joinedPacks, mockLoginName }: HomePac
     return true;
   };
 
-  const swapCollections = () => {
+  const changeCollection = (action: CarouselSelectionAction) => {
     if (navigationLockRef.current || swapLockRef.current) return;
-    swapLockRef.current = true;
-    pendingSwapRef.current = exchangeHomeCarousels(view, {
+    const captured = captureHomeCarousels(view, {
       top: topRef.current?.freezeAndSnapshot() ?? null,
       bottom: bottomRef.current?.freezeAndSnapshot() ?? null,
     });
-    setView((current) => ({ ...current, phase: "exiting" }));
+    const next = selectHomeCarousel({ ...captured, settings: view.settings }, action);
+    const changing = getChangedCarouselPlacements(view, next);
+    // Only the two settings rows write durable state. Preview never writes.
+    if (action !== "preview") carouselSettingsStore.save(next.settings);
+    if (changing.length === 0) {
+      setView({ ...next, phase: "idle", changing });
+      return;
+    }
+    swapLockRef.current = true;
+    pendingSwapRef.current = next;
+    setView((current) => ({ ...current, settings: next.settings, phase: "exiting", changing }));
   };
 
   const updatePreferences = (next: HomePreferences) => {
@@ -143,14 +165,17 @@ export function HomePackCarousels({ packs, joinedPacks, mockLoginName }: HomePac
     setReady(false);
 
     // Capture both live positions, including a wheel still coasting, in one event.
+    const carousels = {
+      top: topRef.current?.freezeAndSnapshot() ?? null,
+      bottom: bottomRef.current?.freezeAndSnapshot() ?? null,
+    };
     setPackCarouselReturnState({
       source,
       topCollection: view.topCollection,
+      bottomCollection: view.bottomCollection,
+      snapshots: captureHomeCarousels(view, carousels).snapshots,
       packId: pack.id,
-      carousels: {
-        top: topRef.current?.freezeAndSnapshot() ?? null,
-        bottom: bottomRef.current?.freezeAndSnapshot() ?? null,
-      },
+      carousels,
     });
     router.push(`/pack/${encodeURIComponent(pack.slug)}`, {
       scroll: false,
@@ -158,9 +183,40 @@ export function HomePackCarousels({ packs, joinedPacks, mockLoginName }: HomePac
     });
   };
 
+  const openCompletedDay = (date: string, source: CarouselPlacement) => {
+    if (navigationLockRef.current || swapLockRef.current || menuOpenRef.current || !calendar.completedOn.includes(date)) return;
+    navigationLockRef.current = true;
+    setReady(false);
+    const carousels = {
+      top: topRef.current?.freezeAndSnapshot() ?? null,
+      bottom: bottomRef.current?.freezeAndSnapshot() ?? null,
+    };
+    setPackCarouselReturnState({
+      source, completedDate: date, packId: getDayGalleryId(date), carousels,
+      topCollection: view.topCollection, bottomCollection: view.bottomCollection,
+      snapshots: captureHomeCarousels(view, carousels).snapshots,
+    });
+    router.push(getDayGalleryHref(date), {
+      scroll: false,
+      transitionTypes: [PACK_OPEN_TRANSITION_TYPE],
+    });
+  };
+
   return (
     <>
-      <ArcCarousel
+      {assignments.top === "calendar" ? (
+        <CalendarCarousel
+          key="top-calendar"
+          data={calendar}
+          placement="top"
+          onOpenDate={openCompletedDay}
+          returnDate={returnState?.source === "top" ? returnState.completedDate : undefined}
+          snapshot={view.snapshots.calendar}
+          interactionDisabled={busy || menuOpen}
+          swappingIn={view.phase === "entering" && view.changing.includes("top")}
+          ref={topRef}
+        />
+      ) : <ArcCarousel
         key={`top-${assignments.top}`}
         packs={collections[assignments.top]}
         placement="top"
@@ -171,11 +227,23 @@ export function HomePackCarousels({ packs, joinedPacks, mockLoginName }: HomePac
           returnState?.source === "top" ? returnState.packId : undefined,
         )}
         interactionDisabled={busy || menuOpen}
-        swappingIn={view.phase === "entering"}
+        swappingIn={view.phase === "entering" && view.changing.includes("top")}
         ref={topRef}
         onOpenPack={openPack}
-      />
-      <ArcCarousel
+      />}
+      {assignments.bottom === "calendar" ? (
+        <CalendarCarousel
+          key="bottom-calendar"
+          data={calendar}
+          placement="bottom"
+          onOpenDate={openCompletedDay}
+          returnDate={returnState?.source === "bottom" ? returnState.completedDate : undefined}
+          snapshot={view.snapshots.calendar}
+          interactionDisabled={busy || menuOpen}
+          swappingIn={view.phase === "entering" && view.changing.includes("bottom")}
+          ref={bottomRef}
+        />
+      ) : <ArcCarousel
         key={`bottom-${assignments.bottom}`}
         packs={collections[assignments.bottom]}
         collection={assignments.bottom}
@@ -185,17 +253,19 @@ export function HomePackCarousels({ packs, joinedPacks, mockLoginName }: HomePac
           returnState?.source === "bottom" ? returnState.packId : undefined,
         )}
         interactionDisabled={busy || menuOpen}
-        swappingIn={view.phase === "entering"}
+        swappingIn={view.phase === "entering" && view.changing.includes("bottom")}
         ref={bottomRef}
         onOpenPack={openPack}
-      />
+      />}
       <HomeUserMenu
         busy={busy}
         loginName={preferences.loggedOut ? "Guest" : mockLoginName}
         theme={preferences.theme}
-        topCollection={view.topCollection}
+        assignments={view.settings}
         onMenuChange={changeMenu}
-        onSwap={swapCollections}
+        onChangeTop={() => changeCollection("top")}
+        onChangeBottom={() => changeCollection("bottom")}
+        onReplaceTop={() => changeCollection("preview")}
         onThemeChange={() => updatePreferences({
           ...preferences,
           theme: preferences.theme === "light" ? "dark" : "light",

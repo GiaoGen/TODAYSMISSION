@@ -9,6 +9,7 @@
   height: 100dvh;
   overflow: hidden;
   background: var(--page-background);
+  transition: background-color var(--theme-transition-duration) var(--theme-transition-easing);
   color: #111;
   cursor: grab;
   overscroll-behavior: none;
@@ -19,6 +20,13 @@
 .root[data-dragging="true"] {
   cursor: grabbing;
 }
+
+.root[data-single="true"] { cursor: default; }
+
+/* A day's first Mission is the temporary carrier, not an extra Pack cover. */
+.root[data-kind="day"] .hero { width: var(--mission-card-width); }
+
+.root[data-single="true"] .hero { pointer-events: none; }
 
 .root[data-phase="closing"] {
   cursor: default;
@@ -73,6 +81,16 @@
 .root[data-phase="closing"] .hero,
 .root[data-phase="closing"] .missionCard {
   will-change: transform, opacity;
+}
+
+.root[data-kind="day"][data-phase="collapsed"] .missionCard,
+.root[data-kind="day"][data-phase="closing"] .missionCard {
+  transform: translate3d(var(--mission-collapsed-x, 0), 0, 0) scale(1);
+}
+
+.root[data-kind="day"][data-phase="expanding"] .hero {
+  transform: translate3d(-50%, -50%, 0) scale(1);
+  transition: opacity 180ms ease-out 700ms;
 }
 
 .root[data-phase="expanding"] .hero {
@@ -162,6 +180,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .root[data-kind="day"][data-phase="expanding"] .hero {
+    transition: opacity 120ms linear;
+  }
   .root[data-phase="expanding"] .hero {
     transform: translate3d(-50%, -50%, 0);
     transition: opacity 120ms linear;

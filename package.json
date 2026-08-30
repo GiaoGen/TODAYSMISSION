@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test tests/arc-carousel-geometry.test.mjs tests/pack-carousel-navigation.test.mjs tests/view-transition-boundaries.test.mjs tests/home-menu-state.test.mjs"
+    "test": "node --test tests/arc-carousel-geometry.test.mjs tests/pack-carousel-navigation.test.mjs tests/view-transition-boundaries.test.mjs tests/home-menu-state.test.mjs tests/calendar-carousel.test.mjs tests/calendar-input.test.mjs tests/carousel-settings.test.mjs tests/completed-missions.test.mjs"
   },
   "dependencies": {
     "next": "16.3.3",

@@ -4,4 +4,5 @@
   height: 100%;
   overflow: hidden;
   background: var(--page-background);
+  transition: background-color var(--theme-transition-duration) var(--theme-transition-easing);
 }

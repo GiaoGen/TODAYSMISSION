@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createHomeCarouselState,
-  exchangeHomeCarousels,
+  captureHomeCarousels,
+  selectHomeCarousel,
   getCarouselAssignments,
 } from "../features/packs/model/home-carousel-state.ts";
 import {
@@ -30,31 +31,35 @@ test("initial assignments are joined above and all below", () => {
   assert.deepEqual(getCarouselAssignments(state.topCollection), { top: "joined", bottom: "all" });
 });
 
-test("repeated swaps cannot select the same collection on both sides", () => {
-  let state = createHomeCarouselState(null);
+test("independent settings changes never select the same content on both sides", () => {
+  let state = { ...createHomeCarouselState(null), settings: { top: "joined", bottom: "all" } };
   for (let index = 0; index < 10; index++) {
-    const assignments = getCarouselAssignments(state.topCollection);
-    const byCollection = { joined: joinedSnapshot, all: allSnapshot };
-    state = exchangeHomeCarousels(state, {
+    const assignments = getCarouselAssignments(state.topCollection, state.bottomCollection);
+    const byCollection = { joined: joinedSnapshot, all: allSnapshot, calendar: null };
+    state = captureHomeCarousels(state, {
       top: byCollection[assignments.top], bottom: byCollection[assignments.bottom],
     });
-    const next = getCarouselAssignments(state.topCollection);
+    const action = index % 2 === 0 ? "top" : "bottom";
+    state = selectHomeCarousel(state, action);
+    const next = getCarouselAssignments(state.topCollection, state.bottomCollection);
     assert.notEqual(next.top, next.bottom);
-    assert.equal(next.top, assignments.bottom);
+    const other = action === "top" ? "bottom" : "top";
+    assert.equal(next[other], assignments[other]);
     assert.deepEqual(state.snapshots.joined, joinedSnapshot);
     assert.deepEqual(state.snapshots.all, allSnapshot);
   }
 });
 
 test("a reduced mock count and fractional winding travel with their collection", () => {
-  const state = exchangeHomeCarousels(createHomeCarouselState(null), {
+  let state = captureHomeCarousels({ ...createHomeCarouselState(null), settings: { top: "joined", bottom: "all" } }, {
     top: joinedSnapshot, bottom: allSnapshot,
   });
   assert.deepEqual(resolveCarouselState(packs, 24, "all", state.snapshots.all), {
     activeIndex: 7, count: 12, position: 31.2,
   });
   const changedJoined = snapshot("pack-2", 3, 1, 1.25);
-  const restored = exchangeHomeCarousels(state, { top: allSnapshot, bottom: changedJoined });
+  state = selectHomeCarousel(selectHomeCarousel(state, "top"), "bottom");
+  const restored = captureHomeCarousels(state, { top: null, bottom: changedJoined });
   assert.deepEqual(resolveCarouselState(joined, 5, "joined", restored.snapshots.joined), {
     activeIndex: 1, count: 3, position: 1.25,
   });

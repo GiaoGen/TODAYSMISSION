@@ -17,6 +17,9 @@ type CarouselMetricsInput = {
   width: number;
 };
 
+const CARD_SPACING_SCALE = 0.85;
+const CARD_TILT_SCALE = 0.35;
+
 function clamp(value: number, minimum: number, maximum: number) {
   return Math.min(maximum, Math.max(minimum, value));
 }
@@ -48,11 +51,13 @@ export function getCarouselMetrics({
       )
     : preferredActiveCenterY;
   const radius = height * (usesTabletScale ? 0.8 : usesTouchLayout ? 0.75 : 0.86);
-  const stepAngle = clamp(
-    (cardWidth + gap * 2.5) / radius,
-    usesTabletScale ? 0.36 : 0.42,
-    usesTabletScale ? 0.54 : 0.6,
-  );
+  // Scale after clamping so every viewport gets the same tighter spacing.
+  const stepAngle =
+    clamp(
+      (cardWidth + gap * 2.5) / radius,
+      usesTabletScale ? 0.36 : 0.42,
+      usesTabletScale ? 0.54 : 0.6,
+    ) * CARD_SPACING_SCALE;
 
   return {
     cardHeight,
@@ -76,7 +81,8 @@ export function getCarouselCardPose(
   return {
     x: metrics.centerX + Math.sin(angle) * metrics.radius,
     y: metrics.centerY - metrics.verticalDirection * Math.cos(angle) * metrics.radius,
-    rotation: metrics.verticalDirection * angle,
+    // Ease the artwork tilt independently of the arc to open the inner corners.
+    rotation: metrics.verticalDirection * angle * CARD_TILT_SCALE,
   };
 }
 

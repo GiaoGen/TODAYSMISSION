@@ -1,0 +1,448 @@
+import assert from "node:assert/strict";
+import { readFileSync, existsSync } from "node:fs";
+import { createRequire } from "node:module";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import vm from "node:vm";
+import test from "node:test";
+import ts from "typescript";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { getGalleryCopyCount } from "../features/packs/model/mission-gallery-layout.ts";
+import * as dayTransitions from "../features/calendar/model/calendar-day-transition.ts";
+import * as returnStates from "../features/packs/model/pack-carousel-return-state.ts";
+import { createHomeCarouselState } from "../features/packs/model/home-carousel-state.ts";
+import * as geometry from "../features/calendar/model/calendar-geometry.ts";
+import * as months from "../features/calendar/model/calendar-month.ts";
+
+const rootPath = fileURLToPath(new URL("../", import.meta.url));
+const require = createRequire(import.meta.url);
+const plain = value => JSON.parse(JSON.stringify(value));
+const read = file => readFileSync(path.join(rootPath, file), "utf8");
+const compile = source => ts.transpileModule(source, { compilerOptions: {
+  target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.CommonJS,
+} }).outputText;
+
+// Load actual repository/fixture/SSR code without adding a test runtime or browser.
+function loadModule(file, overrides = {}, cache = new Map(), globals = {}) {
+  const absolute = path.resolve(rootPath, file);
+  if (cache.has(absolute)) return cache.get(absolute);
+  const exports = {};
+  cache.set(absolute, exports);
+  vm.runInNewContext(compile(readFileSync(absolute, "utf8")), { ...globals, exports, require(name) {
+    if (name in overrides) return overrides[name];
+    if (name.endsWith(".css")) return { default: new Proxy({}, { get: (_, key) => key }) };
+    if (!name.startsWith(".") && !name.startsWith("@/")) return require(name);
+    const base = name.startsWith("@/") ? path.join(rootPath, name.slice(2)) : path.resolve(path.dirname(absolute), name);
+    const resolved = [base, `${base}.ts`, `${base}.tsx`].find(existsSync);
+    assert.ok(resolved, `Module must resolve: ${base}`);
+    return loadModule(resolved, overrides, cache, globals);
+  } }, { filename: absolute });
+  return exports;
+}
+
+const repository = loadModule("data/repositories/get-completed-missions.ts");
+const user = loadModule("data/repositories/get-mock-user.ts");
+const { MISSION_COMPLETION_FIXTURES: completions } = loadModule("data/fixtures/mission-completion-fixtures.ts");
+const { PACK_DETAIL_FIXTURES: packs } = loadModule("data/fixtures/pack-fixtures.ts");
+
+test("every orange date maps to exactly its completed Missions across Packs, not cover cards", () => {
+  assert.deepEqual(plain(user.getMockMissionCalendar().completedOn), plain(repository.getCompletionDates()));
+  const counts = new Set();
+  for (const date of repository.getCompletionDates()) {
+    const day = repository.getCompletedMissionsByDate(date);
+    const records = completions.filter(record => record.completedOn === date);
+    assert.equal(day.date, date);
+    assert.deepEqual(plain(day.missions.map(mission => mission.id)), plain(records.map(record => record.missionId)));
+    assert.equal(new Set(day.missions.map(mission => mission.id)).size, day.missions.length);
+    assert.ok(day.missions.every(mission => !packs.some(pack => pack.id === mission.id)));
+    if (day.missions.length > 1) assert.ok(new Set(records.map(record => record.packId)).size > 1);
+    counts.add(day.missions.length);
+  }
+  assert.deepEqual([...counts].sort((a, b) => a - b), [1, 2, 3, 5, 8]);
+  assert.equal(repository.getCompletedMissionsByDate("2026-08-28").missions.length, 1);
+  assert.equal(repository.getCompletedMissionsByDate("2026-08-26").missions.length, 8);
+});
+
+test("invalid dates, pre-registration days and days without completions cannot open a gallery", () => {
+  for (const date of ["", "2026-02-30", "2026-8-28", "2026-05-11", "2026-08-27", "../2026-08-28", "2099-01-01"]) {
+    assert.equal(repository.getCompletedMissionsByDate(date), null);
+  }
+});
+
+test("actual date route accepts async params, prerenders every recorded day and rejects empty dates", async () => {
+  const page = loadModule("app/completed/[date]/page.tsx", {
+    "next/navigation": { notFound() { throw new Error("not-found"); } },
+    "@/features/packs/components/MissionGallery": { MissionGallery: () => null },
+  });
+  assert.deepEqual(plain(page.generateStaticParams().map(item => item.date)), plain(repository.getCompletionDates()));
+  const element = await page.default({ params: Promise.resolve({ date: "2026-08-26" }) });
+  assert.equal(element.props.completedDate, "2026-08-26");
+  assert.equal(element.props.missions.length, 8);
+  assert.equal(element.props.hero.id, element.props.missions[0].id);
+  await assert.rejects(() => page.default({ params: Promise.resolve({ date: "2026-08-27" }) }), /not-found/);
+});
+
+test("actual day gallery renders exactly the day's card count, never loop copies or extra covers", () => {
+  const { MissionGallery } = loadModule("features/packs/components/MissionGallery.tsx", {
+    react: { ...require("react"), ViewTransition: ({ children }) => children },
+    "next/navigation": { useRouter: () => ({}) },
+    "@/components/card/PackCard": { PackCard: ({ pack }) => createElement("span", { "data-mission-id": pack.id }) },
+  });
+  for (const date of repository.getCompletionDates()) {
+    const day = repository.getCompletedMissionsByDate(date);
+    const html = renderToStaticMarkup(createElement(MissionGallery, {
+      id: dayTransitions.getDayGalleryId(date), title: date, hero: day.missions[0], missions: day.missions, completedDate: date,
+    }));
+    const track = html.match(/<ol\b[\s\S]*?<\/ol>/)?.[0];
+    assert.ok(track);
+    const primaryCards = [...track.matchAll(/<li\b([^>]*)>/g)].filter(match => !match[1].includes('aria-hidden="true"'));
+    assert.equal(primaryCards.length, day.missions.length);
+    assert.equal((track.match(/<li\b/g) ?? []).length, day.missions.length);
+  }
+});
+
+test("refresh/deep-link return opens the correct calendar month without mutating permanent settings", () => {
+  const contents = ["joined", "all", "calendar"];
+  for (const top of contents) for (const bottom of contents.filter(item => item !== top)) {
+    const settings = { top, bottom };
+    const saved = { ...settings };
+    const state = dayTransitions.createDirectDayReturnState("2026-07-11", settings);
+    const view = createHomeCarouselState(state, settings);
+    assert.deepEqual(settings, saved);
+    assert.equal(state.completedDate, "2026-07-11");
+    assert.equal(view.snapshots.calendar.month, "2026-07");
+    assert.notEqual(view.topCollection, view.bottomCollection);
+    assert.equal(state.source === "top" ? view.topCollection : view.bottomCollection, "calendar");
+    assert.equal(dayTransitions.getDayTransitionName(state.completedDate, state.source),
+      dayTransitions.getDayTransitionName(state.completedDate, returnStates.getPackEntrySource(state.packId, state)));
+  }
+});
+
+test("loop copies cover small lists on phone, tablet and ultrawide screens, while single stays single", () => {
+  for (const width of [320, 375, 820, 1180, 1440, 1920, 3840, 5120]) {
+    assert.equal(getGalleryCopyCount(1, width), 1);
+    for (const count of [2, 3, 5, 8]) {
+      const copies = getGalleryCopyCount(count, width);
+      assert.equal(copies % 2, 1);
+      const stride = 178;
+      const primary = Math.floor(copies / 2);
+      for (const fraction of [-.5, 0, .5]) {
+        const position = width / 2 - primary * count * stride - 80 + fraction * count * stride;
+        assert.ok(position <= 0, `${width}/${count}: left edge covered`);
+        assert.ok(position + (copies * count - 1) * stride + 160 >= width,
+          `${width}/${count}: right edge covered`);
+      }
+    }
+  }
+});
+
+test("calendar date markup keeps its open grid, adds curved hit targets and keyboard semantics only for recorded days", () => {
+  const { CalendarMonth } = loadModule("features/calendar/components/CalendarMonth.tsx", {
+    react: { ...require("react"), ViewTransition: ({ children }) => children },
+  });
+  for (const placement of ["top", "bottom"]) {
+    const props = {
+      month: months.monthNumber("2026-08"), range: months.getCalendarRange("2026-05-12", "2026-08-30"),
+      geometry: geometry.getCalendarGeometry(820, 1180, true, placement),
+      completedOn: new Set(["2026-08-28", "2026-08-26"]), onOpenDate() {},
+    };
+    const html = renderToStaticMarkup(createElement(CalendarMonth, props));
+    assert.equal((html.match(/class="rule"/g) ?? []).length, 12);
+    assert.equal((html.match(/role="button"/g) ?? []).length, 2);
+    assert.equal((html.match(/class="dayHitArea"/g) ?? []).length, 2);
+    assert.equal((html.match(/class="dayAnchor"/g) ?? []).length, 2);
+    assert.doesNotMatch(html, /role="img"|NaN|undefined/);
+    const hidden = renderToStaticMarkup(createElement(CalendarMonth, { ...props, active: false }));
+    assert.doesNotMatch(hidden, /role="button"|class="dayAnchor"|tabindex="0"/);
+    for (let row = 1; row <= 6; row++) for (let column = 0; column < 7; column++) {
+      const hitPath = geometry.calendarCellPath(row, column, props.geometry);
+      assert.equal((hitPath.match(/\bA\b/g) ?? []).length, 2);
+      assert.match(hitPath, /^M .+ Z$/);
+      assert.doesNotMatch(hitPath, /NaN|undefined/);
+    }
+  }
+});
+
+function findNode(node, predicate) {
+  if (predicate(node)) return node;
+  return ts.forEachChild(node, child => findNode(child, predicate));
+}
+
+test("actual home date handler snapshots both wheels and temporary content, rejects duplicate navigation and never saves settings", () => {
+  const source = ts.createSourceFile("HomePackCarousels.tsx", read("features/packs/components/HomePackCarousels.tsx"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const handler = findNode(source, node => ts.isVariableDeclaration(node) && node.name.getText(source) === "openCompletedDay").initializer;
+  for (const placement of ["top", "bottom"]) {
+    let captured;
+    const navigations = [];
+    const calendarSnapshot = { month: "2026-07", position: months.monthNumber("2026-07") + .08 };
+    const packSnapshot = { packId: "mock-pack-03", count: 12, activeIndex: 2, position: 26.2 };
+    const wheels = placement === "top" ? { top: calendarSnapshot, bottom: packSnapshot } : { top: packSnapshot, bottom: calendarSnapshot };
+    const state = {
+      navigationLockRef: { current: false }, swapLockRef: { current: false }, menuOpenRef: { current: false },
+      calendar: { completedOn: ["2026-07-11"] }, setReady() {},
+      topRef: { current: { freezeAndSnapshot: () => wheels.top } },
+      bottomRef: { current: { freezeAndSnapshot: () => wheels.bottom } },
+      view: { topCollection: placement === "top" ? "calendar" : "all", bottomCollection: placement === "bottom" ? "calendar" : "all" },
+      captureHomeCarousels: (_, rows) => ({ snapshots: { calendar: rows[placement], all: rows[placement === "top" ? "bottom" : "top"], joined: null } }),
+      setPackCarouselReturnState: value => { captured = value; },
+      ...dayTransitions, PACK_OPEN_TRANSITION_TYPE: "pack-open",
+      router: { push: (...args) => navigations.push(args) },
+    };
+    const run = vm.runInNewContext(compile(`(${handler.getText(source)})`), state);
+    run("2026-07-12", placement);
+    assert.equal(navigations.length, 0);
+    run("2026-07-11", placement);
+    run("2026-07-11", placement);
+    assert.equal(navigations.length, 1);
+    assert.equal(navigations[0][0], "/completed/2026-07-11");
+    assert.deepEqual(plain(navigations[0][1].transitionTypes), ["pack-open"]);
+    assert.deepEqual(plain(captured.carousels), wheels);
+    const restored = createHomeCarouselState(captured, { top: "joined", bottom: "all" });
+    assert.equal(restored.snapshots.calendar.position, calendarSnapshot.position);
+    assert.equal(restored.snapshots.all.position, 26.2);
+    assert.equal(placement === "top" ? restored.topCollection : restored.bottomCollection, "calendar");
+  }
+});
+
+// Execute the real gallery effect with deterministic DOM/RAF/timer stand-ins.
+// This verifies sequencing and cleanup, not browser rendering or visual quality.
+function galleryHarness(count, { reduced = false, saved = null, looping = false } = {}) {
+  const source = ts.createSourceFile("MissionGallery.tsx", read("features/packs/components/MissionGallery.tsx"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const component = source.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === "MissionGallery");
+  const effect = findNode(component, node => ts.isCallExpression(node) && node.expression.getText(source) === "useLayoutEffect" && node.arguments[0]?.getText(source).includes("const root = rootRef.current"));
+  const listeners = new Map();
+  const frames = new Map();
+  const timers = new Map();
+  const navigations = [];
+  let token = 0;
+  let now = 0;
+  let capture = null;
+  let returned = saved;
+  let finishCollapse;
+  const animationFinished = new Promise(resolve => { finishCollapse = resolve; });
+  class Element {
+    constructor(card = false) { this.card = card; }
+    closest() { return this.card ? this : null; }
+  }
+  const root = Object.assign(new Element(), {
+    clientWidth: 1920, dataset: {}, focus() {},
+    addEventListener: (name, handler) => listeners.set(name, handler),
+    removeEventListener: name => listeners.delete(name),
+    getAnimations: () => [{ finished: animationFinished }],
+    hasPointerCapture: id => capture === id,
+    setPointerCapture: id => { capture = id; }, releasePointerCapture: () => { capture = null; },
+  });
+  const copies = looping ? getGalleryCopyCount(count, root.clientWidth) : 1;
+  const cards = Array.from({ length: copies * count }, (_, index) => ({
+    offsetLeft: index * 272, offsetWidth: 240, style: { setProperty(name, value) { this[name] = value; } },
+  }));
+  const track = { style: {} };
+  const env = {
+    rootRef: { current: root }, trackRef: { current: track }, missionRefs: { current: cards },
+    primaryCopyRef: { current: Math.floor(copies / 2) }, measureRef: { current: null },
+    missionCount: count, looping, id: looping ? "mock-pack-01" : dayTransitions.getDayGalleryId("2026-08-28"),
+    completedDate: looping ? undefined : "2026-08-28",
+    performance: { now: () => now }, Element, styles: { missionCard: "missionCard" },
+    requestAnimationFrame: fn => { frames.set(++token, fn); return token; }, cancelAnimationFrame: id => frames.delete(id),
+    window: { matchMedia: () => ({ matches: reduced }), setTimeout: fn => { timers.set(++token, fn); return token; }, clearTimeout: id => timers.delete(id) },
+    ResizeObserver: class { observe() {} disconnect() {} },
+    router: { prefetch() {}, replace: (...args) => navigations.push(args) },
+    getPackCarouselReturnState: () => returned, setPackCarouselReturnState: value => { returned = value; },
+    createDirectDayReturnState: dayTransitions.createDirectDayReturnState,
+    createDirectPackReturnState: returnStates.createDirectPackReturnState,
+    carouselSettingsStore: { read: () => ({ top: "joined", bottom: "all" }) }, PACK_CLOSE_TRANSITION_TYPE: "pack-close",
+  };
+  const constants = source.statements.filter(node => ts.isVariableStatement(node) && node.declarationList.declarations.some(declaration => /^[A-Z_]+$/.test(declaration.name.getText(source))));
+  const clamp = source.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === "clamp");
+  const cleanup = vm.runInNewContext(compile(`${constants.map(node => node.getText(source)).join("\n")}\n${clamp.getText(source)}\n(${effect.arguments[0].getText(source)})()`), env);
+  const frame = () => {
+    now += 16;
+    const pending = [...frames.values()]; frames.clear();
+    pending.forEach(fn => fn(now));
+  };
+  return {
+    root, track, cards, env, frames, timers, listeners, navigations, cleanup, frame, finishCollapse,
+    returned: () => returned,
+    expand() { frame(); [...timers.values()].forEach(fn => fn()); timers.clear(); },
+    event(name, extra = {}) { now += 16; listeners.get(name)?.({ type: name, button: 0, pointerId: 1, clientX: 100, target: root, preventDefault() {}, ...extra }); },
+    cardTarget: () => new Element(true),
+  };
+}
+
+for (const count of [1, 2, 3, 8]) for (const reduced of [false, true]) {
+  test(`${count} Missions${reduced ? " reduced-motion" : ""}: center, expand, wait for collapse, then restore calendar`, async () => {
+    const gallery = galleryHarness(count, { reduced });
+    assert.equal(gallery.cards.length, count);
+    assert.equal(gallery.track.style.transform, "translate3d(840px, -50%, 0)");
+    assert.equal(gallery.root.dataset.phase, "collapsed");
+    gallery.expand();
+    assert.equal(gallery.root.dataset.phase, "settled");
+    gallery.event("click", { target: gallery.cardTarget() });
+    assert.equal(gallery.root.dataset.phase, "settled", "card click must not dismiss");
+    gallery.event("click");
+    assert.equal(gallery.root.dataset.phase, "closing");
+    gallery.frame();
+    assert.equal(gallery.navigations.length, 0, "do not navigate before collapse finishes");
+    gallery.finishCollapse();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(gallery.navigations.length, 1);
+    assert.equal(gallery.navigations[0][0], "/");
+    assert.deepEqual(plain(gallery.navigations[0][1].transitionTypes), ["pack-close"]);
+    assert.equal(gallery.returned().topCollection, "calendar");
+    assert.equal(gallery.returned().snapshots.calendar.month, "2026-08");
+    gallery.cleanup();
+    assert.equal(gallery.listeners.size, 0);
+    assert.equal(gallery.frames.size, 0);
+    assert.equal(gallery.timers.size, 0);
+  });
+}
+
+test("single card cannot be dragged off center or create NaN snaps; a drag release never closes", () => {
+  const gallery = galleryHarness(1);
+  gallery.expand();
+  const initial = gallery.track.style.transform;
+  gallery.event("pointerdown");
+  gallery.event("pointermove", { clientX: 20 });
+  gallery.event("pointerup", { clientX: 20 });
+  gallery.event("click");
+  gallery.event("wheel", { deltaX: 5000, deltaY: 0 });
+  gallery.event("keydown", { key: "ArrowRight" });
+  assert.equal(gallery.track.style.transform, initial);
+  assert.equal(gallery.root.dataset.phase, "settled");
+  assert.equal(gallery.frames.size, 0);
+  gallery.event("keydown", { key: "Escape" });
+  assert.equal(gallery.root.dataset.phase, "closing");
+  gallery.cleanup();
+});
+
+test("loop can wrap repeatedly without drift and cleanup during collapse prevents late navigation", async () => {
+  const gallery = galleryHarness(2, { reduced: true, looping: true });
+  gallery.expand();
+  const initial = gallery.track.style.transform;
+  for (let index = 0; index < 40; index++) gallery.event("wheel", { deltaX: 544, deltaY: 0 });
+  const before = gallery.track.style.transform;
+  assert.equal(before, initial, "ordinary Pack keeps infinite wrapping");
+  gallery.env.measureRef.current();
+  assert.equal(gallery.track.style.transform, before);
+  gallery.event("click");
+  gallery.frame();
+  gallery.cleanup();
+  gallery.finishCollapse();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(gallery.navigations.length, 0);
+});
+
+const trackPosition = gallery => Number(gallery.track.style.transform.match(/translate3d\(([-.\d]+)px/)[1]);
+function settleGallery(gallery) {
+  for (let frame = 0; frame < 600 && gallery.frames.size; frame++) gallery.frame();
+  assert.equal(gallery.frames.size, 0, "spring must stop requesting frames");
+}
+
+for (const count of [2, 3, 8]) {
+  test(`${count} date Missions: wheel and keyboard stop at both endpoints without wrapping`, () => {
+    const gallery = galleryHarness(count, { reduced: true });
+    gallery.expand();
+    const first = trackPosition(gallery);
+    const last = first - (count - 1) * 272;
+    for (let i = 0; i < 5; i++) gallery.event("wheel", { deltaX: 100000, deltaY: 0 });
+    assert.equal(trackPosition(gallery), last);
+    gallery.event("keydown", { key: "ArrowRight" });
+    assert.equal(trackPosition(gallery), last);
+    for (let i = 0; i < 5; i++) gallery.event("wheel", { deltaX: -100000, deltaY: 0 });
+    assert.equal(trackPosition(gallery), first);
+    gallery.event("keydown", { key: "ArrowLeft" });
+    assert.equal(trackPosition(gallery), first);
+    gallery.cleanup();
+  });
+
+  test(`${count} date Missions: drag bounds resist then spring back; collapse starts at the actual browsing position`, () => {
+    const gallery = galleryHarness(count);
+    gallery.expand();
+    const first = trackPosition(gallery);
+    const last = first - (count - 1) * 272;
+    gallery.event("pointerdown");
+    gallery.event("pointermove", { clientX: 10000 });
+    assert.ok(trackPosition(gallery) > first && trackPosition(gallery) < first + 60);
+    gallery.event("pointerup", { clientX: 10000 });
+    settleGallery(gallery);
+    assert.equal(trackPosition(gallery), first);
+    gallery.event("pointerdown");
+    gallery.event("pointermove", { clientX: -10000 });
+    assert.ok(trackPosition(gallery) < last && trackPosition(gallery) > last - 60);
+    gallery.event("pointerup", { clientX: -10000 });
+    settleGallery(gallery);
+    assert.equal(trackPosition(gallery), last);
+    gallery.event("keydown", { key: "ArrowLeft" });
+    settleGallery(gallery);
+    const beforeClose = trackPosition(gallery);
+    gallery.event("click");
+    assert.equal(trackPosition(gallery), beforeClose, "no jump back to first Mission before collapse");
+    for (const card of gallery.cards) {
+      assert.equal(beforeClose + card.offsetLeft + 120 + parseFloat(card.style["--mission-collapsed-x"]), 960);
+    }
+    gallery.cleanup();
+  });
+}
+
+test("calendar return has matching date anchors in the FIRST render, before any layout effect/ResizeObserver", () => {
+  for (const [width, height, coarse] of [[375, 812, true], [820, 1180, true], [1920, 1080, false]]) {
+    for (const placement of ["top", "bottom"]) {
+      const names = [];
+      const overrides = {
+        react: { ...require("react"), ViewTransition: ({ name, children }) => { if (name) names.push(name); return children; } },
+        "next/navigation": { useRouter: () => ({}) },
+      };
+      const { CalendarCarousel } = loadModule("features/calendar/components/CalendarCarousel.tsx", overrides, new Map(), {
+        window: { innerWidth: width, innerHeight: height, matchMedia: () => ({ matches: coarse }) },
+      });
+      const html = renderToStaticMarkup(createElement(CalendarCarousel, {
+        data: user.getMockMissionCalendar(), placement, interactionDisabled: true, swappingIn: false, onOpenDate() {},
+        snapshot: { month: "2026-08", position: months.monthNumber("2026-08") + .08 },
+      }));
+      assert.ok(names.includes(dayTransitions.getDayTransitionName("2026-08-28", placement)));
+      assert.match(html, /class="dayAnchor"/);
+    }
+  }
+});
+
+test("calendar's initial DOM measurement doesn't schedule a second render when geometry is already correct", () => {
+  const source = ts.createSourceFile("CalendarCarousel.tsx", read("features/calendar/components/CalendarCarousel.tsx"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const measure = findNode(source, node => ts.isVariableDeclaration(node) && node.name.getText(source) === "measure").initializer;
+  let updates = 0;
+  const root = { clientWidth: 375, clientHeight: 812 };
+  const context = {
+    root, coarse: { matches: true }, placement: "bottom",
+    geometryRef: { current: geometry.getCalendarGeometry(375, 812, true, "bottom") },
+    getCalendarGeometry: geometry.getCalendarGeometry, dragRef: { current: null }, frameRef: { current: null },
+    finishImmediately() {}, setGeometry() { updates++; },
+  };
+  const run = vm.runInNewContext(compile(`(${measure.getText(source)})`), context);
+  run();
+  assert.equal(updates, 0);
+  root.clientWidth = 820; root.clientHeight = 1180;
+  run();
+  assert.equal(updates, 1, "a genuine resize still adapts the calendar");
+  run();
+  assert.equal(updates, 1);
+});
+
+test("the returning Mission snapshot stays opaque through the whole date morph", () => {
+  const css = read("app/globals.css");
+  assert.match(css, /::view-transition-old\(\.calendar-day-morph\)\s*\{[^}]*animation:\s*none;[^}]*opacity:\s*1;/);
+  assert.doesNotMatch(css, /calendar-card-disappear/);
+  assert.match(css, /::view-transition-group\(\.calendar-day-morph\)\s*\{[^}]*animation-duration:\s*520ms/);
+});
+
+test("live calendar and other wheel snapshots survive gallery close unchanged", async () => {
+  const saved = {
+    source: "bottom", packId: dayTransitions.getDayGalleryId("2026-08-28"), completedDate: "2026-08-28",
+    topCollection: "all", bottomCollection: "calendar",
+    carousels: { top: { count: 5, activeIndex: 2, packId: "mock-pack-03", position: 2.2 }, bottom: { month: "2026-08", position: months.monthNumber("2026-08") } },
+  };
+  const gallery = galleryHarness(2, { saved });
+  gallery.expand(); gallery.event("click"); gallery.frame(); gallery.finishCollapse();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(gallery.returned(), saved, "normal close must not replace the captured live view with defaults");
+  gallery.cleanup();
+});
