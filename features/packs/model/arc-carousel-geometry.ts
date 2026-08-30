@@ -1,3 +1,5 @@
+export type CarouselPlacement = "top" | "bottom";
+
 export type CarouselMetrics = {
   cardHeight: number;
   cardWidth: number;
@@ -5,10 +7,13 @@ export type CarouselMetrics = {
   centerY: number;
   radius: number;
   stepAngle: number;
+  verticalDirection: 1 | -1;
 };
 
 type CarouselMetricsInput = {
+  coarsePointer?: boolean;
   height: number;
+  placement?: CarouselPlacement;
   width: number;
 };
 
@@ -17,32 +22,74 @@ function clamp(value: number, minimum: number, maximum: number) {
 }
 
 export function getCarouselMetrics({
+  coarsePointer = false,
   height,
+  placement = "bottom",
   width,
 }: CarouselMetricsInput): CarouselMetrics {
-  const isMobile = width < 720;
-  const cardWidth = isMobile
-    ? clamp(width * 0.46, 148, 196)
-    : clamp(width * 0.16, 172, 236);
+  const shortSide = Math.min(width, height);
+  const usesTouchLayout = coarsePointer || width < 720;
+  const usesTabletScale = usesTouchLayout && shortSide >= 600;
+  const cardWidth = usesTabletScale
+    ? clamp(shortSide * 0.3, 220, 300)
+    : usesTouchLayout
+      ? clamp(shortSide * 0.46, 148, 220)
+      : clamp(width * 0.16, 172, 236);
   const cardHeight = (cardWidth * 4) / 3;
-  const gap = isMobile ? 32 : 50;
-  const activeCenterY =
-    height * (isMobile ? 0.44 : 0.42) + cardHeight;
-  const radius = height * (isMobile ? 0.75 : 0.86);
+  const gap = usesTouchLayout
+    ? clamp(cardWidth * (usesTabletScale ? 0.18 : 0.16), 32, 54)
+    : 50;
+  const preferredActiveCenterY =
+    height * (usesTouchLayout ? 0.44 : 0.42) + cardHeight;
+  const activeCenterY = usesTouchLayout
+    ? Math.min(
+        preferredActiveCenterY,
+        height - cardHeight * 0.52 - 12,
+      )
+    : preferredActiveCenterY;
+  const radius = height * (usesTabletScale ? 0.8 : usesTouchLayout ? 0.75 : 0.86);
   const stepAngle = clamp(
     (cardWidth + gap * 2.5) / radius,
-    0.42,
-    0.6,
+    usesTabletScale ? 0.36 : 0.42,
+    usesTabletScale ? 0.54 : 0.6,
   );
 
   return {
     cardHeight,
     cardWidth,
     centerX: width / 2,
-    centerY: activeCenterY + radius,
+    centerY: placement === "top"
+      ? height - activeCenterY - radius
+      : activeCenterY + radius,
     radius,
     stepAngle,
+    verticalDirection: placement === "top" ? -1 : 1,
   };
+}
+
+export function getCarouselCardPose(
+  relativeSlot: number,
+  metrics: CarouselMetrics,
+) {
+  const angle = relativeSlot * metrics.stepAngle;
+
+  return {
+    x: metrics.centerX + Math.sin(angle) * metrics.radius,
+    y: metrics.centerY - metrics.verticalDirection * Math.cos(angle) * metrics.radius,
+    rotation: metrics.verticalDirection * angle,
+  };
+}
+
+export function getCarouselPointerAngle(
+  x: number,
+  y: number,
+  metrics: CarouselMetrics,
+) {
+  // Reflect the input, not the artwork: a left drag moves either arc left.
+  return Math.atan2(
+    -(y - metrics.centerY) * metrics.verticalDirection,
+    x - metrics.centerX,
+  );
 }
 
 export function getRelativeSlot(

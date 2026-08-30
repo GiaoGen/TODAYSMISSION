@@ -8,7 +8,7 @@
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
-  background: #f2f2f2;
+  background: var(--page-background);
   color: #111;
   cursor: grab;
   overscroll-behavior: none;
@@ -128,11 +128,36 @@
   will-change: transform;
 }
 
-@media (max-width: 899px) {
+@media (max-width: 599px) {
   .root {
-    --detail-card-width: clamp(148px, 46vw, 196px);
-    --mission-card-width: clamp(210px, 70vw, 300px);
+    --detail-card-width: clamp(148px, 46vmin, 220px);
+    --mission-card-width: clamp(210px, min(70vw, 46dvh), 320px);
     --detail-gap: clamp(18px, 5.5vw, 24px);
+  }
+}
+
+@media (min-width: 600px) and (max-width: 899px) and (orientation: portrait),
+  (pointer: coarse) and (min-width: 600px) and (orientation: portrait) {
+  .root {
+    --detail-card-width: clamp(220px, 30vmin, 300px);
+    --mission-card-width: clamp(360px, min(54vw, 46dvh), 440px);
+    --detail-gap: clamp(24px, 4vmin, 36px);
+  }
+}
+
+@media (pointer: coarse) and (min-height: 600px) and (orientation: landscape) {
+  .root {
+    --detail-card-width: clamp(220px, 30vmin, 300px);
+    --mission-card-width: clamp(300px, min(34vw, 50dvh), 420px);
+    --detail-gap: clamp(22px, 3vmin, 34px);
+  }
+}
+
+@media (pointer: coarse) and (max-height: 599px) and (orientation: landscape) {
+  .root {
+    --detail-card-width: clamp(148px, 46vmin, 220px);
+    --mission-card-width: clamp(210px, min(38vw, 56dvh), 300px);
+    --detail-gap: clamp(18px, 4vmin, 24px);
   }
 }
 

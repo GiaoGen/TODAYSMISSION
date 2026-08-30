@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node --test tests/arc-carousel-geometry.test.mjs tests/pack-carousel-navigation.test.mjs tests/view-transition-boundaries.test.mjs tests/home-menu-state.test.mjs"
   },
   "dependencies": {
     "next": "16.3.3",

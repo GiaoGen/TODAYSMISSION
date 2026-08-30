@@ -1,13 +1,13 @@
 # TODAYSMISSION 项目进度记录
 
-> 快照日期：2026-08-29
+> 快照日期：2026-08-30
 > 记录依据：当前工作区文件、开发计划、Git 状态与本次质量检查
 
 ## 总体状态
 
 - 当前定位：MVP 前端原型，处于 Phase 04（Pack Detail / Mission Browsing）实现阶段。
-- 工作区状态：项目尚无 Git 提交；当前文件均为未跟踪的初始项目内容。
-- 当前可运行性：`npm run lint` 与 `npm run build` 均通过。
+- 工作区状态：已跟踪 `origin/main`；当前有多项未提交修改及新增测试文件。
+- 当前可运行性：`npm test`、`npm run lint` 与 `npm run build` 均通过。
 - 后端状态：尚未接入 Supabase、认证或持久化；页面数据来自本地 fixture repository。
 
 ## 阶段进度
@@ -17,8 +17,8 @@
 | Phase 00：项目基线与执行规则 | 基本完成，仍需补记录 | Next.js 16.3.3、TypeScript、ESLint、路径别名、lint/build 已可用；locale、完整基线记录尚未补齐 |
 | Phase 01：全局视觉基础与 App Shell | 部分完成 | 全局 CSS、页面 metadata、基础 layout 已存在；中英文路由、loading/error/not-found 与完整 Shell 尚未完成 |
 | Phase 02：Card System | 基本完成 | Pack Card、3:4 卡片样式、fixture 数据和缺图/文案基础边界已存在 |
-| Phase 03：Home / Pack Arc Carousel | 基本完成，待设备验收 | 独立几何模型、Pointer/RAF 拖动、惯性与 Snap、键盘操作、Reduced Motion、数量控制和 Pack 导航已实现 |
-| Phase 04：Pack Detail / Mission Browsing | 进行中 | Pack Detail Server Page、静态参数生成、Mission 横向浏览、返回 Home 的 carousel 状态恢复和过渡动画已实现；Mission 状态与 CTA 流程仍待完成 |
+| Phase 03：Home / Pack Arc Carousel | 基本完成，待设备验收 | 已支持上下双 Carousel、joined Pack 数据、独立几何模型、Pointer/RAF 拖动、惯性与 Snap、键盘操作、Reduced Motion、数量控制、双轮状态恢复和 Pack 导航 |
+| Phase 04：Pack Detail / Mission Browsing | 进行中 | Pack Detail Server Page、静态参数生成、Mission 横向浏览/展开/收拢、返回 Home 的双轮状态恢复和过渡动画已实现；Mission 状态与 CTA 流程仍待完成 |
 | Phase 05–11 | 未开始 | 登录、完成滑块、语音、Profile、Supabase 接入和发布前验收尚未实现 |
 
 ## 本次已确认完成
@@ -28,6 +28,7 @@
 - Carousel 支持拖拽、惯性、Snap、鼠标滚轮、左右方向键、数量增减、Reduced Motion，以及进入详情后的返回位置恢复。
 - 页面包含基础响应式样式和 `ViewTransition` 页面/卡片过渡实现。
 - 当前 fixture 可生成首页、404 和 24 个 Pack 详情路径。
+- 新增 53 项 Node 测试，覆盖弧形几何、双轮导航状态、shared-element 边界和主 landmark 结构。
 
 ## 未包含
 
@@ -42,6 +43,7 @@
 
 执行于 2026-08-29：
 
+- `npm test`：通过，53/53 项测试通过；Node 仅提示 `.ts` 测试导入的模块类型 warning。
 - `npm run lint`：通过。
 - `npm run build`：通过；TypeScript 检查通过，静态页面生成通过。
 - 生成路由：`/`、`/_not-found`、`/pack/[slug]`，其中详情 fixture 路径共 24 个。
@@ -59,10 +61,11 @@
 2. 完成 Mission Stage 状态模型与 Fixture Repository 的 Take Mission 入口。
 3. 根据开发计划完成已确认范围的浏览器/响应式验收，并记录结果。
 4. 在进入 Phase 05 前补充 locale、错误边界和 Shell 的缺口。
-5. 首次建立 Git 提交，提交前确认本记录与代码状态一致。
+5. 在提交前确认本记录与代码状态一致，并整理当前未提交修改。
 
 ## 变更记录
 
 | 日期 | 记录 |
 | --- | --- |
 | 2026-08-29 | 创建本项目进度快照；完成工作区、开发计划、源代码和 lint/build 检查。 |
+| 2026-08-30 | 更新双 Carousel、Mission 展开收拢、导航恢复与测试进度；完成 53 项测试、lint、build 检查。 |

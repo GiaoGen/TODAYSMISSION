@@ -1,9 +1,10 @@
 "use client";
 
-import type { PointerEvent as ReactPointerEvent } from "react";
+import type { PointerEvent as ReactPointerEvent, Ref } from "react";
 import {
   useCallback,
   useEffect,
+  useImperativeHandle,
   useLayoutEffect,
   useRef,
   useState,
@@ -15,15 +16,21 @@ import { PackCard } from "@/components/card/PackCard";
 import type { PackSummary } from "@/data/contracts/pack-summary";
 import {
   getActiveIndex,
+  getCarouselCardPose,
   getCarouselMetrics,
+  getCarouselPointerAngle,
   getRelativeSlot,
   getSnapTarget,
   type CarouselMetrics,
+  type CarouselPlacement,
 } from "@/features/packs/model/arc-carousel-geometry";
 import {
   getPackCarouselReturnState,
-  setPackCarouselReturnState,
+  getInitialCarouselState,
+  type PackCarouselSnapshot,
+  type InitialCarouselState,
 } from "@/features/packs/model/pack-carousel-return-state";
+import { COLLECTION_LABELS, type PackCollection } from "@/features/packs/model/home-carousel-state";
 import {
   getPackTransitionName,
   PACK_CLOSE_TRANSITION_TYPE,
@@ -32,7 +39,6 @@ import {
 
 import styles from "./ArcCarousel.module.css";
 
-const DEFAULT_COUNT = 12;
 const MIN_COUNT = 1;
 const MAX_COUNT = 24;
 const DRAG_SPEED = 1;
@@ -47,6 +53,19 @@ const DRAG_CAPTURE_THRESHOLD = 5;
 
 type ArcCarouselProps = {
   packs: readonly PackSummary[];
+  placement?: CarouselPlacement;
+  collection?: PackCollection;
+  initialCarouselState?: InitialCarouselState;
+  interactionDisabled?: boolean;
+  swappingIn?: boolean;
+  onOpenPack: (pack: PackSummary, placement: CarouselPlacement) => void;
+  ref?: Ref<ArcCarouselHandle>;
+};
+
+export type ArcCarouselHandle = {
+  freezeAndSnapshot: () => PackCarouselSnapshot | null;
+  resume: () => void;
+  getElement: () => HTMLElement | null;
 };
 
 type StageBounds = {
@@ -65,12 +84,6 @@ type DragState = {
   velocity: number;
 };
 
-type InitialCarouselState = {
-  activeIndex: number;
-  count: number;
-  position: number;
-};
-
 function clamp(value: number, minimum: number, maximum: number) {
   return Math.min(maximum, Math.max(minimum, value));
 }
@@ -87,9 +100,11 @@ function getPointerAngle(
   metrics: CarouselMetrics,
   bounds: StageBounds,
 ) {
-  const deltaX = clientX - bounds.left - metrics.centerX;
-  const deltaY = clientY - bounds.top - metrics.centerY;
-  return Math.atan2(-deltaY, deltaX);
+  return getCarouselPointerAngle(
+    clientX - bounds.left,
+    clientY - bounds.top,
+    metrics,
+  );
 }
 
 function wrapAngle(angle: number) {
@@ -102,46 +117,24 @@ function wrapAngle(angle: number) {
   return angle;
 }
 
-function getInitialCarouselState(
-  packs: readonly PackSummary[],
-  maximumCount: number,
-): InitialCarouselState {
-  const saved = getPackCarouselReturnState();
-  const savedPackIndex = saved
-    ? packs.findIndex((pack) => pack.id === saved.packId)
-    : -1;
-
-  if (!saved || savedPackIndex < 0) {
-    return {
-      activeIndex: 0,
-      count: Math.min(DEFAULT_COUNT, maximumCount),
-      position: 0,
-    };
-  }
-
-  const count = clamp(
-    Math.max(saved.count ?? DEFAULT_COUNT, savedPackIndex + 1),
-    MIN_COUNT,
-    maximumCount,
-  );
-  const canRestoreExactPosition =
-    saved.count === count && saved.position !== undefined;
-
-  return {
-    activeIndex: savedPackIndex,
-    count,
-    position: canRestoreExactPosition ? (saved.position ?? savedPackIndex) : savedPackIndex,
-  };
-}
-
-export function ArcCarousel({ packs }: ArcCarouselProps) {
+export function ArcCarousel({
+  packs,
+  placement = "bottom",
+  collection = placement === "top" ? "joined" : "all",
+  initialCarouselState,
+  interactionDisabled = false,
+  swappingIn = false,
+  onOpenPack,
+  ref,
+}: ArcCarouselProps) {
   const router = useRouter();
   const maximumCount = Math.min(MAX_COUNT, packs.length);
   const [initialState] = useState(() =>
-    getInitialCarouselState(packs, maximumCount),
+    initialCarouselState ?? getInitialCarouselState(packs, maximumCount, placement, getPackCarouselReturnState()),
   );
   const [count, setCount] = useState(initialState.count);
   const [activeIndex, setActiveIndex] = useState(initialState.activeIndex);
+  const rootRef = useRef<HTMLElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const metricsRef = useRef<CarouselMetrics | null>(null);
@@ -154,7 +147,7 @@ export function ArcCarousel({ packs }: ArcCarouselProps) {
   const reducedMotionRef = useRef(false);
   const suppressNextClickRef = useRef(false);
   const suppressClickTimerRef = useRef<number | null>(null);
-  const navigationLockRef = useRef(false);
+  const navigationLockRef = useRef(interactionDisabled);
   const previousCountRef = useRef(count);
 
   const visiblePacks = packs.slice(0, count);
@@ -186,8 +179,7 @@ export function ArcCarousel({ packs }: ArcCarouselProps) {
 
       const relativeSlot = getRelativeSlot(index, positionRef.current, count);
       const angle = relativeSlot * metrics.stepAngle;
-      const x = metrics.centerX + Math.sin(angle) * metrics.radius;
-      const y = metrics.centerY - Math.cos(angle) * metrics.radius;
+      const { x, y, rotation } = getCarouselCardPose(relativeSlot, metrics);
       const distance = Math.abs(relativeSlot);
       const scale = Math.max(0.88, 1 - Math.min(distance, 3) * 0.035);
       const opacity = Math.max(0.18, 1 - distance * 0.14);
@@ -198,7 +190,7 @@ export function ArcCarousel({ packs }: ArcCarouselProps) {
       const isOnVisibleArc =
         Math.abs(angle) <= Math.min(Math.PI * 0.55, seamSafeAngle);
 
-      card.style.transform = `translate3d(${x - metrics.cardWidth / 2}px, ${y - metrics.cardHeight / 2}px, 0) rotate(${angle}rad) scale(${scale})`;
+      card.style.transform = `translate3d(${x - metrics.cardWidth / 2}px, ${y - metrics.cardHeight / 2}px, 0) rotate(${rotation}rad) scale(${scale})`;
       card.style.opacity = isOnVisibleArc ? String(opacity) : "0";
       card.style.pointerEvents = isOnVisibleArc ? "auto" : "none";
       card.style.visibility = isOnVisibleArc ? "visible" : "hidden";
@@ -221,6 +213,34 @@ export function ArcCarousel({ packs }: ArcCarouselProps) {
     }
     motionVelocityRef.current = 0;
   }, []);
+
+  useImperativeHandle(ref, () => ({
+    freezeAndSnapshot() {
+      navigationLockRef.current = true;
+      stopAnimation();
+      if (layoutFrameRef.current !== null) {
+        cancelAnimationFrame(layoutFrameRef.current);
+      }
+      const drag = dragRef.current;
+      dragRef.current = null;
+      if (drag && stageRef.current?.hasPointerCapture(drag.pointerId)) {
+        stageRef.current.releasePointerCapture(drag.pointerId);
+      }
+      setMoving(false);
+      layoutCards();
+      const index = getActiveIndex(positionRef.current, count);
+      const pack = count > 0 ? packs[index] : null;
+      return pack ? { activeIndex: index, count, packId: pack.id, position: positionRef.current } : null;
+    },
+    resume() {
+      navigationLockRef.current = false;
+      if (stageRef.current) {
+        const { left, top } = stageRef.current.getBoundingClientRect();
+        stageBoundsRef.current = { left, top };
+      }
+    },
+    getElement: () => rootRef.current,
+  }), [count, layoutCards, packs, setMoving, stopAnimation]);
 
   const animateTo = useCallback(
     (target: number) => {
@@ -370,21 +390,30 @@ export function ArcCarousel({ packs }: ArcCarouselProps) {
       return;
     }
 
-    navigationLockRef.current = false;
+    const pointerQuery = window.matchMedia("(pointer: coarse)");
 
     const updateMetrics = () => {
       const { height, left, top, width } = stage.getBoundingClientRect();
       stageBoundsRef.current = { left, top };
-      metricsRef.current = getCarouselMetrics({ height, width });
+      metricsRef.current = getCarouselMetrics({
+        coarsePointer: pointerQuery.matches,
+        height,
+        placement,
+        width,
+      });
       layoutCards();
     };
 
     updateMetrics();
     const observer = new ResizeObserver(updateMetrics);
     observer.observe(stage);
+    pointerQuery.addEventListener("change", updateMetrics);
 
-    return () => observer.disconnect();
-  }, [count, layoutCards]);
+    return () => {
+      observer.disconnect();
+      pointerQuery.removeEventListener("change", updateMetrics);
+    };
+  }, [count, layoutCards, placement]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -408,7 +437,7 @@ export function ArcCarousel({ packs }: ArcCarouselProps) {
     const handleWheel = (event: WheelEvent) => {
       const metrics = metricsRef.current;
 
-      if (!metrics || count <= 1) {
+      if (!metrics || count <= 1 || navigationLockRef.current) {
         return;
       }
 
@@ -491,7 +520,13 @@ export function ArcCarousel({ packs }: ArcCarouselProps) {
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     const metrics = metricsRef.current;
 
-    if (count <= 1 || event.button !== 0 || !metrics) {
+    if (
+      count <= 1 ||
+      event.button !== 0 ||
+      !metrics ||
+      dragRef.current ||
+      navigationLockRef.current
+    ) {
       return;
     }
 
@@ -595,7 +630,7 @@ export function ArcCarousel({ packs }: ArcCarouselProps) {
   };
 
   const handleCardClick = (index: number) => {
-    if (dragRef.current || count <= 1 || suppressNextClickRef.current) {
+    if (navigationLockRef.current || dragRef.current || suppressNextClickRef.current) {
       suppressNextClickRef.current = false;
       return;
     }
@@ -609,19 +644,7 @@ export function ArcCarousel({ packs }: ArcCarouselProps) {
         return;
       }
 
-      navigationLockRef.current = true;
-      stopAnimation();
-      setMoving(false);
-      setPackCarouselReturnState({
-        activeIndex: index,
-        count,
-        packId: pack.id,
-        position: positionRef.current,
-      });
-      router.push(`/pack/${encodeURIComponent(pack.slug)}`, {
-        scroll: false,
-        transitionTypes: [PACK_OPEN_TRANSITION_TYPE],
-      });
+      onOpenPack(pack, placement);
       return;
     }
 
@@ -629,100 +652,122 @@ export function ArcCarousel({ packs }: ArcCarouselProps) {
   };
 
   const stepCarousel = (direction: -1 | 1) => {
+    if (navigationLockRef.current) return;
     animateTo(getSnapTarget(positionRef.current + direction, count));
   };
+
+  const changeCount = (delta: -1 | 1) => {
+    if (navigationLockRef.current) return;
+    setCount((current) => clamp(current + delta, MIN_COUNT, maximumCount));
+  };
+
+  const enterClass = placement === "top" ? "pack-home-top-enter" : "pack-home-enter";
+  const exitClass = placement === "top" ? "pack-home-top-exit" : "pack-home-exit";
 
   return (
     <ViewTransition
       default="none"
       enter={{
-        [PACK_CLOSE_TRANSITION_TYPE]: "pack-home-enter",
-        default: "pack-home-enter",
+        [PACK_CLOSE_TRANSITION_TYPE]: enterClass,
+        default: enterClass,
       }}
-      exit={{ "pack-open": "pack-home-exit", default: "none" }}
+      exit={{
+        [PACK_OPEN_TRANSITION_TYPE]: exitClass,
+        default: "none",
+      }}
     >
-      <section className={styles.root} aria-label="图片轮盘 / Image carousel">
-      <div
-        className={styles.stage}
-        data-moving="false"
-        onKeyDown={(event) => {
-          if (event.key === "ArrowLeft") {
-            event.preventDefault();
-            stepCarousel(-1);
-          }
-          if (event.key === "ArrowRight") {
-            event.preventDefault();
-            stepCarousel(1);
-          }
-        }}
-        onPointerCancel={() => finishDrag(false)}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        ref={stageRef}
-        role="group"
-        tabIndex={0}
+      <section
+        aria-label={`${placement === "top" ? "上轮盘" : "下轮盘"}：${COLLECTION_LABELS[collection]}（模拟数据）/ ${collection === "joined" ? "Joined" : "All"} packs (mock)`}
+        className={styles.root}
+        data-placement={placement}
+        data-swapping-in={swappingIn}
+        inert={interactionDisabled}
+        ref={rootRef}
       >
-        {visiblePacks.map((pack, index) => {
-          const directDistance = Math.abs(index - activeIndex);
-          const activeDistance =
-            count >= 6
+        <div
+          className={styles.stage}
+          data-moving="false"
+          onKeyDown={(event) => {
+            if (count <= 1) return;
+            if (event.key === "ArrowLeft") {
+              event.preventDefault();
+              stepCarousel(-1);
+            }
+            if (event.key === "ArrowRight") {
+              event.preventDefault();
+              stepCarousel(1);
+            }
+          }}
+          onPointerCancel={() => finishDrag(false)}
+          onPointerLeave={() => {
+            if (dragRef.current && !dragRef.current.captured) finishDrag(false);
+          }}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          ref={stageRef}
+          role="group"
+          tabIndex={count > 0 ? 0 : -1}
+        >
+          {visiblePacks.map((pack, index) => {
+            const directDistance = Math.abs(index - activeIndex);
+            const activeDistance = count >= 6
               ? Math.min(directDistance, count - directDistance)
               : directDistance;
 
-          return (
+            return (
+              <button
+                aria-current={index === activeIndex ? "true" : undefined}
+                aria-label={`${pack.title}, ${index + 1} / ${count}`}
+                className={styles.card}
+                key={pack.id}
+                onClick={() => handleCardClick(index)}
+                ref={(element) => {
+                  cardRefs.current[index] = element;
+                }}
+                type="button"
+              >
+                <ViewTransition
+                  default="none"
+                  name={getPackTransitionName(pack.id, placement)}
+                  share="pack-card-morph"
+                >
+                  <PackCard eager={activeDistance <= (placement === "top" ? 1 : 2)} pack={pack} />
+                </ViewTransition>
+              </button>
+            );
+          })}
+        </div>
+
+        {placement === "bottom" && (
+          <div className={styles.countControl} aria-label="当前图片数量 / Current image count">
             <button
-              aria-current={index === activeIndex ? "true" : undefined}
-              aria-label={`${pack.title}, ${index + 1} / ${count}`}
-              className={styles.card}
-              key={pack.id}
-              onClick={() => handleCardClick(index)}
-              ref={(element) => {
-                cardRefs.current[index] = element;
-              }}
+              aria-label="减少图片 / Decrease images"
+              className={styles.countButton}
+              disabled={count <= MIN_COUNT}
+              onClick={() => changeCount(-1)}
               type="button"
             >
-              <ViewTransition
-                default="none"
-                name={getPackTransitionName(pack.id)}
-                share="pack-card-morph"
-              >
-                <PackCard eager={activeDistance <= 2} pack={pack} />
-              </ViewTransition>
+              <span aria-hidden="true">−</span>
             </button>
-          );
-        })}
-      </div>
+            <output className={styles.countValue} aria-live="polite">
+              {count}
+            </output>
+            <button
+              aria-label="增加图片 / Increase images"
+              className={styles.countButton}
+              disabled={count >= maximumCount}
+              onClick={() => changeCount(1)}
+              type="button"
+            >
+              <span aria-hidden="true">+</span>
+            </button>
+          </div>
+        )}
 
-      <div className={styles.countControl} aria-label="当前图片数量 / Current image count">
-        <button
-          aria-label="减少图片 / Decrease images"
-          className={styles.countButton}
-          disabled={count <= MIN_COUNT}
-          onClick={() => setCount((current) => Math.max(MIN_COUNT, current - 1))}
-          type="button"
-        >
-          <span aria-hidden="true">−</span>
-        </button>
-        <output className={styles.countValue} aria-live="polite">
-          {count}
-        </output>
-        <button
-          aria-label="增加图片 / Increase images"
-          className={styles.countButton}
-          disabled={count >= maximumCount}
-          onClick={() =>
-            setCount((current) => Math.min(maximumCount, current + 1))
-          }
-          type="button"
-        >
-          <span aria-hidden="true">+</span>
-        </button>
-      </div>
-
-      <p className={styles.srOnly} aria-live="polite">
-        {activeIndex + 1} / {count}
-      </p>
+        <p className={styles.srOnly} aria-live="polite">
+          {count > 0 ? activeIndex + 1 : 0} / {count}
+        </p>
       </section>
     </ViewTransition>
   );

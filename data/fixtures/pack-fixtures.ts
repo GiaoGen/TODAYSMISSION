@@ -23,6 +23,10 @@ export const PACK_FIXTURES: readonly PackSummary[] = Array.from(
   },
 );
 
+// An independent joined-pack list for the frontend-only home prototype.
+export const JOINED_PACK_FIXTURES: readonly PackSummary[] =
+  PACK_FIXTURES.filter((_, index) => [0, 2, 4, 6, 8].includes(index));
+
 function createMissionFixtures(packIndex: number): readonly MissionSummary[] {
   const groupStart = Math.floor(packIndex / PACK_GROUP_SIZE) * PACK_GROUP_SIZE;
   const localPackIndex = packIndex - groupStart;

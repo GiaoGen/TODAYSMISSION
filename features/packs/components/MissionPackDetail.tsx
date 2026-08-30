@@ -1,14 +1,18 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { useLayoutEffect, useRef, ViewTransition } from "react";
+import { useLayoutEffect, useRef, useSyncExternalStore, ViewTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { PackCard } from "@/components/card/PackCard";
 import type { MissionSummary, PackDetail } from "@/data/contracts/pack-summary";
 import {
+  createDirectPackReturnState,
   getPackCarouselReturnState,
+  getPackEntrySource,
+  getServerPackCarouselReturnState,
   setPackCarouselReturnState,
+  subscribePackCarouselReturnState,
 } from "@/features/packs/model/pack-carousel-return-state";
 import {
   getPackTransitionName,
@@ -19,7 +23,6 @@ import styles from "./MissionPackDetail.module.css";
 
 const COPY_COUNT = 3;
 const EXPANSION_SETTLE_MS = 1600;
-const CLOSE_NAVIGATION_MS = 540;
 const MOMENTUM_DAMPING = 0.94;
 const MAX_SPEED = 2400;
 const SNAP_SECONDS = 0.7;
@@ -66,7 +69,7 @@ function MissionArtwork({
       <PackCard
         eager={copyIndex === 1 && (slot === 0 || slot === 1)}
         pack={mission}
-        sizes="(max-width: 899px) 70vw, 240px"
+        sizes="(max-width: 599px) 70vw, (orientation: portrait) and (pointer: coarse) 54vw, (pointer: coarse) 34vw, 240px"
       />
     </li>
   );
@@ -74,6 +77,12 @@ function MissionArtwork({
 
 export function MissionPackDetail({ pack }: MissionPackDetailProps) {
   const router = useRouter();
+  const entry = useSyncExternalStore(
+    subscribePackCarouselReturnState,
+    getPackCarouselReturnState,
+    getServerPackCarouselReturnState,
+  );
+  const source = getPackEntrySource(pack.id, entry);
   const rootRef = useRef<HTMLElement>(null);
   const trackRef = useRef<HTMLOListElement>(null);
   const missionRefs = useRef<Array<HTMLLIElement | null>>([]);
@@ -94,7 +103,8 @@ export function MissionPackDetail({ pack }: MissionPackDetailProps) {
     let animationFrame = 0;
     let expandFrame = 0;
     let settleTimer = 0;
-    let closeTimer = 0;
+    let closeFrame = 0;
+    let disposed = false;
     let cycleWidth = 0;
     let stride = 0;
     let origin = 0;
@@ -104,6 +114,7 @@ export function MissionPackDetail({ pack }: MissionPackDetailProps) {
     let lastPointerTime = 0;
     let pointerVelocity = 0;
     let pointerTravel = 0;
+    let pointerCaptured = false;
     let suppressBlankClickUntil = 0;
     let interactive = false;
 
@@ -223,17 +234,14 @@ export function MissionPackDetail({ pack }: MissionPackDetailProps) {
 
     const updateCollapsedOffsets = () => {
       const heroCenterInTrack = root.clientWidth / 2 - position;
+      const offsets = cards.map((card) => card
+        ? { card, x: heroCenterInTrack - card.offsetLeft - card.offsetWidth / 2 }
+        : null);
 
-      for (const card of cards) {
-        if (!card) {
-          continue;
+      for (const offset of offsets) {
+        if (offset) {
+          offset.card.style.setProperty("--mission-collapsed-x", `${offset.x}px`);
         }
-
-        const cardCenter = card.offsetLeft + card.offsetWidth / 2;
-        card.style.setProperty(
-          "--mission-collapsed-x",
-          `${heroCenterInTrack - cardCenter}px`,
-        );
       }
     };
 
@@ -273,8 +281,7 @@ export function MissionPackDetail({ pack }: MissionPackDetailProps) {
       lastPointerTime = performance.now();
       pointerVelocity = 0;
       pointerTravel = 0;
-      root.dataset.dragging = "true";
-      root.setPointerCapture(event.pointerId);
+      pointerCaptured = false;
     };
 
     const onPointerMove = (event: PointerEvent) => {
@@ -285,11 +292,17 @@ export function MissionPackDetail({ pack }: MissionPackDetailProps) {
       const now = performance.now();
       const elapsedSeconds = Math.max((now - lastPointerTime) / 1000, 0.008);
       const deltaX = event.clientX - lastPointerX;
-      position += deltaX;
       pointerTravel += Math.abs(deltaX);
-      pointerVelocity = clamp(deltaX / elapsedSeconds, -MAX_SPEED, MAX_SPEED);
       lastPointerX = event.clientX;
       lastPointerTime = now;
+      if (!pointerCaptured && pointerTravel <= 5) return;
+      if (!pointerCaptured) {
+        pointerCaptured = true;
+        root.dataset.dragging = "true";
+        root.setPointerCapture(event.pointerId);
+      }
+      position += deltaX;
+      pointerVelocity = clamp(deltaX / elapsedSeconds, -MAX_SPEED, MAX_SPEED);
       normalizePosition();
       renderTrack();
     };
@@ -299,19 +312,26 @@ export function MissionPackDetail({ pack }: MissionPackDetailProps) {
         return;
       }
 
+      const wasCaptured = pointerCaptured;
+      pointerId = null;
+      pointerCaptured = false;
       if (root.hasPointerCapture(event.pointerId)) {
         root.releasePointerCapture(event.pointerId);
       }
 
-      pointerId = null;
       root.dataset.dragging = "false";
-      if (pointerTravel > 5) {
+      if (wasCaptured || event.type === "pointercancel") {
         suppressBlankClickUntil = performance.now() + 160;
       }
-      const releaseVelocity = performance.now() - lastPointerTime > 80
+      if (!wasCaptured) return;
+      const releaseVelocity = event.type === "pointercancel" || performance.now() - lastPointerTime > 80
         ? 0
         : pointerVelocity;
       releaseWithMomentum(releaseVelocity);
+    };
+
+    const onPointerLeave = (event: PointerEvent) => {
+      if (!pointerCaptured) finishPointer(event);
     };
 
     const onWheel = (event: WheelEvent) => {
@@ -354,7 +374,7 @@ export function MissionPackDetail({ pack }: MissionPackDetailProps) {
       const savedState = getPackCarouselReturnState();
 
       if (savedState?.packId !== pack.id) {
-        setPackCarouselReturnState({ packId: pack.id });
+        setPackCarouselReturnState(createDirectPackReturnState(pack.id));
       }
 
       router.replace("/", {
@@ -382,10 +402,14 @@ export function MissionPackDetail({ pack }: MissionPackDetailProps) {
       root.dataset.dragging = "false";
       root.dataset.phase = "closing";
 
-      closeTimer = window.setTimeout(
-        navigateHome,
-        prefersReducedMotion ? 180 : CLOSE_NAVIGATION_MS,
-      );
+      // Wait for the actual collapse, not a second, independently timed delay.
+      // getAnimations flushes the changed styles and includes the hero's reveal.
+      closeFrame = requestAnimationFrame(() => {
+        const animations = root.getAnimations({ subtree: true });
+        void Promise.allSettled(animations.map((animation) => animation.finished)).then(() => {
+          if (!disposed) navigateHome();
+        });
+      });
     };
 
     measure();
@@ -396,6 +420,7 @@ export function MissionPackDetail({ pack }: MissionPackDetailProps) {
     root.addEventListener("pointermove", onPointerMove);
     root.addEventListener("pointerup", finishPointer);
     root.addEventListener("pointercancel", finishPointer);
+    root.addEventListener("pointerleave", onPointerLeave);
     root.addEventListener("wheel", onWheel, { passive: false });
     root.addEventListener("keydown", onKeyDown);
     root.addEventListener("click", onBlankClick);
@@ -410,20 +435,25 @@ export function MissionPackDetail({ pack }: MissionPackDetailProps) {
     }, settleDuration);
 
     return () => {
+      disposed = true;
       observer.disconnect();
       stopAnimation();
       cancelAnimationFrame(expandFrame);
       window.clearTimeout(settleTimer);
-      window.clearTimeout(closeTimer);
+      cancelAnimationFrame(closeFrame);
+      if (pointerId !== null && root.hasPointerCapture(pointerId)) {
+        root.releasePointerCapture(pointerId);
+      }
       root.removeEventListener("pointerdown", onPointerDown);
       root.removeEventListener("pointermove", onPointerMove);
       root.removeEventListener("pointerup", finishPointer);
       root.removeEventListener("pointercancel", finishPointer);
+      root.removeEventListener("pointerleave", onPointerLeave);
       root.removeEventListener("wheel", onWheel);
       root.removeEventListener("keydown", onKeyDown);
       root.removeEventListener("click", onBlankClick);
     };
-  }, [missionCount, pack.id, router]);
+  }, [missionCount, pack.id, router, source]);
 
   return (
     <ViewTransition
@@ -433,7 +463,7 @@ export function MissionPackDetail({ pack }: MissionPackDetailProps) {
         default: "none",
       }}
     >
-      <main
+      <section
         aria-label={pack.title}
         className={styles.root}
         data-dragging="false"
@@ -444,7 +474,7 @@ export function MissionPackDetail({ pack }: MissionPackDetailProps) {
       >
         <ViewTransition
           default="none"
-          name={getPackTransitionName(pack.id)}
+          name={getPackTransitionName(pack.id, source)}
           share="pack-card-morph"
         >
           <div className={styles.hero}>
@@ -472,7 +502,7 @@ export function MissionPackDetail({ pack }: MissionPackDetailProps) {
             }),
           )}
         </ol>
-      </main>
+      </section>
     </ViewTransition>
   );
 }
