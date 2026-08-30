@@ -3,8 +3,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import {
   COLLECTION_LABELS,
-  getSpareCollection,
-  type CarouselAssignments,
+  type PackCollection,
 } from "@/features/packs/model/home-carousel-state";
 import type { HomePreferences } from "@/features/packs/model/home-preferences";
 
@@ -14,11 +13,9 @@ type HomeUserMenuProps = {
   busy: boolean;
   loginName: string;
   theme: HomePreferences["theme"];
-  assignments: CarouselAssignments;
+  bottomCollection: PackCollection;
   onMenuChange: (open: boolean) => boolean;
-  onChangeTop: () => void;
-  onChangeBottom: () => void;
-  onReplaceTop: () => void;
+  onSwitchPacks: () => void;
   onThemeChange: () => void;
   onLogout: () => void;
 };
@@ -27,11 +24,9 @@ export function HomeUserMenu({
   busy,
   loginName,
   theme,
-  assignments,
+  bottomCollection,
   onMenuChange,
-  onChangeTop,
-  onChangeBottom,
-  onReplaceTop,
+  onSwitchPacks,
   onThemeChange,
   onLogout,
 }: HomeUserMenuProps) {
@@ -41,7 +36,7 @@ export function HomeUserMenu({
   const firstActionRef = useRef<HTMLButtonElement>(null);
   const wasOpenRef = useRef(false);
   const outsidePointerRef = useRef(false);
-  const spareCollection = getSpareCollection(assignments);
+  const nextCollection = bottomCollection === "joined" ? "all" : "joined";
 
   useLayoutEffect(() => {
     const dialog = dialogRef.current;
@@ -72,6 +67,17 @@ export function HomeUserMenu({
   return (
     <div className={styles.layer} data-menu-open={phase !== "closed"}>
       <div className={styles.identity}>
+        <button
+          aria-label={`当前${COLLECTION_LABELS[bottomCollection]}，切换为${COLLECTION_LABELS[nextCollection]} / Switch Pack collection`}
+          className={`${styles.trigger} ${styles.switchTrigger}`}
+          disabled={busy || phase !== "closed"}
+          onClick={onSwitchPacks}
+          type="button"
+        >
+          <svg aria-hidden="true" className={styles.switchIcon} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M2 5h11m-3-3 3 3-3 3M14 11H3m3-3-3 3 3 3" />
+          </svg>
+        </button>
         <span className={styles.loginName}>{loginName}</span>
         <button
           aria-label="打开用户菜单 / Open user menu"
@@ -117,42 +123,12 @@ export function HomeUserMenu({
         }}
       >
         <button
-          className={styles.row}
-          disabled={busy || phase === "closing"}
-          onClick={onChangeTop}
-          ref={firstActionRef}
-          type="button"
-          aria-label={`上轮盘设置：${COLLECTION_LABELS[assignments.top]}，切换为${COLLECTION_LABELS[spareCollection]}并保存 / Change saved top carousel`}
-        >
-          <span>上轮盘</span>
-          <span className={styles.value}>{COLLECTION_LABELS[assignments.top]}</span>
-        </button>
-        <button
-          className={styles.row}
-          disabled={busy || phase === "closing"}
-          onClick={onChangeBottom}
-          type="button"
-          aria-label={`下轮盘设置：${COLLECTION_LABELS[assignments.bottom]}，切换为${COLLECTION_LABELS[spareCollection]}并保存 / Change saved bottom carousel`}
-        >
-          <span>下轮盘</span>
-          <span className={styles.value}>{COLLECTION_LABELS[assignments.bottom]}</span>
-        </button>
-        <button
-          className={styles.row}
-          disabled={busy || phase === "closing"}
-          onClick={onReplaceTop}
-          type="button"
-          aria-label={`临时将上轮盘切换为${COLLECTION_LABELS[spareCollection]}，不保存设置 / Temporarily preview on top carousel`}
-        >
-          <span>切换上轮盘</span>
-          <span className={styles.value}>{COLLECTION_LABELS[spareCollection]}</span>
-        </button>
-        <button
           aria-label="深色模式 / Dark mode"
           aria-checked={theme === "dark"}
           className={styles.row}
           disabled={phase === "closing"}
           onClick={onThemeChange}
+          ref={firstActionRef}
           role="switch"
           type="button"
         >

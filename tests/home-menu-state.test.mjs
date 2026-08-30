@@ -26,20 +26,21 @@ const snapshot = (packId, count, activeIndex, position = activeIndex) => ({
 const joinedSnapshot = snapshot("pack-4", 5, 2, 2.1);
 const allSnapshot = snapshot("pack-7", 12, 7, 31.2);
 
-test("initial assignments are joined above and all below", () => {
+test("initial assignments are calendar above and all below", () => {
   const state = createHomeCarouselState(null);
-  assert.deepEqual(getCarouselAssignments(state.topCollection), { top: "joined", bottom: "all" });
+  assert.deepEqual(getCarouselAssignments(state.topCollection, state.bottomCollection), { top: "calendar", bottom: "all" });
 });
 
 test("independent settings changes never select the same content on both sides", () => {
-  let state = { ...createHomeCarouselState(null), settings: { top: "joined", bottom: "all" } };
+  let state = { ...createHomeCarouselState(null), settings: { top: "calendar", bottom: "all" } };
+  state.snapshots = { joined: joinedSnapshot, all: allSnapshot, calendar: null };
   for (let index = 0; index < 10; index++) {
     const assignments = getCarouselAssignments(state.topCollection, state.bottomCollection);
     const byCollection = { joined: joinedSnapshot, all: allSnapshot, calendar: null };
     state = captureHomeCarousels(state, {
       top: byCollection[assignments.top], bottom: byCollection[assignments.bottom],
     });
-    const action = index % 2 === 0 ? "top" : "bottom";
+    const action = "bottom";
     state = selectHomeCarousel(state, action);
     const next = getCarouselAssignments(state.topCollection, state.bottomCollection);
     assert.notEqual(next.top, next.bottom);
@@ -51,8 +52,8 @@ test("independent settings changes never select the same content on both sides",
 });
 
 test("a reduced mock count and fractional winding travel with their collection", () => {
-  let state = captureHomeCarousels({ ...createHomeCarouselState(null), settings: { top: "joined", bottom: "all" } }, {
-    top: joinedSnapshot, bottom: allSnapshot,
+  let state = captureHomeCarousels({ ...createHomeCarouselState(null), settings: { top: "calendar", bottom: "all" } }, {
+    top: null, bottom: allSnapshot,
   });
   assert.deepEqual(resolveCarouselState(packs, 24, "all", state.snapshots.all), {
     activeIndex: 7, count: 12, position: 31.2,
@@ -74,7 +75,7 @@ for (const source of ["top", "bottom"]) {
       carousels: { top: allSnapshot, bottom: joinedSnapshot },
     };
     const restored = createHomeCarouselState(saved);
-    assert.deepEqual(getCarouselAssignments(restored.topCollection), { top: "all", bottom: "joined" });
+    assert.deepEqual(getCarouselAssignments(restored.topCollection, restored.bottomCollection), { top: "calendar", bottom: source === "top" ? "all" : "joined" });
     assert.deepEqual(restored.snapshots.all, allSnapshot);
     assert.deepEqual(restored.snapshots.joined, joinedSnapshot);
     assert.equal(getPackTransitionName(saved.packId, getPackEntrySource(saved.packId, saved)),
@@ -85,7 +86,7 @@ for (const source of ["top", "bottom"]) {
 test("direct detail links fall back to all packs on the bottom", () => {
   const saved = createDirectPackReturnState("pack-20");
   const state = createHomeCarouselState(saved);
-  assert.equal(getCarouselAssignments(state.topCollection).bottom, "all");
+  assert.equal(state.bottomCollection, "all");
   assert.deepEqual(resolveCarouselState(packs, 24, "all", null, saved.packId), {
     activeIndex: 20, count: 21, position: 20,
   });

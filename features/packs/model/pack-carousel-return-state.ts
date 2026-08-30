@@ -59,7 +59,7 @@ export function getPackEntrySource(
 }
 
 export function createDirectPackReturnState(packId: string): PackCarouselReturnState {
-  return { source: "bottom", packId, carousels: { top: null, bottom: null } };
+  return { source: "bottom", packId, topCollection: "calendar", bottomCollection: "all", carousels: { top: null, bottom: null } };
 }
 
 export function getInitialCarouselState(

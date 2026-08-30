@@ -17,10 +17,9 @@ import {
   captureHomeCarousels,
   selectHomeCarousel,
   getChangedCarouselPlacements,
-  getCarouselAssignments,
+  normalizeCarouselAssignments,
   type CarouselSwapPhase,
   type HomeCarouselSelection,
-  type CarouselSelectionAction,
 } from "@/features/packs/model/home-carousel-state";
 import { carouselSettingsStore } from "@/features/packs/model/carousel-settings";
 import { animateCarouselPair } from "@/features/packs/model/carousel-swap-motion";
@@ -60,7 +59,7 @@ export function HomePackCarousels({ packs, joinedPacks, mockLoginName, calendar 
   const swapLockRef = useRef(false);
   const menuOpenRef = useRef(false);
   const pendingSwapRef = useRef<HomeCarouselSelection | null>(null);
-  const assignments = getCarouselAssignments(view.topCollection, view.bottomCollection);
+  const assignments = normalizeCarouselAssignments({ top: view.topCollection, bottom: view.bottomCollection });
   const collections = { joined: joinedPacks, all: packs };
   const busy = !ready || view.phase !== "idle";
 
@@ -90,7 +89,9 @@ export function HomePackCarousels({ packs, joinedPacks, mockLoginName, calendar 
     if (view.phase === "idle") {
       swapLockRef.current = false;
       if (!menuOpenRef.current && !navigationLockRef.current) {
-        topRef.current?.resume();
+        // A bottom swap never paused the calendar; resuming it would restart
+        // its spring and interrupt a month gesture still in progress.
+        if (view.changing.length === 0) topRef.current?.resume();
         bottomRef.current?.resume();
       }
       return;
@@ -135,16 +136,16 @@ export function HomePackCarousels({ packs, joinedPacks, mockLoginName, calendar 
     return true;
   };
 
-  const changeCollection = (action: CarouselSelectionAction) => {
-    if (navigationLockRef.current || swapLockRef.current) return;
-    const captured = captureHomeCarousels(view, {
-      top: topRef.current?.freezeAndSnapshot() ?? null,
-      bottom: bottomRef.current?.freezeAndSnapshot() ?? null,
-    });
-    const next = selectHomeCarousel({ ...captured, settings: view.settings }, action);
+  const changeCollection = () => {
+    if (navigationLockRef.current || swapLockRef.current || menuOpenRef.current) return;
+    const captured = {
+      ...view,
+      snapshots: { ...view.snapshots, [view.bottomCollection]: bottomRef.current?.freezeAndSnapshot() ?? null },
+    };
+    // The calendar stays mounted and keeps its live month, even during a swap.
+    const next = selectHomeCarousel({ ...captured, settings: { top: "calendar", bottom: assignments.bottom } }, "bottom");
     const changing = getChangedCarouselPlacements(view, next);
-    // Only the two settings rows write durable state. Preview never writes.
-    if (action !== "preview") carouselSettingsStore.save(next.settings);
+    carouselSettingsStore.save(next.settings);
     if (changing.length === 0) {
       setView({ ...next, phase: "idle", changing });
       return;
@@ -204,68 +205,38 @@ export function HomePackCarousels({ packs, joinedPacks, mockLoginName, calendar 
 
   return (
     <>
-      {assignments.top === "calendar" ? (
-        <CalendarCarousel
-          key="top-calendar"
-          data={calendar}
-          placement="top"
-          onOpenDate={openCompletedDay}
-          returnDate={returnState?.source === "top" ? returnState.completedDate : undefined}
-          snapshot={view.snapshots.calendar}
-          interactionDisabled={busy || menuOpen}
-          swappingIn={view.phase === "entering" && view.changing.includes("top")}
-          ref={topRef}
-        />
-      ) : <ArcCarousel
-        key={`top-${assignments.top}`}
-        packs={collections[assignments.top]}
+      <CalendarCarousel
+        key="top-calendar"
+        data={calendar}
         placement="top"
-        collection={assignments.top}
-        initialCarouselState={resolveCarouselState(
-          collections[assignments.top], Math.min(24, collections[assignments.top].length),
-          assignments.top, view.snapshots[assignments.top],
-          returnState?.source === "top" ? returnState.packId : undefined,
-        )}
-        interactionDisabled={busy || menuOpen}
-        swappingIn={view.phase === "entering" && view.changing.includes("top")}
+        onOpenDate={openCompletedDay}
+        returnDate={returnState?.completedDate}
+        snapshot={view.snapshots.calendar}
+        interactionDisabled={!ready || menuOpen}
+        swappingIn={false}
         ref={topRef}
-        onOpenPack={openPack}
-      />}
-      {assignments.bottom === "calendar" ? (
-        <CalendarCarousel
-          key="bottom-calendar"
-          data={calendar}
-          placement="bottom"
-          onOpenDate={openCompletedDay}
-          returnDate={returnState?.source === "bottom" ? returnState.completedDate : undefined}
-          snapshot={view.snapshots.calendar}
-          interactionDisabled={busy || menuOpen}
-          swappingIn={view.phase === "entering" && view.changing.includes("bottom")}
-          ref={bottomRef}
-        />
-      ) : <ArcCarousel
+      />
+      <ArcCarousel
         key={`bottom-${assignments.bottom}`}
         packs={collections[assignments.bottom]}
         collection={assignments.bottom}
         initialCarouselState={resolveCarouselState(
           collections[assignments.bottom], Math.min(24, collections[assignments.bottom].length),
           assignments.bottom, view.snapshots[assignments.bottom],
-          returnState?.source === "bottom" ? returnState.packId : undefined,
+          !returnState?.completedDate ? returnState?.packId : undefined,
         )}
         interactionDisabled={busy || menuOpen}
         swappingIn={view.phase === "entering" && view.changing.includes("bottom")}
         ref={bottomRef}
         onOpenPack={openPack}
-      />}
+      />
       <HomeUserMenu
         busy={busy}
         loginName={preferences.loggedOut ? "Guest" : mockLoginName}
         theme={preferences.theme}
-        assignments={view.settings}
+        bottomCollection={assignments.bottom}
         onMenuChange={changeMenu}
-        onChangeTop={() => changeCollection("top")}
-        onChangeBottom={() => changeCollection("bottom")}
-        onReplaceTop={() => changeCollection("preview")}
+        onSwitchPacks={changeCollection}
         onThemeChange={() => updatePreferences({
           ...preferences,
           theme: preferences.theme === "light" ? "dark" : "light",

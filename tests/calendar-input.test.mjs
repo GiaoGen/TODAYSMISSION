@@ -151,7 +151,7 @@ test("open menu/navigation lock prevents starting a calendar gesture", () => {
   assert.equal(input.state.positionRef.current, input.center);
 });
 
-test("actual month markup has only twelve open dividers, no paper or shadow", () => {
+test("actual month markup has fourteen open Bezier dividers, no paper or shadow", () => {
   const require = createRequire(import.meta.url);
   const css = readFileSync(new URL("../features/calendar/components/CalendarCarousel.module.css", import.meta.url), "utf8");
   const component = readFileSync(new URL("../features/calendar/components/CalendarMonth.tsx", import.meta.url), "utf8");
@@ -171,7 +171,7 @@ test("actual month markup has only twelve open dividers, no paper or shadow", ()
     month: months.monthNumber("2026-08"), range: months.getCalendarRange("2026-05-12", "2026-08-30"),
     geometry: geometry.getCalendarGeometry(375, 812, true, "top"), completedOn: new Set(["2026-08-05"]),
   }));
-  assert.equal((html.match(/<path\b/g) || []).length, 12);
+  assert.equal((html.match(/<path\b/g) || []).length, 14);
   assert.doesNotMatch(html, /class="(?:paper|shadow)"/);
   assert.doesNotMatch(css, /\.(?:paper|shadow)\s*\{/);
   assert.match(css, /\.rule\s*\{[^}]*fill:\s*none/);

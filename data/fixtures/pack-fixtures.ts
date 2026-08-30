@@ -8,17 +8,37 @@ const PACK_COUNT = 24;
 const PACK_GROUP_SIZE = 12;
 const MISSION_OFFSETS = [-4, -3, -2, -1, 1, 2, 3, 4] as const;
 
+// The five supplied stream designs repeat without changing Mission identities,
+// counts, photo records or calendar presentation.
+const MISSION_DESIGNS = [
+  { title: "Go to a movie alone.", note: "Pick the film yourself. Buy one ticket. Stay until the credits begin.", tag: "GO ALONE", symbol: "●", background: "#e5392d", foreground: "#111111" },
+  { title: "Ask a stranger for a recommendation.", note: "Coffee, food, music, anything. Start the conversation before you overthink it.", tag: "TALK FIRST", symbol: "■", background: "#1457c9", foreground: "#f3e8c8" },
+  { title: "Ask for something they might say no to.", note: "Keep it harmless and ordinary. The goal is hearing an answer, not getting a yes.", tag: "GET REJECTED", symbol: "▲", background: "#f1c933", foreground: "#111111" },
+  { title: "Sit alone in a busy café.", note: "No laptop shield. No pretending to wait for someone. Just stay for twenty minutes.", tag: "BE SEEN", symbol: "◆", background: "#111111", foreground: "#f3e8c8" },
+  { title: "Give someone a simple compliment.", note: "Say it once, clearly, without turning it into a joke or explaining yourself.", tag: "TALK FIRST", symbol: "◐", background: "#f3e8c8", foreground: "#111111" },
+] as const;
+
+// Cover designs copied from the supplied Mission Deck Wheel prototype.
+const DECK_DESIGNS = [
+  { title: "GO ALONE", description: "Do things without waiting for company.", symbol: "●", background: "#E5392D", foreground: "#111111" },
+  { title: "TALK FIRST", description: "Start small conversations before your fear does.", symbol: "■", background: "#1457C9", foreground: "#F3E8C8" },
+  { title: "GET REJECTED", description: "Practice hearing no without shrinking yourself.", symbol: "▲", background: "#F1C933", foreground: "#111111" },
+  { title: "BE SEEN", description: "Let yourself take up a little more space.", symbol: "◆", background: "#111111", foreground: "#F3E8C8" },
+] as const;
+
 export const PACK_FIXTURES: readonly PackSummary[] = Array.from(
   { length: PACK_COUNT },
   (_, index) => {
     const number = String(index + 1).padStart(2, "0");
+    const { title, ...design } = DECK_DESIGNS[index % DECK_DESIGNS.length];
 
     return {
       id: `mock-pack-${number}`,
       slug: `mock-pack-${number}`,
-      title: `Mock Pack ${number}`,
+      title,
       imageSrc: `https://picsum.photos/seed/todaysmission-${number}/600/800`,
       imageAlt: `Mock Pack ${number}`,
+      deck: { ...design, number, missionCount: MISSION_OFFSETS.length },
     };
   },
 );
@@ -44,6 +64,7 @@ function createMissionFixtures(packIndex: number): readonly MissionSummary[] {
       title: `Mock Mission ${number}`,
       imageSrc: sourcePack.imageSrc,
       imageAlt: `Mock Mission ${number}`,
+      card: { ...MISSION_DESIGNS[missionIndex % MISSION_DESIGNS.length], code: `${number}—${String.fromCharCode(65 + missionIndex)}` },
     };
   });
 }

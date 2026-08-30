@@ -8,6 +8,11 @@ import {
   getCarouselPointerAngle,
   getRelativeSlot,
   getSnapTarget,
+  getDeckIndex,
+  getDeckMetrics,
+  getDeckOffset,
+  getDeckPose,
+  getDeckSwipeDirection,
 } from "../features/packs/model/arc-carousel-geometry.ts";
 
 const viewports = [
@@ -37,7 +42,8 @@ for (const viewport of viewports) {
 
       near(pose.x, metrics.centerX + Math.sin(stepAngle) * radius);
       near(pose.y, metrics.centerY - verticalDirection * Math.cos(stepAngle) * radius);
-      near(pose.rotation, verticalDirection * stepAngle * 0.75);
+      assert.equal(Math.sign(pose.rotation), verticalDirection);
+      assert.ok(Math.abs(pose.rotation) < stepAngle);
 
       const inwardReach = (tilt) =>
         (cardWidth * Math.cos(tilt) + cardHeight * Math.sin(tilt)) / 2;
@@ -143,5 +149,74 @@ test("card angular spacing is 15 percent tighter, including clamped layouts", ()
       const metrics = getCarouselMetrics({ ...viewport, placement });
       near(metrics.stepAngle, previousAngles[index] * 0.85);
     }
+  }
+});
+
+for (const viewport of viewports) {
+  test(`${viewport.name}: deck layout copies the prototype with uniform scaling and mirrored placement`, () => {
+    const bottom = getDeckMetrics(viewport);
+    const top = getDeckMetrics({ ...viewport, placement: "top" });
+    near(top.centerY + bottom.centerY, viewport.height);
+    near(top.cardWidth, bottom.cardWidth);
+    near(top.cardHeight, bottom.cardHeight);
+    near(bottom.cardHeight / bottom.cardWidth, 1.42);
+    assert.ok(bottom.unit > 0 && bottom.unit <= 1);
+    near(bottom.gap / bottom.unit, viewport.width < 640 ? 220 : 290);
+    near(bottom.titleSize / bottom.unit, Math.min(46, Math.max(28, viewport.width * .032)));
+    // Include the active back-card fan, not just the front rectangle.
+    const halfExtent = bottom.cardHeight / 2 + 24 * bottom.unit;
+    assert.ok(bottom.centerY - halfExtent >= viewport.height / 2 + 24 - 1e-8);
+    assert.ok(bottom.centerY + halfExtent <= viewport.height - 12 + 1e-8);
+
+    for (const offset of [-3, -2, -1, 0, 1, 2, 3]) {
+      const a = getDeckPose(offset, bottom);
+      const b = getDeckPose(offset, top);
+      const distance = Math.abs(offset);
+      near(a.x, offset * bottom.gap);
+      near(a.y / bottom.unit, distance * 22);
+      near(a.rotation, offset * (viewport.width < 640 ? 8 : 10));
+      near(a.scale, offset === 0 ? 1 : Math.max(.72, .88 - distance * .06));
+      near(a.opacity, distance > 2 ? 0 : Math.max(.18, 1 - distance * .34));
+      near(a.zIndex, 10 - distance);
+      near(a.x, b.x);
+      near(a.y, -b.y);
+      near(a.rotation, -b.rotation);
+      assert.equal(a.visible, distance <= 2);
+    }
+  });
+}
+
+test("prototype cyclic offsets handle empty, single, small and large decks without duplicate cards", () => {
+  assert.equal(getDeckIndex(10, 0), 0);
+  assert.equal(getDeckOffset(0, 0, 0), 0);
+  for (const count of [1, 2, 3, 4, 5, 6, 12, 24]) {
+    assert.equal(getDeckIndex(count, count), 0);
+    assert.equal(getDeckIndex(-1, count), count - 1);
+    for (let active = 0; active < count; active++) {
+      const offsets = Array.from({ length: count }, (_, index) => getDeckOffset(index, active, count));
+      assert.equal(offsets.filter(offset => offset === 0).length, 1);
+      assert.equal(new Set(offsets).size, count);
+      assert.ok(offsets.every(offset => Math.abs(offset) <= count / 2));
+      for (let index = 0; index < count; index++) {
+        let expected = index - active;
+        if (expected > count / 2) expected -= count;
+        if (expected < -count / 2) expected += count;
+        near(offsets[index], expected);
+      }
+    }
+  }
+});
+
+test("prototype swipe threshold follows the finger and ignores taps, vertical swipes and short drags", () => {
+  for (const deltaX of [-42, 0, 42]) assert.equal(getDeckSwipeDirection(deltaX, 0), 0);
+  assert.equal(getDeckSwipeDirection(-43, 0), 1);
+  assert.equal(getDeckSwipeDirection(43, 0), -1);
+  assert.equal(getDeckSwipeDirection(-60, 90), 0);
+  assert.equal(getDeckSwipeDirection(60, -90), 0);
+  const metrics = getDeckMetrics(viewports[0]);
+  for (const delta of [-80, 80]) {
+    const direction = getDeckSwipeDirection(delta, 0);
+    const after = getDeckPose(getDeckOffset(0, direction, 6), metrics);
+    assert.equal(Math.sign(after.x), Math.sign(delta));
   }
 });

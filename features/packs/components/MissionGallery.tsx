@@ -1,27 +1,32 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { useLayoutEffect, useRef, useSyncExternalStore, ViewTransition } from "react";
+import { useLayoutEffect, useRef, useState, ViewTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { PackCard } from "@/components/card/PackCard";
-import type { MissionSummary } from "@/data/contracts/pack-summary";
+import { getDeckMetrics } from "@/features/packs/model/arc-carousel-geometry";
+import { useDeckViewport } from "@/features/packs/model/use-deck-viewport";
+import { useSafariScroll } from "@/features/packs/model/use-safari-scroll";
+import { getNativeCopyCount, isSafariUserAgent } from "@/features/packs/model/safari-scroll";
+import { mountNativeMissionGallery } from "@/features/packs/model/native-mission-gallery";
+import type { MissionSummary, PackSummary } from "@/data/contracts/pack-summary";
 import { createDirectDayReturnState, getDayTransitionName } from "@/features/calendar/model/calendar-day-transition";
 import { carouselSettingsStore } from "@/features/packs/model/carousel-settings";
-import { getGalleryCopyCount } from "@/features/packs/model/mission-gallery-layout";
+import { getGalleryCopyCount, getMissionStreamMetrics } from "@/features/packs/model/mission-gallery-layout";
+import { MissionStreamDepth } from "@/features/packs/model/mission-stream-depth";
 import {
   createDirectPackReturnState,
   getPackCarouselReturnState,
-  getPackEntrySource,
-  getServerPackCarouselReturnState,
   setPackCarouselReturnState,
-  subscribePackCarouselReturnState,
 } from "@/features/packs/model/pack-carousel-return-state";
 import {
   getPackTransitionName,
   PACK_CLOSE_TRANSITION_TYPE,
 } from "@/features/packs/model/pack-transition";
 
+import { PackDeckCover } from "./PackDeck";
+import { MissionStreamCard } from "./MissionStreamCard";
 import styles from "./MissionGallery.module.css";
 
 const EXPANSION_SETTLE_MS = 1600;
@@ -32,21 +37,27 @@ const SNAP_RATE = 4.8 / SNAP_SECONDS;
 const SNAP_SPRING = SNAP_RATE * SNAP_RATE;
 const SNAP_DAMPING = 2 * SNAP_RATE * 0.76;
 
-const subscribeViewport = (notify: () => void) => {
-  window.addEventListener("resize", notify);
-  return () => window.removeEventListener("resize", notify);
-};
-const getViewportWidth = () => window.innerWidth;
-const getServerViewportWidth = () => 0;
-
 type MissionCardStyle = CSSProperties & {
   "--mission-delay": string;
+};
+
+type PackHeroStyle = CSSProperties & {
+  "--deck-unit": string;
+  "--deck-title-size": string;
+};
+
+type StreamStyle = CSSProperties & {
+  "--mission-card-width": string;
+  "--detail-gap": string;
+  "--stream-unit": string;
+  "--stream-mobile-unit": string;
+  "--stream-collapse-scale": number;
 };
 
 type MissionGalleryProps = {
   id: string;
   title: string;
-  hero: MissionSummary;
+  hero: MissionSummary | PackSummary;
   missions: readonly MissionSummary[];
   completedDate?: string;
 };
@@ -56,12 +67,14 @@ function clamp(value: number, minimum: number, maximum: number) {
 }
 
 function MissionArtwork({
+  stream,
   primaryCopy,
   mission,
   refIndex,
   setRef,
   slot,
 }: {
+  stream: boolean;
   primaryCopy: boolean;
   mission: MissionSummary;
   refIndex: number;
@@ -79,30 +92,49 @@ function MissionArtwork({
       ref={(element) => setRef(refIndex, element)}
       style={style}
     >
-      <PackCard
+      <div className={styles.missionMotion}>{stream ? <div className={styles.streamDepth}>
+        <MissionStreamCard mission={mission} number={slot + 1} />
+      </div> : <PackCard
         eager={primaryCopy && (slot === 0 || slot === 1)}
         pack={mission}
         sizes="(max-width: 599px) 70vw, (orientation: portrait) and (pointer: coarse) 54vw, (pointer: coarse) 34vw, 240px"
-      />
+      />}</div>
     </li>
   );
 }
 
 export function MissionGallery({ id, title, hero, missions, completedDate }: MissionGalleryProps) {
   const router = useRouter();
-  const entry = useSyncExternalStore(
-    subscribePackCarouselReturnState,
-    getPackCarouselReturnState,
-    getServerPackCarouselReturnState,
-  );
-  const source = getPackEntrySource(id, entry);
+  const nativeScrolling = useSafariScroll();
+  const source = completedDate ? "top" : "bottom";
   const rootRef = useRef<HTMLElement>(null);
   const trackRef = useRef<HTMLOListElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const missionRefs = useRef<Array<HTMLLIElement | null>>([]);
   const missionCount = missions.length;
   const looping = completedDate === undefined;
-  const viewportWidth = useSyncExternalStore(subscribeViewport, getViewportWidth, getServerViewportWidth);
-  const copies = looping ? getGalleryCopyCount(missionCount, viewportWidth) : 1;
+  const liveViewport = useDeckViewport();
+  const [stableViewport, setStableViewport] = useState(liveViewport);
+  const viewport = nativeScrolling ? stableViewport : liveViewport;
+  const nativeIdleRef = useRef<((work: () => void) => void) | null>(null);
+  const viewportWidth = viewport.width;
+  const deckMetrics = getDeckMetrics(viewport);
+  const streamMetrics = getMissionStreamMetrics(viewport);
+  const streamStyle: StreamStyle | undefined = looping ? {
+    "--mission-card-width": `${streamMetrics.cardWidth}px`,
+    "--detail-gap": `${streamMetrics.gap}px`,
+    "--stream-unit": `${streamMetrics.unit}px`,
+    "--stream-mobile-unit": `${streamMetrics.mobileUnit}px`,
+    "--stream-collapse-scale": deckMetrics.cardWidth / streamMetrics.cardWidth,
+  } : undefined;
+  const heroStyle: PackHeroStyle | undefined = completedDate ? undefined : {
+    width: deckMetrics.cardWidth,
+    aspectRatio: "1 / 1.42",
+    "--deck-unit": `${deckMetrics.unit}px`,
+    "--deck-title-size": `${deckMetrics.titleSize}px`,
+  };
+  const copies = nativeScrolling ? getNativeCopyCount(missionCount, viewportWidth, streamMetrics.stride, looping)
+    : looping ? getGalleryCopyCount(missionCount, viewportWidth, streamMetrics.stride) : 1;
   const primaryCopy = Math.floor(copies / 2);
   const primaryCopyRef = useRef(primaryCopy);
   const measureRef = useRef<(() => void) | null>(null);
@@ -110,7 +142,7 @@ export function MissionGallery({ id, title, hero, missions, completedDate }: Mis
   useLayoutEffect(() => {
     primaryCopyRef.current = primaryCopy;
     measureRef.current?.();
-  }, [primaryCopy]);
+  }, [primaryCopy, streamMetrics.cardWidth, streamMetrics.gap]);
 
   useLayoutEffect(() => {
     const root = rootRef.current;
@@ -120,6 +152,31 @@ export function MissionGallery({ id, title, hero, missions, completedDate }: Mis
     if (!root || !track || missionCount < 1) {
       return;
     }
+    // Hydration starts from the server snapshot. Wait for the Safari mode
+    // before attaching any driver; never briefly install Chrome's handlers.
+    if (!nativeScrolling && isSafariUserAgent(window.navigator?.userAgent ?? "")) return;
+
+    const navigateHome = () => {
+      const savedState = getPackCarouselReturnState();
+      if (savedState?.packId !== id) {
+        setPackCarouselReturnState(completedDate
+          ? createDirectDayReturnState(completedDate, carouselSettingsStore.read())
+          : createDirectPackReturnState(id));
+      }
+      router.replace("/", { scroll: false, transitionTypes: [PACK_CLOSE_TRANSITION_TYPE] });
+    };
+    if (nativeScrolling && scrollRef.current) {
+      // No transform-driver listeners or RAF loops are mounted in this mode.
+      router.prefetch("/");
+      const native = mountNativeMissionGallery({
+        root, viewport: scrollRef.current, cards, count: missionCount,
+        copies: () => 2 * primaryCopyRef.current + 1, looping,
+        cardClass: styles.missionCard, navigateHome,
+      });
+      measureRef.current = native.measure;
+      nativeIdleRef.current = native.whenIdle;
+      return () => { measureRef.current = null; nativeIdleRef.current = null; native.destroy(); };
+    }
 
     const prefersReducedMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
@@ -128,6 +185,10 @@ export function MissionGallery({ id, title, hero, missions, completedDate }: Mis
     let expandFrame = 0;
     let settleTimer = 0;
     let closeFrame = 0;
+    let depthFrame = 0;
+    let depthRebase = 0;
+    let resetDepth = true;
+    const depth = new MissionStreamDepth();
     let disposed = false;
     let cycleWidth = 0;
     let stride = 0;
@@ -148,8 +209,33 @@ export function MissionGallery({ id, title, hero, missions, completedDate }: Mis
     root.dataset.moving = "false";
     router.prefetch("/");
 
+    const paintDepth = () => {
+      depthFrame = 0;
+      const now = performance.now();
+      const poses = depth.sample(now);
+      for (let index = 0; index < poses.length; index++) {
+        const card = cards[index];
+        if (!card) continue;
+        const pose = poses[index];
+        card.style.setProperty("--stream-y", String(pose.y));
+        card.style.setProperty("--stream-scale", String(pose.scale));
+        card.style.setProperty("--stream-opacity", String(pose.opacity));
+      }
+      const moving = depth.isMoving(now);
+      root.dataset.depthMoving = String(moving);
+      if (moving && !disposed) depthFrame = requestAnimationFrame(paintDepth);
+    };
+
     const renderTrack = () => {
       track.style.transform = `translate3d(${position}px, -50%, 0)`;
+      if (looping) {
+        const center = stride ? missionCount * primaryCopyRef.current + Math.round((origin - position) / stride) : 0;
+        depth.update(cards.length, center, performance.now(), depthRebase, resetDepth || prefersReducedMotion);
+        depthRebase = 0;
+        resetDepth = false;
+        cancelAnimationFrame(depthFrame);
+        paintDepth();
+      }
     };
 
     const normalizePosition = () => {
@@ -169,6 +255,8 @@ export function MissionGallery({ id, title, hero, missions, completedDate }: Mis
         position += cycleWidth;
         wrappedBy += cycleWidth;
       }
+
+      if (stride > 0) depthRebase += Math.round(wrappedBy / stride);
 
       return wrappedBy;
     };
@@ -286,6 +374,8 @@ export function MissionGallery({ id, title, hero, missions, completedDate }: Mis
     };
 
     const measure = () => {
+      if (root.dataset.phase === "closing") return;
+      resetDepth = true;
       if (interactive) {
         stopAnimation();
         const activePointer = pointerId;
@@ -442,21 +532,6 @@ export function MissionGallery({ id, title, hero, missions, completedDate }: Mis
       settleAt(nearestSnap(position) + direction * stride);
     };
 
-    const navigateHome = () => {
-      const savedState = getPackCarouselReturnState();
-
-      if (savedState?.packId !== id) {
-        setPackCarouselReturnState(completedDate
-          ? createDirectDayReturnState(completedDate, carouselSettingsStore.read())
-          : createDirectPackReturnState(id));
-      }
-
-      router.replace("/", {
-        scroll: false,
-        transitionTypes: [PACK_CLOSE_TRANSITION_TYPE],
-      });
-    };
-
     const onBlankClick = (event: MouseEvent) => {
       if (!interactive || performance.now() < suppressBlankClickUntil) {
         return;
@@ -476,6 +551,9 @@ export function MissionGallery({ id, title, hero, missions, completedDate }: Mis
     const closeGallery = () => {
       interactive = false;
       stopAnimation();
+      cancelAnimationFrame(depthFrame);
+      depthFrame = 0;
+      root.dataset.depthMoving = "false";
       updateCollapsedOffsets();
       root.dataset.dragging = "false";
       root.dataset.phase = "closing";
@@ -522,6 +600,7 @@ export function MissionGallery({ id, title, hero, missions, completedDate }: Mis
       cancelAnimationFrame(expandFrame);
       window.clearTimeout(settleTimer);
       cancelAnimationFrame(closeFrame);
+      cancelAnimationFrame(depthFrame);
       if (pointerId !== null && root.hasPointerCapture(pointerId)) {
         root.releasePointerCapture(pointerId);
       }
@@ -534,7 +613,12 @@ export function MissionGallery({ id, title, hero, missions, completedDate }: Mis
       root.removeEventListener("keydown", onKeyDown);
       root.removeEventListener("click", onBlankClick);
     };
-  }, [missionCount, id, completedDate, looping, router]);
+  }, [missionCount, id, completedDate, looping, router, nativeScrolling]);
+
+  useLayoutEffect(() => {
+    if (!nativeScrolling || (liveViewport.width === stableViewport.width && liveViewport.height === stableViewport.height && liveViewport.coarsePointer === stableViewport.coarsePointer)) return;
+    nativeIdleRef.current?.(() => { setStableViewport(liveViewport); });
+  }, [nativeScrolling, liveViewport, stableViewport]);
 
   return (
     <ViewTransition
@@ -551,7 +635,9 @@ export function MissionGallery({ id, title, hero, missions, completedDate }: Mis
         data-moving="false"
         data-phase="collapsed"
         data-kind={completedDate ? "day" : "pack"}
+        data-native-scroll={nativeScrolling}
         data-single={missionCount === 1}
+        style={streamStyle}
         ref={rootRef}
         tabIndex={0}
       >
@@ -560,18 +646,20 @@ export function MissionGallery({ id, title, hero, missions, completedDate }: Mis
           name={completedDate ? getDayTransitionName(completedDate, source) : getPackTransitionName(id, source)}
           share={completedDate ? "calendar-day-morph" : "pack-card-morph"}
         >
-          <div aria-hidden="true" className={styles.hero}>
-            <PackCard eager pack={hero} />
+          <div aria-hidden="true" className={styles.hero} style={heroStyle}>
+            {completedDate ? <PackCard eager pack={hero} /> : <PackDeckCover pack={hero} />}
           </div>
         </ViewTransition>
 
-        <ol aria-label="Missions" className={styles.track} ref={trackRef}>
+        <div className={styles.scrollViewport} ref={scrollRef}>
+          <ol aria-label="Missions" className={styles.track} ref={trackRef}>
           {Array.from({ length: copies }, (_, copyIndex) =>
             missions.map((mission, slot) => {
               const refIndex = copyIndex * missionCount + slot;
 
               return (
                 <MissionArtwork
+                  stream={looping}
                   primaryCopy={copyIndex === primaryCopy}
                   key={`${copyIndex}-${mission.id}`}
                   mission={mission}
@@ -584,7 +672,8 @@ export function MissionGallery({ id, title, hero, missions, completedDate }: Mis
               );
             }),
           )}
-        </ol>
+          </ol>
+        </div>
       </section>
     </ViewTransition>
   );

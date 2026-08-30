@@ -21,6 +21,12 @@ export const COLLECTION_LABELS: Record<CarouselContent, string> = {
   calendar: "日历",
 };
 
+export function normalizeCarouselAssignments(assignments?: CarouselAssignments): { top: "calendar"; bottom: PackCollection } {
+  const bottom = assignments?.bottom === "joined" || assignments?.bottom === "all" ? assignments.bottom
+    : assignments?.top === "joined" || assignments?.top === "all" ? assignments.top : "all";
+  return { top: "calendar", bottom };
+}
+
 export function getCarouselAssignments(
   topCollection: CarouselContent,
   bottomCollection: CarouselContent = topCollection === "joined" ? "all" : "joined",
@@ -38,9 +44,15 @@ export function createHomeCarouselState(
   saved: PackCarouselReturnState | null,
   settings?: CarouselAssignments,
 ): HomeCarouselState {
-  const assignments = saved?.topCollection
+  const previous = saved?.topCollection
     ? getCarouselAssignments(saved.topCollection, saved.bottomCollection)
-    : settings ?? getCarouselAssignments("joined");
+    : settings ?? normalizeCarouselAssignments();
+  const assignments = normalizeCarouselAssignments(previous);
+  // Old sessions could open a Pack from the top. Keep that collection on return,
+  // but move it to the now-permanent bottom Pack wheel.
+  if (saved && !saved.completedDate && previous[saved.source] !== "calendar") {
+    assignments.bottom = previous[saved.source] as PackCollection;
+  }
   return {
     topCollection: assignments.top,
     bottomCollection: assignments.bottom,
@@ -49,8 +61,8 @@ export function createHomeCarouselState(
       all: null,
       calendar: null,
       ...saved?.snapshots,
-      [assignments.top]: saved?.carousels.top ?? null,
-      [assignments.bottom]: saved?.carousels.bottom ?? null,
+      ...(saved?.carousels.top ? { [previous.top]: saved.carousels.top } : {}),
+      ...(saved?.carousels.bottom ? { [previous.bottom]: saved.carousels.bottom } : {}),
     },
   };
 }
@@ -73,14 +85,13 @@ export function selectHomeCarousel(
   state: HomeCarouselSelection,
   action: CarouselSelectionAction,
 ): HomeCarouselSelection {
-  const spare = getSpareCollection(state.settings);
-  const settings = action === "preview" ? state.settings : { ...state.settings, [action]: spare };
+  const settings = normalizeCarouselAssignments(state.settings);
+  if (action === "bottom") settings.bottom = settings.bottom === "joined" ? "all" : "joined";
   return {
     ...state,
     settings,
-    // A settings edit exits temporary viewing. Never promote the other side's
-    // temporary content to a saved setting as a side effect of changing one row.
-    topCollection: action === "preview" ? spare : settings.top,
+    // Legacy top/preview actions are deliberately inert after layout migration.
+    topCollection: "calendar",
     bottomCollection: settings.bottom,
   };
 }

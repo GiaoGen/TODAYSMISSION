@@ -1,5 +1,6 @@
 import type { CarouselPlacement } from "../../packs/model/arc-carousel-geometry";
 import type { CarouselAssignments } from "../../packs/model/home-carousel-state";
+import { normalizeCarouselAssignments } from "../../packs/model/home-carousel-state.ts";
 import type { PackCarouselReturnState } from "../../packs/model/pack-carousel-return-state";
 
 export function getDayGalleryId(date: string) {
@@ -15,15 +16,15 @@ export function getDayGalleryHref(date: string) {
 }
 
 // A refreshed/deep-linked gallery has no live wheel snapshot. Restore this month
-// as a temporary calendar view without rewriting the user's saved settings.
+// in the fixed top calendar without rewriting the user's saved Pack selection.
 export function createDirectDayReturnState(date: string, settings: CarouselAssignments): PackCarouselReturnState {
-  const source = settings.bottom === "calendar" ? "bottom" : "top";
+  const source = "top";
   const calendar = { month: date.slice(0, 7), position: Number(date.slice(0, 4)) * 12 + Number(date.slice(5, 7)) - 1 };
   return {
     source, packId: getDayGalleryId(date), completedDate: date,
-    topCollection: source === "top" ? "calendar" : settings.top,
-    bottomCollection: source === "bottom" ? "calendar" : settings.bottom,
+    topCollection: "calendar",
+    bottomCollection: normalizeCarouselAssignments(settings).bottom,
     snapshots: { joined: null, all: null, calendar },
-    carousels: { top: source === "top" ? calendar : null, bottom: source === "bottom" ? calendar : null },
+    carousels: { top: calendar, bottom: null },
   };
 }

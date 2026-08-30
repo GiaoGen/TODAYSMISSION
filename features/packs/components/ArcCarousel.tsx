@@ -1,58 +1,36 @@
 "use client";
 
-import type { PointerEvent as ReactPointerEvent, Ref } from "react";
-import {
-  useCallback,
-  useEffect,
-  useImperativeHandle,
-  useLayoutEffect,
-  useRef,
-  useState,
-  ViewTransition,
-} from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent, Ref } from "react";
+import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, ViewTransition } from "react";
 import { useRouter } from "next/navigation";
 
-import { PackCard } from "@/components/card/PackCard";
 import type { PackSummary } from "@/data/contracts/pack-summary";
 import {
-  getActiveIndex,
-  getCarouselCardPose,
-  getCarouselMetrics,
-  getCarouselPointerAngle,
-  getRelativeSlot,
-  getSnapTarget,
-  type CarouselMetrics,
+  getActiveIndex, getDeckMetrics, getRelativeSlot, getSnapTarget, getContinuousDeckPose, resistDeckPosition,
+  DECK_DRAG_SENSITIVITY, DECK_MAX_VELOCITY, DECK_INERTIA_SECONDS,
   type CarouselPlacement,
 } from "@/features/packs/model/arc-carousel-geometry";
+import { advanceCarouselSpring } from "@/features/packs/model/carousel-spring";
+import { useDeckViewport } from "@/features/packs/model/use-deck-viewport";
+import { useSafariScroll } from "@/features/packs/model/use-safari-scroll";
+import { NativePackCarousel } from "./NativePackCarousel";
 import {
-  getPackCarouselReturnState,
-  getInitialCarouselState,
-  type InitialCarouselState,
+  getPackCarouselReturnState, getInitialCarouselState, type InitialCarouselState,
 } from "@/features/packs/model/pack-carousel-return-state";
 import { COLLECTION_LABELS, type PackCollection } from "@/features/packs/model/home-carousel-state";
 import type { CarouselHandle } from "@/features/packs/model/carousel-handle";
-import { CAROUSEL_SNAP_SECONDS, CAROUSEL_SPRING_DAMPING_RATIO } from "@/features/packs/model/carousel-spring";
 import {
-  getPackTransitionName,
-  PACK_CLOSE_TRANSITION_TYPE,
-  PACK_OPEN_TRANSITION_TYPE,
+  getPackTransitionName, PACK_CLOSE_TRANSITION_TYPE, PACK_OPEN_TRANSITION_TYPE,
 } from "@/features/packs/model/pack-transition";
+import { PackDeck } from "./PackDeck";
 
 import styles from "./ArcCarousel.module.css";
 
 const MIN_COUNT = 1;
 const MAX_COUNT = 24;
-const DRAG_SPEED = 1;
-const DAMPING = 0.94;
-const MAX_ANGULAR_SPEED = 12;
-const SNAP_TIME_SECONDS = CAROUSEL_SNAP_SECONDS;
-const SNAP_FROM_ANGULAR_SPEED = 1;
-const SNAP_SPRING_DAMPING_RATIO = CAROUSEL_SPRING_DAMPING_RATIO;
-const PICK_TIME_MS = 550;
-const SCROLL_SPEED = 0.0022;
 const DRAG_CAPTURE_THRESHOLD = 5;
 
-type ArcCarouselProps = {
+export type ArcCarouselProps = {
   packs: readonly PackSummary[];
   placement?: CarouselPlacement;
   collection?: PackCollection;
@@ -65,56 +43,31 @@ type ArcCarouselProps = {
 
 export type ArcCarouselHandle = CarouselHandle;
 
-type StageBounds = {
-  left: number;
-  top: number;
-};
-
 type DragState = {
-  captured: boolean;
-  lastAngle: number;
-  lastTime: number;
-  lastX: number;
-  lastY: number;
   pointerId: number;
-  travel: number;
+  startX: number;
+  startY: number;
+  startPosition: number;
+  lastX: number;
+  lastTime: number;
   velocity: number;
+  captured: boolean;
 };
 
-function clamp(value: number, minimum: number, maximum: number) {
-  return Math.min(maximum, Math.max(minimum, value));
+type DeckStageStyle = CSSProperties & {
+  "--card-width": string;
+  "--card-height": string;
+  "--deck-center-y": string;
+  "--deck-unit": string;
+  "--deck-title-size": string;
+};
+
+export function ArcCarousel(props: ArcCarouselProps) {
+  const nativeScrolling = useSafariScroll();
+  return nativeScrolling ? <NativePackCarousel {...props} /> : <TransformArcCarousel {...props} />;
 }
 
-function easeInOutCubic(value: number) {
-  return value < 0.5
-    ? 4 * value * value * value
-    : 1 - Math.pow(-2 * value + 2, 3) / 2;
-}
-
-function getPointerAngle(
-  clientX: number,
-  clientY: number,
-  metrics: CarouselMetrics,
-  bounds: StageBounds,
-) {
-  return getCarouselPointerAngle(
-    clientX - bounds.left,
-    clientY - bounds.top,
-    metrics,
-  );
-}
-
-function wrapAngle(angle: number) {
-  if (angle > Math.PI) {
-    return angle - Math.PI * 2;
-  }
-  if (angle < -Math.PI) {
-    return angle + Math.PI * 2;
-  }
-  return angle;
-}
-
-export function ArcCarousel({
+export function TransformArcCarousel({
   packs,
   placement = "bottom",
   collection = placement === "top" ? "joined" : "all",
@@ -126,552 +79,250 @@ export function ArcCarousel({
 }: ArcCarouselProps) {
   const router = useRouter();
   const maximumCount = Math.min(MAX_COUNT, packs.length);
-  const [initialState] = useState(() =>
-    initialCarouselState ?? getInitialCarouselState(packs, maximumCount, placement, getPackCarouselReturnState()),
-  );
-  const [count, setCount] = useState(initialState.count);
-  const [activeIndex, setActiveIndex] = useState(initialState.activeIndex);
+  const [selection, setSelection] = useState(() => {
+    const initial = initialCarouselState ?? getInitialCarouselState(packs, maximumCount, placement, getPackCarouselReturnState());
+    return { count: initial.count, activeIndex: getActiveIndex(initial.position, initial.count), position: initial.position };
+  });
+  const selectionRef = useRef(selection);
+  const positionRef = useRef(selection.position);
+  const { count, activeIndex } = selection;
+  const viewport = useDeckViewport();
+  const { width, height, coarsePointer } = viewport;
+  const metrics = useMemo(() => getDeckMetrics({ width, height, coarsePointer, placement }), [width, height, coarsePointer, placement]);
   const rootRef = useRef<HTMLElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<Array<HTMLButtonElement | null>>([]);
-  const metricsRef = useRef<CarouselMetrics | null>(null);
-  const stageBoundsRef = useRef<StageBounds>({ left: 0, top: 0 });
-  const positionRef = useRef(initialState.position);
-  const motionVelocityRef = useRef(0);
   const dragRef = useRef<DragState | null>(null);
-  const layoutFrameRef = useRef<number | null>(null);
-  const animationFrameRef = useRef<number | null>(null);
-  const reducedMotionRef = useRef(false);
-  const suppressNextClickRef = useRef(false);
-  const suppressClickTimerRef = useRef<number | null>(null);
   const navigationLockRef = useRef(interactionDisabled);
-  const previousCountRef = useRef(count);
-
+  const frameRef = useRef<number | null>(null);
+  const movingRef = useRef(false);
+  const suppressClickUntilRef = useRef(0);
   const visiblePacks = packs.slice(0, count);
 
-  const setMoving = useCallback((moving: boolean) => {
-    if (stageRef.current) {
-      stageRef.current.dataset.moving = String(moving);
-    }
+  const finishMotion = useCallback(() => {
+    if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+    frameRef.current = null;
+    movingRef.current = false;
+    if (stageRef.current) stageRef.current.dataset.moving = "false";
   }, []);
 
-  const layoutCards = useCallback(() => {
-    layoutFrameRef.current = null;
-    const metrics = metricsRef.current;
-    const stage = stageRef.current;
+  const paint = useCallback(() => {
+    const current = selectionRef.current;
+    cardRefs.current.forEach((card, index) => {
+      if (!card || index >= current.count) return;
+      const pose = getContinuousDeckPose(getRelativeSlot(index, positionRef.current, current.count), metrics);
+      card.style.transform = `translate3d(${pose.x}px, ${pose.y}px, 0) rotate(${pose.rotation}deg) scale(${pose.scale})`;
+      card.style.opacity = String(pose.opacity);
+      card.style.zIndex = String(pose.zIndex);
+      card.style.pointerEvents = pose.visible ? "auto" : "none";
+      card.setAttribute("aria-hidden", String(!pose.visible));
+      card.tabIndex = pose.visible ? 0 : -1;
+    });
+  }, [metrics]);
 
-    if (!metrics || !stage) {
+  const moveTo = useCallback((position: number) => {
+    positionRef.current = position;
+    const current = selectionRef.current;
+    const activeIndex = getActiveIndex(position, current.count);
+    // Only a centered-card change updates React. Frames write transforms directly.
+    if (activeIndex !== current.activeIndex) {
+      const next = { ...current, activeIndex, position };
+      selectionRef.current = next;
+      setSelection(next);
+    }
+    paint();
+  }, [paint]);
+
+  const settle = useCallback((velocity = 0, requestedTarget?: number) => {
+    finishMotion();
+    const count = selectionRef.current.count;
+    const speed = Math.max(-DECK_MAX_VELOCITY, Math.min(DECK_MAX_VELOCITY, velocity));
+    const target = getSnapTarget(requestedTarget ?? positionRef.current + speed * DECK_INERTIA_SECONDS, count);
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || (Math.abs(target - positionRef.current) < 0.001 && Math.abs(speed) < 0.01)) {
+      moveTo(target);
       return;
     }
+    movingRef.current = true;
+    if (stageRef.current) stageRef.current.dataset.moving = "true";
+    let lastTime = performance.now();
+    let currentVelocity = speed;
+    const tick = (time: number) => {
+      const seconds = Math.min(0.034, Math.max(0.001, (time - lastTime) / 1000));
+      lastTime = time;
+      const next = advanceCarouselSpring(positionRef.current, currentVelocity, target, seconds);
+      currentVelocity = next.velocity;
+      moveTo(next.position);
+      if (Math.abs(target - next.position) < 0.001 && Math.abs(currentVelocity) < 0.01) {
+        moveTo(target);
+        finishMotion();
+      } else frameRef.current = requestAnimationFrame(tick);
+    };
+    frameRef.current = requestAnimationFrame(tick);
+  }, [finishMotion, moveTo]);
 
-    stage.style.setProperty("--card-width", `${metrics.cardWidth}px`);
-    stage.style.setProperty("--card-height", `${metrics.cardHeight}px`);
-
-    for (let index = 0; index < count; index += 1) {
-      const card = cardRefs.current[index];
-
-      if (!card) {
-        continue;
-      }
-
-      const relativeSlot = getRelativeSlot(index, positionRef.current, count);
-      const angle = relativeSlot * metrics.stepAngle;
-      const { x, y, rotation } = getCarouselCardPose(relativeSlot, metrics);
-      const distance = Math.abs(relativeSlot);
-      const scale = Math.max(0.88, 1 - Math.min(distance, 3) * 0.035);
-      const opacity = Math.max(0.18, 1 - distance * 0.14);
-      const seamSafeAngle =
-        count >= 6
-          ? Math.max(metrics.stepAngle, (count / 2 - 0.65) * metrics.stepAngle)
-          : Number.POSITIVE_INFINITY;
-      const isOnVisibleArc =
-        Math.abs(angle) <= Math.min(Math.PI * 0.55, seamSafeAngle);
-
-      card.style.transform = `translate3d(${x - metrics.cardWidth / 2}px, ${y - metrics.cardHeight / 2}px, 0) rotate(${rotation}rad) scale(${scale})`;
-      card.style.opacity = isOnVisibleArc ? String(opacity) : "0";
-      card.style.pointerEvents = isOnVisibleArc ? "auto" : "none";
-      card.style.visibility = isOnVisibleArc ? "visible" : "hidden";
-      card.style.zIndex = String(1000 - Math.round(distance * 10));
+  const cancelDrag = useCallback(() => {
+    const drag = dragRef.current;
+    dragRef.current = null;
+    if (drag && stageRef.current?.hasPointerCapture(drag.pointerId)) {
+      stageRef.current.releasePointerCapture(drag.pointerId);
     }
-  }, [count]);
-
-  const scheduleLayout = useCallback(() => {
-    if (layoutFrameRef.current !== null) {
-      return;
-    }
-
-    layoutFrameRef.current = requestAnimationFrame(layoutCards);
-  }, [layoutCards]);
-
-  const stopAnimation = useCallback(() => {
-    if (animationFrameRef.current !== null) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
-    }
-    motionVelocityRef.current = 0;
   }, []);
 
   useImperativeHandle(ref, () => ({
     freezeAndSnapshot() {
       navigationLockRef.current = true;
-      stopAnimation();
-      if (layoutFrameRef.current !== null) {
-        cancelAnimationFrame(layoutFrameRef.current);
-      }
-      const drag = dragRef.current;
-      dragRef.current = null;
-      if (drag && stageRef.current?.hasPointerCapture(drag.pointerId)) {
-        stageRef.current.releasePointerCapture(drag.pointerId);
-      }
-      setMoving(false);
-      layoutCards();
-      const index = getActiveIndex(positionRef.current, count);
-      const pack = count > 0 ? packs[index] : null;
-      return pack ? { activeIndex: index, count, packId: pack.id, position: positionRef.current } : null;
+      cancelDrag();
+      // Freeze only our RAF, never route/pair animations or the other wheel.
+      finishMotion();
+      const current = selectionRef.current;
+      const pack = current.count > 0 ? packs[current.activeIndex] : null;
+      return pack ? { ...current, packId: pack.id, position: positionRef.current } : null;
     },
-    resume() {
-      navigationLockRef.current = false;
-      if (stageRef.current) {
-        const { left, top } = stageRef.current.getBoundingClientRect();
-        stageBoundsRef.current = { left, top };
-      }
-    },
+    resume() { navigationLockRef.current = false; settle(); },
     getElement: () => rootRef.current,
-  }), [count, layoutCards, packs, setMoving, stopAnimation]);
+  }), [cancelDrag, finishMotion, packs, settle]);
 
-  const animateTo = useCallback(
-    (target: number) => {
-      stopAnimation();
-      const from = positionRef.current;
+  // React may commit a new active fan while the spring keeps moving. Reapply
+  // its latest pose before paint, including fractional route-return snapshots.
+  useLayoutEffect(() => { paint(); });
 
-      if (reducedMotionRef.current) {
-        positionRef.current = target;
-        layoutCards();
-        setActiveIndex(getActiveIndex(target, count));
-        setMoving(false);
-        return;
-      }
-
-      const distance = Math.abs(target - from);
-      const duration = PICK_TIME_MS * Math.sqrt(Math.max(1, distance));
-      const startedAt = performance.now();
-      setMoving(true);
-
-      const tick = (now: number) => {
-        const progress = Math.min(1, (now - startedAt) / duration);
-        positionRef.current =
-          from + (target - from) * easeInOutCubic(progress);
-        layoutCards();
-
-        if (progress < 1) {
-          animationFrameRef.current = requestAnimationFrame(tick);
-          return;
-        }
-
-        animationFrameRef.current = null;
-        positionRef.current = target;
-        setActiveIndex(getActiveIndex(target, count));
-        setMoving(false);
-      };
-
-      animationFrameRef.current = requestAnimationFrame(tick);
-    },
-    [count, layoutCards, setMoving, stopAnimation],
-  );
-
-  const startMomentum = useCallback(
-    (initialVelocity: number) => {
-      const metrics = metricsRef.current;
-
-      if (!metrics) {
-        return;
-      }
-
-      stopAnimation();
-
-      if (reducedMotionRef.current) {
-        const target = getSnapTarget(positionRef.current, count);
-        positionRef.current = target;
-        layoutCards();
-        setActiveIndex(getActiveIndex(target, count));
-        setMoving(false);
-        return;
-      }
-
-      const maximumSpeed = MAX_ANGULAR_SPEED / metrics.stepAngle;
-      const decay = Math.max(0.01, -Math.log(DAMPING) * 60);
-      const snapEngagementSpeed = Math.max(
-        SNAP_FROM_ANGULAR_SPEED / metrics.stepAngle,
-        decay * 0.5,
-      );
-      const snapRate = 4.8 / Math.max(0.05, SNAP_TIME_SECONDS);
-      const springStrength = snapRate * snapRate;
-      const springDamping =
-        2 * snapRate * SNAP_SPRING_DAMPING_RATIO;
-      let previousTime = performance.now();
-      let settling = false;
-      let snapTarget = 0;
-      let snapSpeedCap = 0;
-
-      motionVelocityRef.current = clamp(
-        initialVelocity,
-        -maximumSpeed,
-        maximumSpeed,
-      );
-      setMoving(true);
-
-      const tick = (now: number) => {
-        const elapsedSeconds = Math.min(
-          0.05,
-          Math.max(0, now - previousTime) / 1000,
-        );
-        previousTime = now;
-        let velocity = motionVelocityRef.current;
-        let nextPosition = positionRef.current + velocity * elapsedSeconds;
-
-        if (count < 6) {
-          const boundedPosition = clamp(nextPosition, 0, count - 1);
-          if (boundedPosition !== nextPosition) {
-            velocity = 0;
-          }
-          nextPosition = boundedPosition;
-        }
-
-        positionRef.current = nextPosition;
-        if (!settling) {
-          velocity *= Math.pow(DAMPING, elapsedSeconds * 60);
-        }
-
-        if (!settling && Math.abs(velocity) < snapEngagementSpeed) {
-          const coastPosition = positionRef.current + velocity / decay;
-          snapTarget = getSnapTarget(coastPosition, count);
-          snapSpeedCap = Math.max(Math.abs(velocity), snapRate * 0.5);
-          settling = true;
-        }
-
-        if (settling) {
-          const offset = snapTarget - positionRef.current;
-          velocity += offset * springStrength * elapsedSeconds;
-          velocity *= Math.exp(-springDamping * elapsedSeconds);
-          velocity = clamp(
-            velocity,
-            -snapSpeedCap,
-            snapSpeedCap,
-          );
-
-          if (Math.abs(velocity) < 0.0015 && Math.abs(offset) < 0.0008) {
-            positionRef.current = snapTarget;
-            motionVelocityRef.current = 0;
-            animationFrameRef.current = null;
-            layoutCards();
-            setActiveIndex(getActiveIndex(snapTarget, count));
-            setMoving(false);
-            return;
-          }
-        }
-
-        motionVelocityRef.current = velocity;
-        layoutCards();
-        animationFrameRef.current = requestAnimationFrame(tick);
-      };
-
-      animationFrameRef.current = requestAnimationFrame(tick);
-    },
-    [count, layoutCards, setMoving, stopAnimation],
-  );
-
-  useLayoutEffect(() => {
-    const stage = stageRef.current;
-
-    if (!stage) {
-      return;
-    }
-
-    const pointerQuery = window.matchMedia("(pointer: coarse)");
-
-    const updateMetrics = () => {
-      const { height, left, top, width } = stage.getBoundingClientRect();
-      stageBoundsRef.current = { left, top };
-      metricsRef.current = getCarouselMetrics({
-        coarsePointer: pointerQuery.matches,
-        height,
-        placement,
-        width,
-      });
-      layoutCards();
+  useEffect(() => {
+    const interrupted = () => {
+      if (dragRef.current) suppressClickUntilRef.current = performance.now() + 400;
+      cancelDrag();
+      finishMotion();
+      moveTo(getSnapTarget(positionRef.current, selectionRef.current.count));
     };
-
-    updateMetrics();
-    const observer = new ResizeObserver(updateMetrics);
-    observer.observe(stage);
-    pointerQuery.addEventListener("change", updateMetrics);
-
+    window.addEventListener("blur", interrupted);
+    window.addEventListener("resize", interrupted);
+    const visibility = () => { if (document.hidden) interrupted(); };
+    document.addEventListener("visibilitychange", visibility);
     return () => {
-      observer.disconnect();
-      pointerQuery.removeEventListener("change", updateMetrics);
+      window.removeEventListener("blur", interrupted);
+      window.removeEventListener("resize", interrupted);
+      document.removeEventListener("visibilitychange", visibility);
+      cancelDrag();
+      finishMotion();
     };
-  }, [count, layoutCards, placement]);
+  }, [cancelDrag, finishMotion, moveTo]);
 
-  useEffect(() => {
-    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const updatePreference = () => {
-      reducedMotionRef.current = mediaQuery.matches;
-    };
+  const selectIndex = useCallback((index: number) => {
+    if (navigationLockRef.current || interactionDisabled) return;
+    const current = selectionRef.current;
+    if (current.count <= 1) return;
+    const offset = getRelativeSlot(index, positionRef.current, current.count);
+    settle(0, positionRef.current + offset);
+  }, [interactionDisabled, settle]);
 
-    updatePreference();
-    mediaQuery.addEventListener("change", updatePreference);
-
-    return () => mediaQuery.removeEventListener("change", updatePreference);
-  }, []);
+  const stepCarousel = useCallback((direction: -1 | 1) => {
+    selectIndex(selectionRef.current.activeIndex + direction);
+  }, [selectIndex]);
 
   useEffect(() => {
     const stage = stageRef.current;
-
-    if (!stage) {
-      return;
-    }
-
-    const handleWheel = (event: WheelEvent) => {
-      const metrics = metricsRef.current;
-
-      if (!metrics || count <= 1 || navigationLockRef.current) {
-        return;
-      }
-
+    if (!stage) return;
+    const onWheel = (event: WheelEvent) => {
+      if (event.ctrlKey || navigationLockRef.current || interactionDisabled || selectionRef.current.count <= 1) return;
       event.preventDefault();
-      const delta =
-        Math.abs(event.deltaY) >= Math.abs(event.deltaX)
-          ? event.deltaY
-          : event.deltaX;
-      const angularVelocity = (delta * SCROLL_SPEED) / (1 / 60);
-      const slotVelocity = angularVelocity / metrics.stepAngle;
-      startMomentum(motionVelocityRef.current + slotVelocity);
+      if (movingRef.current || dragRef.current) return;
+      const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+      if (Math.abs(delta) >= 2) stepCarousel(delta > 0 ? 1 : -1);
     };
-
-    stage.addEventListener("wheel", handleWheel, { passive: false });
-    return () => stage.removeEventListener("wheel", handleWheel);
-  }, [count, startMomentum]);
-
-  useEffect(() => {
-    if (previousCountRef.current === count) {
-      scheduleLayout();
-      return;
-    }
-
-    previousCountRef.current = count;
-    const nextPosition =
-      count < 6
-        ? Math.floor(count / 2)
-        : Math.min(
-            getActiveIndex(positionRef.current, Math.max(count, 1)),
-            count - 1,
-          );
-    positionRef.current = nextPosition;
-    setActiveIndex(nextPosition);
-    stopAnimation();
-    setMoving(false);
-    scheduleLayout();
-  }, [count, scheduleLayout, setMoving, stopAnimation]);
+    stage.addEventListener("wheel", onWheel, { passive: false });
+    return () => stage.removeEventListener("wheel", onWheel);
+  }, [interactionDisabled, stepCarousel]);
 
   useEffect(() => {
-    const activePack = packs[activeIndex];
-
-    if (activePack && activeIndex < count) {
-      router.prefetch(`/pack/${encodeURIComponent(activePack.slug)}`);
-    }
+    const pack = packs[activeIndex];
+    if (pack && activeIndex < count) router.prefetch(`/pack/${encodeURIComponent(pack.slug)}`);
   }, [activeIndex, count, packs, router]);
 
-  useEffect(
-    () => () => {
-      stopAnimation();
-      if (layoutFrameRef.current !== null) {
-        cancelAnimationFrame(layoutFrameRef.current);
-      }
-      if (suppressClickTimerRef.current !== null) {
-        window.clearTimeout(suppressClickTimerRef.current);
-      }
-    },
-    [stopAnimation],
-  );
-
-  const finishDrag = useCallback(
-    (withInertia: boolean) => {
-      const drag = dragRef.current;
-
-      if (!drag) {
-        return;
-      }
-
-      dragRef.current = null;
-
-      if (!drag.captured) {
-        setMoving(false);
-        return;
-      }
-
-      startMomentum(withInertia ? drag.velocity : 0);
-    },
-    [setMoving, startMomentum],
-  );
-
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const metrics = metricsRef.current;
-
-    if (
-      count <= 1 ||
-      event.button !== 0 ||
-      !metrics ||
-      dragRef.current ||
-      navigationLockRef.current
-    ) {
-      return;
-    }
-
-    stopAnimation();
+    if (!event.isPrimary || event.button !== 0 || navigationLockRef.current || interactionDisabled || dragRef.current) return;
+    suppressClickUntilRef.current = 0;
+    if (count <= 1) return;
+    finishMotion();
     dragRef.current = {
-      captured: false,
-      lastAngle: getPointerAngle(
-        event.clientX,
-        event.clientY,
-        metrics,
-        stageBoundsRef.current,
-      ),
-      lastTime: performance.now(),
-      lastX: event.clientX,
-      lastY: event.clientY,
-      pointerId: event.pointerId,
-      travel: 0,
-      velocity: 0,
+      pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, captured: false,
+      startPosition: positionRef.current, lastX: event.clientX, lastTime: event.timeStamp, velocity: 0,
     };
   };
 
   const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current;
-    const metrics = metricsRef.current;
-
-    if (!drag || drag.pointerId !== event.pointerId || !metrics) {
-      return;
-    }
-
-    const nextAngle = getPointerAngle(
-      event.clientX,
-      event.clientY,
-      metrics,
-      stageBoundsRef.current,
-    );
-    const angularTurn = wrapAngle(nextAngle - drag.lastAngle) * DRAG_SPEED;
-    const slotTurn = angularTurn / metrics.stepAngle;
-    const now = performance.now();
-    const elapsedSeconds = Math.max(0.008, (now - drag.lastTime) / 1000);
-    const travelDelta = Math.hypot(
-      event.clientX - drag.lastX,
-      event.clientY - drag.lastY,
-    );
-
-    drag.travel += travelDelta;
-
-    if (!drag.captured && drag.travel <= DRAG_CAPTURE_THRESHOLD) {
-      drag.lastAngle = nextAngle;
-      drag.lastTime = now;
-      drag.lastX = event.clientX;
-      drag.lastY = event.clientY;
-      return;
-    }
-
-    if (!drag.captured) {
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - drag.startX;
+    const deltaY = event.clientY - drag.startY;
+    // Delay capture so a stationary desktop click still reaches its button.
+    if (!drag.captured && Math.abs(deltaX) > DRAG_CAPTURE_THRESHOLD && Math.abs(deltaX) > Math.abs(deltaY)) {
       drag.captured = true;
       event.currentTarget.setPointerCapture(event.pointerId);
-      setMoving(true);
     }
-
-    let nextPosition = positionRef.current + slotTurn;
-
-    if (count < 6) {
-      nextPosition = clamp(nextPosition, 0, count - 1);
-    }
-
-    drag.lastAngle = nextAngle;
-    drag.lastTime = now;
+    if (!drag.captured) return;
+    movingRef.current = true;
+    event.currentTarget.dataset.moving = "true";
+    const elapsed = Math.max(8, event.timeStamp - drag.lastTime) / 1000;
+    const velocity = -(event.clientX - drag.lastX) * DECK_DRAG_SENSITIVITY / metrics.gap / elapsed;
+    drag.velocity = Math.max(-DECK_MAX_VELOCITY, Math.min(DECK_MAX_VELOCITY, velocity * 0.7 + drag.velocity * 0.3));
     drag.lastX = event.clientX;
-    drag.lastY = event.clientY;
-    drag.velocity = (nextPosition - positionRef.current) / elapsedSeconds;
-    positionRef.current = nextPosition;
-    scheduleLayout();
+    drag.lastTime = event.timeStamp;
+    moveTo(resistDeckPosition(drag.startPosition - deltaX * DECK_DRAG_SENSITIVITY / metrics.gap, count));
   };
 
   const handlePointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current;
-
-    if (drag?.pointerId !== event.pointerId) {
-      return;
-    }
-
-    if (drag.captured) {
-      suppressNextClickRef.current = true;
-      if (suppressClickTimerRef.current !== null) {
-        window.clearTimeout(suppressClickTimerRef.current);
-      }
-      suppressClickTimerRef.current = window.setTimeout(() => {
-        suppressNextClickRef.current = false;
-        suppressClickTimerRef.current = null;
-      }, 0);
-    }
-
-    if (
-      drag.captured &&
-      event.currentTarget.hasPointerCapture(event.pointerId)
-    ) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-    finishDrag(true);
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    if (drag.captured) suppressClickUntilRef.current = event.timeStamp + 400;
+    const velocity = drag.captured && event.timeStamp - drag.lastTime <= 80 ? drag.velocity : 0;
+    cancelDrag();
+    settle(velocity);
   };
 
-  const handleCardClick = (index: number) => {
-    if (navigationLockRef.current || dragRef.current || suppressNextClickRef.current) {
-      suppressNextClickRef.current = false;
-      return;
-    }
-
-    const offset = getRelativeSlot(index, positionRef.current, count);
-
-    if (Math.abs(offset) < 0.02) {
-      const pack = visiblePacks[index];
-
-      if (!pack || navigationLockRef.current) {
-        return;
-      }
-
-      onOpenPack(pack, placement);
-      return;
-    }
-
-    animateTo(getSnapTarget(positionRef.current + offset, count));
+  const handlePointerCancel = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (dragRef.current?.pointerId !== event.pointerId) return;
+    suppressClickUntilRef.current = event.timeStamp + 400;
+    cancelDrag();
+    settle();
   };
 
-  const stepCarousel = (direction: -1 | 1) => {
-    if (navigationLockRef.current) return;
-    animateTo(getSnapTarget(positionRef.current + direction, count));
+  const handleCardClick = (index: number, timeStamp: number) => {
+    if (navigationLockRef.current || interactionDisabled || dragRef.current || timeStamp < suppressClickUntilRef.current) return;
+    if (index !== selectionRef.current.activeIndex || Math.abs(positionRef.current - Math.round(positionRef.current)) > 0.001) {
+      selectIndex(index);
+    } else if (!movingRef.current) {
+      const pack = packs[index];
+      if (pack) onOpenPack(pack, placement);
+    }
   };
 
   const changeCount = (delta: -1 | 1) => {
-    if (navigationLockRef.current) return;
-    setCount((current) => clamp(current + delta, MIN_COUNT, maximumCount));
+    if (navigationLockRef.current || interactionDisabled || maximumCount === 0) return;
+    const current = selectionRef.current;
+    const nextCount = Math.max(MIN_COUNT, Math.min(maximumCount, current.count + delta));
+    const nextIndex = Math.min(current.activeIndex, nextCount - 1);
+    const next = { count: nextCount, activeIndex: nextIndex, position: nextIndex };
+    cancelDrag();
+    finishMotion();
+    selectionRef.current = next;
+    positionRef.current = next.position;
+    setSelection(next);
   };
 
+  const stageStyle: DeckStageStyle = {
+    "--card-width": `${metrics.cardWidth}px`,
+    "--card-height": `${metrics.cardHeight}px`,
+    "--deck-center-y": `${metrics.centerY}px`,
+    "--deck-unit": `${metrics.unit}px`,
+    "--deck-title-size": `${metrics.titleSize}px`,
+  };
   const enterClass = placement === "top" ? "pack-home-top-enter" : "pack-home-enter";
   const exitClass = placement === "top" ? "pack-home-top-exit" : "pack-home-exit";
 
   return (
     <ViewTransition
       default="none"
-      enter={{
-        [PACK_CLOSE_TRANSITION_TYPE]: enterClass,
-        default: enterClass,
-      }}
-      exit={{
-        [PACK_OPEN_TRANSITION_TYPE]: exitClass,
-        default: "none",
-      }}
+      enter={{ [PACK_CLOSE_TRANSITION_TYPE]: enterClass, default: enterClass }}
+      exit={{ [PACK_OPEN_TRANSITION_TYPE]: exitClass, default: "none" }}
     >
       <section
         aria-label={`${placement === "top" ? "上轮盘" : "下轮盘"}：${COLLECTION_LABELS[collection]}（模拟数据）/ ${collection === "joined" ? "Joined" : "All"} packs (mock)`}
@@ -683,88 +334,68 @@ export function ArcCarousel({
       >
         <div
           className={styles.stage}
-          data-moving="false"
           onKeyDown={(event) => {
             if (count <= 1) return;
-            if (event.key === "ArrowLeft") {
+            if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
               event.preventDefault();
-              stepCarousel(-1);
+              stepCarousel(event.key === "ArrowLeft" ? -1 : 1);
             }
-            if (event.key === "ArrowRight") {
-              event.preventDefault();
-              stepCarousel(1);
-            }
-          }}
-          onPointerCancel={() => finishDrag(false)}
-          onPointerLeave={() => {
-            if (dragRef.current && !dragRef.current.captured) finishDrag(false);
           }}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerCancel}
+          onLostPointerCapture={(event) => {
+            // Touch initially captures the hit card. Its loss bubbles when
+            // capture transfers to the stage; only a real stage loss cancels.
+            if (event.target === event.currentTarget && !event.currentTarget.hasPointerCapture(event.pointerId)) {
+              handlePointerCancel(event);
+            }
+          }}
+          onPointerLeave={(event) => {
+            if (!dragRef.current?.captured) handlePointerCancel(event);
+          }}
           ref={stageRef}
           role="group"
+          style={stageStyle}
           tabIndex={count > 0 ? 0 : -1}
         >
           {visiblePacks.map((pack, index) => {
-            const directDistance = Math.abs(index - activeIndex);
-            const activeDistance = count >= 6
-              ? Math.min(directDistance, count - directDistance)
-              : directDistance;
-
+            const pose = getContinuousDeckPose(getRelativeSlot(index, selection.position, count), metrics);
             return (
               <button
                 aria-current={index === activeIndex ? "true" : undefined}
+                aria-hidden={!pose.visible}
                 aria-label={`${pack.title}, ${index + 1} / ${count}`}
                 className={styles.card}
                 key={pack.id}
-                onClick={() => handleCardClick(index)}
-                ref={(element) => {
-                  cardRefs.current[index] = element;
+                ref={(element) => { cardRefs.current[index] = element; }}
+                onClick={(event) => handleCardClick(index, event.timeStamp)}
+                tabIndex={pose.visible ? 0 : -1}
+                style={{
+                  transform: `translate3d(${pose.x}px, ${pose.y}px, 0) rotate(${pose.rotation}deg) scale(${pose.scale})`,
+                  opacity: pose.opacity, zIndex: pose.zIndex,
+                  pointerEvents: pose.visible ? "auto" : "none",
                 }}
                 type="button"
               >
-                <ViewTransition
-                  default="none"
-                  name={getPackTransitionName(pack.id, placement)}
-                  share="pack-card-morph"
-                >
-                  <PackCard eager={activeDistance <= (placement === "top" ? 1 : 2)} pack={pack} />
-                </ViewTransition>
+                <PackDeck pack={pack} active={index === activeIndex} placement={placement} transitionName={getPackTransitionName(pack.id, placement)} />
               </button>
             );
           })}
         </div>
-
         {placement === "bottom" && (
           <div className={styles.countControl} aria-label="当前图片数量 / Current image count">
-            <button
-              aria-label="减少图片 / Decrease images"
-              className={styles.countButton}
-              disabled={count <= MIN_COUNT}
-              onClick={() => changeCount(-1)}
-              type="button"
-            >
+            <button aria-label="减少图片 / Decrease images" className={styles.countButton} disabled={count <= MIN_COUNT} onClick={() => changeCount(-1)} type="button">
               <span aria-hidden="true">−</span>
             </button>
-            <output className={styles.countValue} aria-live="polite">
-              {count}
-            </output>
-            <button
-              aria-label="增加图片 / Increase images"
-              className={styles.countButton}
-              disabled={count >= maximumCount}
-              onClick={() => changeCount(1)}
-              type="button"
-            >
+            <output className={styles.countValue} aria-live="polite">{count}</output>
+            <button aria-label="增加图片 / Increase images" className={styles.countButton} disabled={count >= maximumCount} onClick={() => changeCount(1)} type="button">
               <span aria-hidden="true">+</span>
             </button>
           </div>
         )}
-
-        <p className={styles.srOnly} aria-live="polite">
-          {count > 0 ? activeIndex + 1 : 0} / {count}
-        </p>
+        <p className={styles.srOnly} aria-live="polite">{count > 0 ? activeIndex + 1 : 0} / {count}</p>
       </section>
     </ViewTransition>
   );

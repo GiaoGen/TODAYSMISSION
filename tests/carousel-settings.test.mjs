@@ -10,7 +10,7 @@ import { CAROUSEL_SETTINGS_KEY, DEFAULT_CAROUSEL_SETTINGS, createCarouselSetting
 import * as selection from "../features/packs/model/home-carousel-state.ts";
 import { animateCarouselPair } from "../features/packs/model/carousel-swap-motion.ts";
 
-const makeState = (settings = { top: "joined", bottom: "all" }) => ({ ...selection.createHomeCarouselState(null, settings), settings });
+const makeState = (settings = { top: "calendar", bottom: "all" }) => ({ ...selection.createHomeCarouselState(null, settings), settings });
 const sourceText = readFileSync(new URL("../features/packs/components/HomePackCarousels.tsx", import.meta.url), "utf8");
 
 function memoryStorage() {
@@ -19,13 +19,13 @@ function memoryStorage() {
   return { writes, getItem: key => items.get(key) ?? null, setItem(key, value) { writes.push([key, value]); items.set(key, value); } };
 }
 
-test("all six valid assignments survive a fresh store, while storage contains only two settings", () => {
-  for (const top of ["joined", "all", "calendar"]) {
-    for (const bottom of ["joined", "all", "calendar"].filter(item => item !== top)) {
+test("both bottom Pack selections survive refresh, with only durable settings persisted", () => {
+  for (const top of ["calendar"]) {
+    for (const bottom of ["joined", "all"]) {
       const storage = memoryStorage();
       const store = createCarouselSettingsStore(() => storage);
       assert.equal(store.save({ top, bottom, temporary: "ignored", position: 12, loggedOut: true }), true);
-      assert.deepEqual(JSON.parse(storage.getItem(CAROUSEL_SETTINGS_KEY)), { version: 1, top, bottom });
+      assert.deepEqual(JSON.parse(storage.getItem(CAROUSEL_SETTINGS_KEY)), { version: 2, top, bottom });
       assert.deepEqual(createCarouselSettingsStore(() => storage).read(), { top, bottom });
       const restored = selection.createHomeCarouselState(null, createCarouselSettingsStore(() => storage).read());
       assert.equal(restored.topCollection, top);
@@ -33,6 +33,21 @@ test("all six valid assignments survive a fresh store, while storage contains on
       assert.deepEqual(restored.snapshots, { joined: null, all: null, calendar: null });
     }
   }
+});
+
+test("all six legacy pairs migrate to calendar on top, preferring the previous bottom Pack", () => {
+  for (const top of ["calendar", "joined", "all"]) {
+    for (const bottom of ["calendar", "joined", "all"].filter(content => content !== top)) {
+      const storage = memoryStorage();
+      storage.setItem("todaysmission:carousel-settings:v1", JSON.stringify({ version: 1, top, bottom }));
+      const expected = { top: "calendar", bottom: bottom === "calendar" ? top : bottom };
+      const store = createCarouselSettingsStore(() => storage);
+      assert.deepEqual(store.read(), expected);
+      assert.equal(store.save(expected), true);
+      assert.deepEqual(createCarouselSettingsStore(() => storage).read(), expected);
+    }
+  }
+  assert.equal(parseCarouselSettings('{"version":"2","top":"calendar","bottom":"all"}'), null);
 });
 
 test("malformed, outdated and duplicate settings fail closed to defaults", () => {
@@ -48,10 +63,10 @@ test("denied storage getters and quota failures cannot crash or corrupt session 
   assert.equal(denied.save({ top: "calendar", bottom: "joined" }), false);
   assert.deepEqual(denied.read(), { top: "calendar", bottom: "joined" });
   const quota = createCarouselSettingsStore(() => ({ getItem: () => null, setItem() { throw new Error("QuotaExceededError"); } }));
-  assert.equal(quota.save({ top: "all", bottom: "calendar" }), false);
-  assert.deepEqual(quota.read(), { top: "all", bottom: "calendar" });
+  assert.equal(quota.save({ top: "calendar", bottom: "all" }), false);
+  assert.deepEqual(quota.read(), { top: "calendar", bottom: "all" });
   assert.equal(quota.save({ top: "all", bottom: "all" }), false);
-  assert.deepEqual(quota.read(), { top: "all", bottom: "calendar" });
+  assert.deepEqual(quota.read(), { top: "calendar", bottom: "all" });
 });
 
 test("caller mutation never changes cached or persisted settings", () => {
@@ -65,39 +80,39 @@ test("caller mutation never changes cached or persisted settings", () => {
   assert.deepEqual(createCarouselSettingsStore(() => storage).read(), store.read());
 });
 
-test("preview never changes the saved pair; refresh restores it", () => {
+test("legacy preview cannot replace the fixed calendar", () => {
   const state = makeState({ top: "calendar", bottom: "joined" });
   const preview = selection.selectHomeCarousel(state, "preview");
   assert.deepEqual(preview.settings, state.settings);
-  assert.equal(preview.topCollection, "all");
+  assert.equal(preview.topCollection, "calendar");
   assert.equal(preview.bottomCollection, "joined");
-  assert.deepEqual(selection.getChangedCarouselPlacements(state, preview), ["top"]);
+  assert.deepEqual(selection.getChangedCarouselPlacements(state, preview), []);
   const refreshed = selection.createHomeCarouselState(null, preview.settings);
   assert.equal(refreshed.topCollection, "calendar");
 });
 
-test("changing bottom during preview exits preview without saving its temporary top", () => {
+test("switching after a legacy preview action still changes bottom only", () => {
   const state = makeState();
   const preview = selection.selectHomeCarousel(state, "preview");
   const next = selection.selectHomeCarousel(preview, "bottom");
-  assert.deepEqual(next.settings, { top: "joined", bottom: "calendar" });
-  assert.equal(next.topCollection, "joined");
-  assert.equal(next.bottomCollection, "calendar");
-  assert.deepEqual(selection.getChangedCarouselPlacements(preview, next), ["top", "bottom"]);
+  assert.deepEqual(next.settings, { top: "calendar", bottom: "joined" });
+  assert.equal(next.topCollection, "calendar");
+  assert.equal(next.bottomCollection, "joined");
+  assert.deepEqual(selection.getChangedCarouselPlacements(preview, next), ["bottom"]);
 });
 
-test("each settings row modifies only its saved side and skips the other side", () => {
+test("bottom alternates between the two Pack collections and top is immutable", () => {
   const state = makeState({ top: "calendar", bottom: "joined" });
   const next = selection.selectHomeCarousel(state, "bottom");
   assert.deepEqual(next.settings, { top: "calendar", bottom: "all" });
   assert.deepEqual(selection.getChangedCarouselPlacements(state, next), ["bottom"]);
   assert.deepEqual(selection.selectHomeCarousel(next, "bottom").settings, state.settings);
   const top = selection.selectHomeCarousel(state, "top");
-  assert.deepEqual(top.settings, { top: "all", bottom: "joined" });
-  assert.deepEqual(selection.getChangedCarouselPlacements(state, top), ["top"]);
+  assert.deepEqual(top.settings, state.settings);
+  assert.deepEqual(selection.getChangedCarouselPlacements(state, top), []);
 });
 
-test("explicitly selecting previewed content saves it without remounting the same visible wheel", () => {
+test("legacy top selection remains inert", () => {
   const preview = selection.selectHomeCarousel(makeState(), "preview");
   const saved = selection.selectHomeCarousel(preview, "top");
   assert.deepEqual(saved.settings, { top: "calendar", bottom: "all" });
@@ -105,14 +120,14 @@ test("explicitly selecting previewed content saves it without remounting the sam
   assert.deepEqual(selection.getChangedCarouselPlacements(preview, selection.selectHomeCarousel(preview, "preview")), []);
 });
 
-test("Pack return restores a temporary view but refresh restores only saved configuration", () => {
+test("Pack return and refresh both preserve the fixed layout", () => {
   const preview = selection.selectHomeCarousel(makeState(), "preview");
   const saved = { topCollection: preview.topCollection, bottomCollection: preview.bottomCollection,
     source: "bottom", packId: "pack-1", carousels: { top: { month: "2026-07", position: 24318 }, bottom: null } };
   const returned = selection.createHomeCarouselState(saved, preview.settings);
   assert.equal(returned.topCollection, "calendar");
   assert.deepEqual(returned.snapshots.calendar, saved.carousels.top);
-  assert.equal(selection.createHomeCarouselState(null, preview.settings).topCollection, "joined");
+  assert.equal(selection.createHomeCarouselState(null, preview.settings).topCollection, "calendar");
 });
 
 function findNode(node, predicate) {
@@ -120,7 +135,7 @@ function findNode(node, predicate) {
   return ts.forEachChild(node, child => findNode(child, predicate));
 }
 
-test("actual menu controller saves only explicit settings, rejects overlapping changes, and snapshots both wheels", () => {
+test("actual switch controller saves the bottom choice and never freezes the calendar", () => {
   const source = ts.createSourceFile("HomePackCarousels.tsx", sourceText, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const arrow = findNode(source, node => ts.isVariableDeclaration(node) && node.name.getText(source) === "changeCollection").initializer;
   const storage = memoryStorage();
@@ -129,7 +144,8 @@ test("actual menu controller saves only explicit settings, rejects overlapping c
     ...selection,
     view: { ...makeState(), phase: "idle", changing: [] },
     navigationLockRef: { current: false }, swapLockRef: { current: false }, pendingSwapRef: { current: null },
-    topRef: { current: { freezeAndSnapshot() { frozen++; return null; } } },
+    menuOpenRef: { current: false }, assignments: { top: "calendar", bottom: "all" },
+    topRef: { current: { freezeAndSnapshot() { throw new Error("calendar must stay live"); } } },
     bottomRef: { current: { freezeAndSnapshot() { frozen++; return null; } } },
     carouselSettingsStore: createCarouselSettingsStore(() => storage),
     setView(update) { context.view = typeof update === "function" ? update(context.view) : update; },
@@ -137,19 +153,25 @@ test("actual menu controller saves only explicit settings, rejects overlapping c
   const handler = vm.runInNewContext(ts.transpileModule(`(${arrow.getText(source)})`, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
   }).outputText, context);
-  handler("preview");
-  assert.equal(frozen, 2);
-  assert.equal(storage.writes.length, 0);
-  assert.equal(context.pendingSwapRef.current.topCollection, "calendar");
-  handler("bottom");
-  assert.equal(frozen, 2, "pending animation locks duplicate actions");
-  assert.equal(storage.writes.length, 0);
-  context.view = { ...context.pendingSwapRef.current, phase: "idle", changing: [] };
-  context.swapLockRef.current = false;
-  handler("bottom");
+  handler();
+  assert.equal(frozen, 1);
   assert.equal(storage.writes.length, 1);
-  assert.deepEqual(JSON.parse(storage.writes[0][1]), { version: 1, top: "joined", bottom: "calendar" });
-  assert.deepEqual(context.view.changing, ["top", "bottom"]);
+  assert.equal(context.pendingSwapRef.current.topCollection, "calendar");
+  handler();
+  assert.equal(frozen, 1, "pending animation locks duplicate actions");
+  assert.equal(storage.writes.length, 1);
+  context.view = { ...context.pendingSwapRef.current, phase: "idle", changing: [] };
+  context.assignments.bottom = context.view.bottomCollection;
+  context.swapLockRef.current = false;
+  handler();
+  assert.equal(storage.writes.length, 2);
+  assert.deepEqual(JSON.parse(storage.writes[0][1]), { version: 2, top: "calendar", bottom: "joined" });
+  assert.deepEqual(JSON.parse(storage.writes[1][1]), { version: 2, top: "calendar", bottom: "all" });
+  assert.deepEqual(context.view.changing, ["bottom"]);
+  context.swapLockRef.current = false;
+  context.menuOpenRef.current = true;
+  handler();
+  assert.equal(storage.writes.length, 2, "open menu owns input");
 });
 
 test("bottom-only change uses the existing bottom motion and does not animate top", async () => {
@@ -162,6 +184,30 @@ test("bottom-only change uses the existing bottom motion and does not animate to
   await motion.finished;
   assert.deepEqual(calls.map(call => call.placement), ["bottom"]);
   assert.match(calls[0].frames[0].transform, /, 112vh/);
+});
+
+test("finishing a bottom swap cannot restart the calendar spring or interrupt its live drag", () => {
+  const source = ts.createSourceFile("HomePackCarousels.tsx", sourceText, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const effect = findNode(source, node => ts.isCallExpression(node) && node.expression.getText(source) === "useLayoutEffect"
+    && node.arguments[0].getText(source).includes('view.phase === "idle"')).arguments[0];
+  let topResumes = 0;
+  let bottomResumes = 0;
+  const context = {
+    view: { phase: "idle", changing: ["bottom"] },
+    swapLockRef: { current: true }, menuOpenRef: { current: false }, navigationLockRef: { current: false },
+    topRef: { current: { resume() { topResumes++; } } },
+    bottomRef: { current: { resume() { bottomResumes++; } } },
+  };
+  const run = vm.runInNewContext(ts.transpileModule(`(${effect.getText(source)})`, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
+  }).outputText, context);
+  run();
+  assert.equal(topResumes, 0);
+  assert.equal(bottomResumes, 1);
+  assert.equal(context.swapLockRef.current, false);
+  context.view.changing = [];
+  run();
+  assert.equal(topResumes, 1, "initial mount may resume both wheels");
 });
 
 function compileComponent(file, replacements) {
@@ -178,20 +224,21 @@ function compileComponent(file, replacements) {
   return exports;
 }
 
-test("menu displays saved settings and spare content with no arrows inside the dialog", () => {
+test("nickname has a left Pack switch and right menu trigger; dialog only has theme and logout", () => {
   const { HomeUserMenu } = compileComponent("features/packs/components/HomeUserMenu.tsx", {
     "@/features/packs/model/home-carousel-state": selection,
   });
   const html = renderToStaticMarkup(createElement(HomeUserMenu, {
-    busy: false, loginName: "mission_user", theme: "light", assignments: { top: "calendar", bottom: "joined" },
-    onMenuChange() {}, onChangeTop() {}, onChangeBottom() {}, onReplaceTop() {}, onThemeChange() {}, onLogout() {},
+    busy: false, loginName: "mission_user", theme: "light", bottomCollection: "joined",
+    onMenuChange() {}, onSwitchPacks() {}, onThemeChange() {}, onLogout() {},
   }));
   const dialog = html.match(/<dialog\b[\s\S]*?<\/dialog>/)[0];
-  assert.equal((dialog.match(/<button\b/g) || []).length, 5);
+  assert.equal((dialog.match(/<button\b/g) || []).length, 2);
   assert.doesNotMatch(dialog, /chevron|<svg|<i\b/);
-  assert.match(dialog, /临时将上轮盘切换为所有 Pack/);
-  assert.match(dialog, /上轮盘设置：日历/);
-  assert.match(dialog, /下轮盘设置：用户 Pack/);
+  assert.doesNotMatch(dialog, /轮盘|Pack/);
+  assert.match(html, /当前用户 Pack，切换为所有 Pack/);
+  assert.match(html, /class="trigger switchTrigger"/);
+  assert.match(html, /stroke-width="1.5"/);
   assert.equal((html.match(/class="chevron"/g) || []).length, 1, "username menu trigger is preserved");
 });
 
@@ -210,6 +257,11 @@ test("theme transitions target colors only, with short reduced-motion duration",
     const css = readFileSync(new URL(`../${file}`, import.meta.url), "utf8");
     const transitions = css.match(/transition:[^;]*--theme-transition-duration[^;]*;/g);
     assert.ok(transitions?.length, `${file} uses the shared theme transition`);
-    for (const transition of transitions) assert.doesNotMatch(transition, /\ball\b|\btransform\b|\bopacity\b/);
+    for (const transition of transitions) {
+      // A separate fixed-duration hover effect is not a theme transition.
+      for (const property of transition.split(",").filter(part => part.includes("--theme-transition-duration"))) {
+        assert.doesNotMatch(property, /\ball\b|\btransform\b|\bopacity\b/);
+      }
+    }
   }
 });

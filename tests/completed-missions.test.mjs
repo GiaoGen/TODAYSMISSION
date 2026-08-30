@@ -9,6 +9,7 @@ import ts from "typescript";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { getGalleryCopyCount } from "../features/packs/model/mission-gallery-layout.ts";
+import { MissionStreamDepth } from "../features/packs/model/mission-stream-depth.ts";
 import * as dayTransitions from "../features/calendar/model/calendar-day-transition.ts";
 import * as returnStates from "../features/packs/model/pack-carousel-return-state.ts";
 import { createHomeCarouselState } from "../features/packs/model/home-carousel-state.ts";
@@ -46,7 +47,7 @@ const user = loadModule("data/repositories/get-mock-user.ts");
 const { MISSION_COMPLETION_FIXTURES: completions } = loadModule("data/fixtures/mission-completion-fixtures.ts");
 const { PACK_DETAIL_FIXTURES: packs } = loadModule("data/fixtures/pack-fixtures.ts");
 
-test("every orange date maps to exactly its completed Missions across Packs, not cover cards", () => {
+test("every marked date maps to exactly its completed Missions across Packs, not cover cards", () => {
   assert.deepEqual(plain(user.getMockMissionCalendar().completedOn), plain(repository.getCompletionDates()));
   const counts = new Set();
   for (const date of repository.getCompletionDates()) {
@@ -99,6 +100,7 @@ test("actual day gallery renders exactly the day's card count, never loop copies
     const primaryCards = [...track.matchAll(/<li\b([^>]*)>/g)].filter(match => !match[1].includes('aria-hidden="true"'));
     assert.equal(primaryCards.length, day.missions.length);
     assert.equal((track.match(/<li\b/g) ?? []).length, day.missions.length);
+    assert.doesNotMatch(track, /class="streamDepth"|class="mission"|FIELD/);
   }
 });
 
@@ -148,7 +150,7 @@ test("calendar date markup keeps its open grid, adds curved hit targets and keyb
       completedOn: new Set(["2026-08-28", "2026-08-26"]), onOpenDate() {},
     };
     const html = renderToStaticMarkup(createElement(CalendarMonth, props));
-    assert.equal((html.match(/class="rule"/g) ?? []).length, 12);
+    assert.equal((html.match(/class="rule"/g) ?? []).length, 14);
     assert.equal((html.match(/role="button"/g) ?? []).length, 2);
     assert.equal((html.match(/class="dayHitArea"/g) ?? []).length, 2);
     assert.equal((html.match(/class="dayAnchor"/g) ?? []).length, 2);
@@ -157,9 +159,62 @@ test("calendar date markup keeps its open grid, adds curved hit targets and keyb
     assert.doesNotMatch(hidden, /role="button"|class="dayAnchor"|tabindex="0"/);
     for (let row = 1; row <= 6; row++) for (let column = 0; column < 7; column++) {
       const hitPath = geometry.calendarCellPath(row, column, props.geometry);
-      assert.equal((hitPath.match(/\bA\b/g) ?? []).length, 2);
+      assert.equal((hitPath.match(/\bQ\b/g) ?? []).length, 2);
       assert.match(hitPath, /^M .+ Z$/);
       assert.doesNotMatch(hitPath, /NaN|undefined/);
+    }
+  }
+});
+
+test("calendar artwork uses the active month, actual today and exactly one colored dot per completed date", () => {
+  const { CalendarMonth } = loadModule("features/calendar/components/CalendarMonth.tsx", {
+    react: { ...require("react"), ViewTransition: ({ children }) => children },
+  });
+  const props = {
+    month: months.monthNumber("2026-08"), range: months.getCalendarRange("2026-05-12", "2026-08-29"),
+    geometry: geometry.getCalendarGeometry(375, 812, true, "top"),
+    completedOn: new Set(["2026-08-27", "2026-08-28", "2026-08-29", "2026-08-31"]), onOpenDate() {},
+  };
+  const html = renderToStaticMarkup(createElement(CalendarMonth, props));
+  assert.match(html, /class="monthName"[^>]*>AUGUST<\/span>/);
+  assert.match(html, /class="monthSub"[^>]*>2026 — 08<\/span>/);
+  assert.equal((html.match(/class="todayMark"/g) ?? []).length, 1);
+  const today = html.match(/<g[^>]*aria-current="date"[^>]*>[\s\S]*?<\/g>/)?.[0];
+  assert.match(today, /<title>2026-08-29/);
+  assert.match(today, /class="todayMark"/);
+  const colors = [...html.matchAll(/<circle[^>]*class="dot"[^>]*fill="([^"]+)"/g)].map(match => match[1]);
+  assert.deepEqual(colors.sort(), ["#e5392d", "#1457c9", "#efc832"].sort());
+  const january = renderToStaticMarkup(createElement(CalendarMonth, {
+    ...props, month: months.monthNumber("2027-01"), range: months.getCalendarRange("2026-05-12", "2027-01-02"),
+  }));
+  assert.match(january, /class="monthName"[^>]*>JANUARY<\/span>/);
+  assert.match(january, /class="monthSub"[^>]*>2027 — 01<\/span>/);
+  assert.doesNotMatch(january, /class="dot"|class="dayAnchor"/);
+});
+
+test("rendered shared anchors align with date text on both placements, including short landscape screens", () => {
+  const { CalendarMonth } = loadModule("features/calendar/components/CalendarMonth.tsx", {
+    react: { ...require("react"), ViewTransition: ({ children }) => children },
+  });
+  for (const [width, height, coarse] of [[568, 320, true], [375, 812, true], [820, 1180, true], [1920, 1080, false]]) {
+    for (const placement of ["top", "bottom"]) {
+      const metrics = geometry.getCalendarGeometry(width, height, coarse, placement);
+      const html = renderToStaticMarkup(createElement(CalendarMonth, {
+        month: months.monthNumber("2026-08"), range: months.getCalendarRange("2026-05-12", "2026-08-28"),
+        geometry: metrics, completedOn: new Set(["2026-08-28"]), onOpenDate() {},
+      }));
+      const group = html.match(/<g[^>]*data-completed-date="2026-08-28"[^>]*>[\s\S]*?<\/g>/)?.[0];
+      const [, x, y] = group.match(/<text class="date" x="([^"]+)" y="([^"]+)"/);
+      const style = html.match(/class="dayAnchor" style="([^"]+)"/)[1];
+      const value = name => parseFloat(style.match(new RegExp(`(?:^|;)${name}:([^;]+)`))[1]);
+      assert.equal(value("left"), +x);
+      assert.equal(value("top"), +y + (placement === "bottom" ? metrics.labelHeight : 0));
+      assert.ok(value("width") > 0 && value("height") > 0);
+      if (metrics.rowHeight < 15) {
+        const [, cx] = group.match(/<circle[^>]*cx="([^"]+)"/);
+        const [, right] = group.match(/<line[^>]*x2="([^"]+)"/);
+        assert.ok(+cx - metrics.dotRadius > +right, "today's underline and completion dot remain distinct");
+      }
     }
   }
 });
@@ -169,7 +224,7 @@ function findNode(node, predicate) {
   return ts.forEachChild(node, child => findNode(child, predicate));
 }
 
-test("actual home date handler snapshots both wheels and temporary content, rejects duplicate navigation and never saves settings", () => {
+test("actual home date handler snapshots both wheels, rejects duplicate navigation and never saves settings", () => {
   const source = ts.createSourceFile("HomePackCarousels.tsx", read("features/packs/components/HomePackCarousels.tsx"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const handler = findNode(source, node => ts.isVariableDeclaration(node) && node.name.getText(source) === "openCompletedDay").initializer;
   for (const placement of ["top", "bottom"]) {
@@ -201,7 +256,7 @@ test("actual home date handler snapshots both wheels and temporary content, reje
     const restored = createHomeCarouselState(captured, { top: "joined", bottom: "all" });
     assert.equal(restored.snapshots.calendar.position, calendarSnapshot.position);
     assert.equal(restored.snapshots.all.position, 26.2);
-    assert.equal(placement === "top" ? restored.topCollection : restored.bottomCollection, "calendar");
+    assert.equal(restored.topCollection, "calendar", "legacy bottom calendar also migrates to top");
   }
 });
 
@@ -239,9 +294,11 @@ function galleryHarness(count, { reduced = false, saved = null, looping = false 
   }));
   const track = { style: {} };
   const env = {
+    nativeScrolling: false,
+    isSafariUserAgent: () => false,
     rootRef: { current: root }, trackRef: { current: track }, missionRefs: { current: cards },
     primaryCopyRef: { current: Math.floor(copies / 2) }, measureRef: { current: null },
-    missionCount: count, looping, id: looping ? "mock-pack-01" : dayTransitions.getDayGalleryId("2026-08-28"),
+    MissionStreamDepth, missionCount: count, looping, id: looping ? "mock-pack-01" : dayTransitions.getDayGalleryId("2026-08-28"),
     completedDate: looping ? undefined : "2026-08-28",
     performance: { now: () => now }, Element, styles: { missionCard: "missionCard" },
     requestAnimationFrame: fn => { frames.set(++token, fn); return token; }, cancelAnimationFrame: id => frames.delete(id),
@@ -332,6 +389,42 @@ test("loop can wrap repeatedly without drift and cleanup during collapse prevent
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(gallery.navigations.length, 0);
 });
+
+for (const source of ["top", "bottom"]) for (const count of [1, 2, 3, 8]) {
+  test(`Pack stream ${source}/${count}: depth, live-position collapse and original wheel return stay connected`, async () => {
+    const saved = {
+      source, packId: "mock-pack-01", topCollection: "joined", bottomCollection: "all",
+      carousels: { top: { packId: "mock-pack-01", activeIndex: 0, count: 5, position: 0 }, bottom: { packId: "mock-pack-03", activeIndex: 2, count: 12, position: 2 } },
+    };
+    const gallery = galleryHarness(count, { looping: true, saved });
+    const center = count * gallery.env.primaryCopyRef.current;
+    assert.equal(Number(gallery.cards[center].style["--stream-scale"]), 1);
+    if (count > 1) assert.equal(Number(gallery.cards[center + 1].style["--stream-y"]), 28);
+    gallery.expand();
+    gallery.event("pointerdown", { clientX: 300, pointerType: "touch" });
+    gallery.event("pointermove", { clientX: 60, pointerType: "touch" });
+    gallery.event("pointerup", { clientX: 60, pointerType: "touch" });
+    gallery.event("click");
+    assert.equal(gallery.root.dataset.phase, "settled", "release click must not close the pack");
+    for (let frame = 0; frame < 14; frame++) gallery.frame();
+    const before = Number(gallery.track.style.transform.match(/translate3d\(([-.\d]+)px/)[1]);
+    gallery.event("click");
+    assert.equal(gallery.root.dataset.phase, "closing");
+    for (const card of gallery.cards) {
+      assert.ok(Math.abs(before + card.offsetLeft + 120 + parseFloat(card.style["--mission-collapsed-x"]) - 960) < .000001);
+    }
+    const depthStyles = gallery.cards.map(card => card.style["--stream-scale"]);
+    gallery.frame();
+    assert.deepEqual(gallery.cards.map(card => card.style["--stream-scale"]), depthStyles, "depth RAF cannot fight the closing CSS");
+    assert.equal(gallery.navigations.length, 0);
+    gallery.finishCollapse();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(gallery.navigations.length, 1);
+    assert.equal(gallery.returned(), saved);
+    gallery.cleanup();
+    assert.equal(gallery.frames.size, 0);
+  });
+}
 
 const trackPosition = gallery => Number(gallery.track.style.transform.match(/translate3d\(([-.\d]+)px/)[1]);
 function settleGallery(gallery) {

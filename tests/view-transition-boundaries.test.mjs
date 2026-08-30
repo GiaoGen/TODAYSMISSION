@@ -10,6 +10,8 @@ const componentFiles = {
   HomePackCarousels: "features/packs/components/HomePackCarousels.tsx",
   HomeUserMenu: "features/packs/components/HomeUserMenu.tsx",
   ArcCarousel: "features/packs/components/ArcCarousel.tsx",
+  TransformArcCarousel: "features/packs/components/ArcCarousel.tsx",
+  NativePackCarousel: "features/packs/components/NativePackCarousel.tsx",
   CalendarCarousel: "features/calendar/components/CalendarCarousel.tsx",
   PackDetailPage: "app/pack/[slug]/page.tsx",
   MissionPackDetail: "features/packs/components/MissionPackDetail.tsx",
@@ -101,16 +103,16 @@ function hostElements(root, tagName) {
 
 test("home exposes both wheel boundaries before any route-owned DOM wrapper", () => {
   const boundaries = routeBoundaries("Home");
-  // Both alternatives at each placement must expose their own boundary directly.
-  assert.equal(boundaries.length, 4);
-  assert.deepEqual(boundaries.map((boundary) => boundary.owner), ["CalendarCarousel", "ArcCarousel", "CalendarCarousel", "ArcCarousel"]);
-  const invocations = boundaries.filter(({ owner }) => owner === "ArcCarousel").map(({ path }) =>
+  // Fixed calendar and Pack still expose independent, coordinated boundaries.
+  assert.equal(boundaries.length, 3);
+  assert.deepEqual(boundaries.map((boundary) => boundary.owner), ["CalendarCarousel", "NativePackCarousel", "TransformArcCarousel"]);
+  const invocations = boundaries.filter(({ owner }) => owner !== "CalendarCarousel").map(({ path }) =>
     path.find((part) => part.name === "ArcCarousel invocation"));
-  assert.deepEqual(invocations.map((call) => call.placement ?? "bottom"), ["top", "bottom"]);
+  assert.deepEqual(invocations.map((call) => call.placement ?? "bottom"), ["bottom", "bottom"]);
   assert.deepEqual(invocations.map((call) => call.onOpenPack), ["{openPack}", "{openPack}"]);
   const calendarCalls = boundaries.filter(({ owner }) => owner === "CalendarCarousel").map(({ path }) =>
     path.find((part) => part.name === "CalendarCarousel invocation"));
-  assert.deepEqual(calendarCalls.map((call) => call.placement), ["top", "bottom"]);
+  assert.deepEqual(calendarCalls.map((call) => call.placement), ["top"]);
   for (const { element } of boundaries) {
     assert.ok(attribute(element, "enter"));
     assert.ok(attribute(element, "exit"));

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { calendarArc, calendarCell, calendarPoint, calendarPose, getCalendarGeometry, getCalendarGridPaths } from "../features/calendar/model/calendar-geometry.ts";
-import { calendarSnapshot, getCalendarRange, getMonthDays, getMonthSnapTarget, localDateKey, monthKey, monthNumber, parseDateKey, resistMonthPosition, restoreCalendarPosition, visibleMonths } from "../features/calendar/model/calendar-month.ts";
+import { calendarCell, calendarCellPath, calendarDayAnchor, calendarPose, getCalendarGeometry, getCalendarGridPaths } from "../features/calendar/model/calendar-geometry.ts";
+import { calendarCompletionColor, calendarMonthHeading, calendarSnapshot, getCalendarRange, getMonthDays, getMonthSnapTarget, localDateKey, monthKey, monthNumber, parseDateKey, resistMonthPosition, restoreCalendarPosition, visibleMonths } from "../features/calendar/model/calendar-month.ts";
 import { captureHomeCarousels, createHomeCarouselState, getCarouselAssignments, getSpareCollection, selectHomeCarousel } from "../features/packs/model/home-carousel-state.ts";
 import { animateCarouselPair } from "../features/packs/model/carousel-swap-motion.ts";
 import { advanceCarouselSpring } from "../features/packs/model/carousel-spring.ts";
@@ -12,35 +12,33 @@ const joined = { packId: "pack-4", activeIndex: 2, count: 5, position: 2.1 };
 const all = { packId: "pack-7", activeIndex: 7, count: 12, position: 31.2 };
 const calendar = { month: "2026-07", position: monthNumber("2026-07") + .15 };
 
-test("third item previews only top without overwriting settings or hidden snapshots", () => {
-  let state = captureHomeCarousels({ ...createHomeCarouselState(null), settings: { top: "joined", bottom: "all" } }, { top: joined, bottom: all });
-  state = selectHomeCarousel(state, "preview");
-  assert.equal(state.topCollection, "calendar");
-  assert.equal(state.bottomCollection, "all");
-  assert.equal(getSpareCollection(state.settings), "calendar");
+test("bottom switches preserve the calendar month and hidden Pack snapshot", () => {
+  let state = { ...createHomeCarouselState(null), settings: { top: "calendar", bottom: "all" } };
+  state.snapshots.joined = joined;
   state = captureHomeCarousels(state, { top: calendar, bottom: all });
   state = selectHomeCarousel(state, "bottom");
-  assert.equal(state.topCollection, "joined");
-  assert.equal(state.bottomCollection, "calendar");
-  state = selectHomeCarousel(state, "top");
-  assert.equal(state.topCollection, "all");
-  assert.equal(state.bottomCollection, "calendar");
+  assert.equal(state.topCollection, "calendar");
+  assert.equal(state.bottomCollection, "joined");
+  state = selectHomeCarousel(state, "bottom");
+  assert.equal(state.topCollection, "calendar");
+  assert.equal(state.bottomCollection, "all");
   assert.deepEqual(state.snapshots, { joined, all, calendar });
 });
 
-test("every settings/preview combination keeps both saved and displayed pairs distinct", () => {
+test("legacy actions cannot dislodge the fixed calendar or introduce a third layout", () => {
   const visited = new Set();
   function visit(state, depth) {
     const assignments = getCarouselAssignments(state.topCollection, state.bottomCollection);
     const spare = getSpareCollection(assignments);
     assert.equal(new Set([assignments.top, assignments.bottom, spare]).size, 3);
     assert.notEqual(state.settings.top, state.settings.bottom);
+    assert.equal(state.topCollection, "calendar");
     visited.add(`${state.settings.top}/${state.settings.bottom}`);
     if (depth === 0) return;
     for (const action of ["top", "bottom", "preview"]) visit(selectHomeCarousel(state, action), depth - 1);
   }
-  visit({ ...createHomeCarouselState(null), settings: { top: "joined", bottom: "all" } }, 6);
-  assert.equal(visited.size, 6);
+  visit({ ...createHomeCarouselState(null), settings: { top: "calendar", bottom: "all" } }, 6);
+  assert.equal(visited.size, 2);
 });
 
 for (const placement of ["top", "bottom"]) {
@@ -49,9 +47,9 @@ for (const placement of ["top", "bottom"]) {
     const carousels = placement === "top" ? { top: calendar, bottom: all } : { top: all, bottom: calendar };
     const saved = { source: placement === "top" ? "bottom" : "top", packId: all.packId, ...captureHomeCarousels(state, carousels), carousels };
     setPackCarouselReturnState(saved);
-    assert.deepEqual(createHomeCarouselState(getPackCarouselReturnState()), state);
+    assert.deepEqual(createHomeCarouselState(getPackCarouselReturnState()), { ...state, topCollection: "calendar", bottomCollection: "all" });
     assert.notEqual(getPackCarouselReturnState().snapshots.calendar, saved.snapshots.calendar);
-    assert.deepEqual(createHomeCarouselState(null), { topCollection: "joined", bottomCollection: "all", snapshots: { joined: null, all: null, calendar: null } });
+    assert.deepEqual(createHomeCarouselState(null), { topCollection: "calendar", bottomCollection: "all", snapshots: { joined: null, all: null, calendar: null } });
   });
 }
 
@@ -157,18 +155,11 @@ for (const [width, height, touch] of devices) {
       const geometry = getCalendarGeometry(width, height, touch, placement);
       assert.ok(geometry.width < width);
       assert.ok(geometry.panelHeight <= height / 2 - 28, `${geometry.panelHeight} exceeds half-screen safe area`);
-      assert.ok(geometry.fontSize >= 11);
+      assert.ok(geometry.fontSize >= (height < 500 ? 10 : 15));
       const paths = getCalendarGridPaths(geometry);
-      assert.equal(paths.length, 12);
+      assert.equal(paths.length, 14);
       assert.ok(paths.every(path => !/NaN|Infinity|Z/i.test(path)));
-      assert.deepEqual(paths.slice(0, 6), geometry.boundaries.slice(1, -1).map(radius =>
-        calendarArc(radius, -geometry.halfAngle, geometry.halfAngle, geometry)));
-      for (let column = 1; column <= 6; column++) {
-        const angle = -geometry.halfAngle + column * geometry.halfAngle * 2 / 7;
-        const a = calendarPoint(geometry.innerRadius, angle, geometry);
-        const b = calendarPoint(geometry.outerRadius, angle, geometry);
-        assert.equal(paths[column + 5], `M ${a.x.toFixed(2)},${a.y.toFixed(2)} L ${b.x.toFixed(2)},${b.y.toFixed(2)}`);
-      }
+      assert.ok(paths.every(path => /^M [\d., -]+ Q [\d., -]+$/.test(path)));
       for (let row = 0; row <= 6; row++) {
         for (let column = 0; column < 7; column++) {
           const point = calendarCell(row, column, geometry);
@@ -176,6 +167,18 @@ for (const [width, height, touch] of devices) {
           assert.ok(point.y >= 4 && point.y <= geometry.height - 4);
           if (row > 0) assert.ok(point.y > calendarCell(row - 1, column, geometry).y);
           if (column > 0) assert.ok(point.x > calendarCell(row, column - 1, geometry).x);
+          if (row === 0) continue;
+          const anchor = calendarDayAnchor(row, column, geometry);
+          assert.equal(anchor.x, point.x);
+          assert.equal(anchor.y, point.y + geometry.textOffset + (placement === "bottom" ? geometry.labelHeight : 0));
+          assert.ok(anchor.width > 0 && anchor.height > 0);
+          assert.ok(point.y + geometry.dotOffset + geometry.dotRadius <= geometry.height);
+          if (row < 6) {
+            const nextTextTop = calendarCell(row + 1, column, geometry).y + geometry.textOffset - geometry.fontSize / 2;
+            assert.ok(point.y + geometry.dotOffset + geometry.dotRadius < nextTextTop, "completion dot does not collide with the next week's text");
+          }
+          const coordinates = [...calendarCellPath(row, column, geometry).matchAll(/(-?[\d.]+),(-?[\d.]+)/g)];
+          assert.ok(coordinates.every(([, x, y]) => +x > 0 && +x < geometry.width && +y > 0 && +y < geometry.height));
         }
       }
       const pose = calendarPose(-.1, geometry);
@@ -184,9 +187,61 @@ for (const [width, height, touch] of devices) {
       assert.ok(calendarPose(1, geometry).x > geometry.width);
       const top = getCalendarGeometry(width, height, touch, "top");
       const bottom = getCalendarGeometry(width, height, touch, "bottom");
-      const a = calendarPoint(top.outerRadius, .1, top);
-      const b = calendarPoint(bottom.outerRadius, .1, bottom);
-      assert.ok(Math.abs(a.y + b.y - top.height) < .0001);
+      for (let row = 0; row <= 6; row++) {
+        const topBow = calendarCell(row, 3, top).y - calendarCell(row, 0, top).y;
+        const bottomBow = calendarCell(row, 3, bottom).y - calendarCell(row, 0, bottom).y;
+        assert.ok(topBow > 0 && bottomBow < 0);
+        assert.ok(Math.abs(topBow + bottomBow) < .0001);
+      }
     });
   }
 }
+
+test("desktop top reproduces all fourteen prototype Bezier paths at its native scale", () => {
+  const geometry = getCalendarGeometry(1440, 1400, false, "top");
+  assert.equal(geometry.scaleX, 1);
+  assert.equal(geometry.scaleY, 1);
+  const paths = getCalendarGridPaths(geometry);
+  for (let row = 0; row < 6; row++) {
+    const y = 52 + row * 69; // source y minus 84-unit whitespace plus 8px padding
+    assert.equal(paths[row], `M 50.00,${y.toFixed(2)} Q 590.00,${(y + 108).toFixed(2)} 1130.00,${y.toFixed(2)}`);
+  }
+  for (let column = 0; column < 8; column++) {
+    const x = 70 + 1040 * column / 7;
+    const shift = (x - 590) / 996 * 55;
+    assert.equal(paths[column + 6], `M ${x.toFixed(2)},8.00 Q ${(x - shift * .25).toFixed(2)},214.00 ${(x + shift).toFixed(2)},459.00`);
+  }
+  assert.deepEqual(calendarCell(1, 3, geometry), { x: 590, y: 136 });
+});
+
+test("headings use the active month and completion colors stay within the prototype palette", () => {
+  assert.deepEqual(calendarMonthHeading(monthNumber("2026-08")), { name: "AUGUST", subtitle: "2026 — 08" });
+  assert.deepEqual(calendarMonthHeading(monthNumber("2027-01")), { name: "JANUARY", subtitle: "2027 — 01" });
+  assert.deepEqual(calendarMonthHeading(monthNumber("2026-12")), { name: "DECEMBER", subtitle: "2026 — 12" });
+  const palette = new Set(["#e5392d", "#1457c9", "#efc832"]);
+  for (let day = 1; day <= 31; day++) assert.ok(palette.has(calendarCompletionColor(day)));
+});
+
+test("curved hit strips contain their dates and do not overlap adjacent cells", () => {
+  const quadratic = (a, control, b, t) => (1 - t) ** 2 * a + 2 * (1 - t) * t * control + t * t * b;
+  for (const [width, height, touch] of devices) for (const placement of ["top", "bottom"]) {
+    const geometry = getCalendarGeometry(width, height, touch, placement);
+    const points = (row, col) => [...calendarCellPath(row, col, geometry).matchAll(/(-?[\d.]+),(-?[\d.]+)/g)]
+      .map(([, x, y]) => ({ x: +x, y: +y }));
+    for (let row = 1; row <= 6; row++) for (let col = 0; col < 7; col++) {
+      const path = points(row, col);
+      const cell = calendarCell(row, col, geometry);
+      assert.ok(cell.x > path[0].x && cell.x < path[2].x);
+      const t = (cell.x - path[0].x) / (path[2].x - path[0].x);
+      assert.ok(cell.y + geometry.textOffset > quadratic(path[0].y, path[1].y, path[2].y, t));
+      assert.ok(cell.y + geometry.dotOffset < quadratic(path[3].y, path[4].y, path[5].y, 1 - t));
+      if (col < 6) assert.ok(path[2].x < points(row, col + 1)[0].x);
+      if (row === 6) continue;
+      const next = points(row + 1, col);
+      for (const sample of [0, .25, .5, .75, 1]) {
+        assert.ok(quadratic(path[5].y, path[4].y, path[3].y, sample)
+          < quadratic(next[0].y, next[1].y, next[2].y, sample));
+      }
+    }
+  }
+});

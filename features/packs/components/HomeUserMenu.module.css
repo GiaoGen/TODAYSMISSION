@@ -57,6 +57,17 @@
   transform: rotate(-45deg);
 }
 
+.switchTrigger {
+  left: auto;
+  right: calc(100% + 3px);
+}
+
+.switchIcon {
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+}
+
 .trigger .chevron {
   transform: translateY(-2px) rotate(45deg);
 }

@@ -25,6 +25,17 @@ export function monthLabel(month: number): string {
   return `${Math.floor(month / 12)} 年 ${month % 12 + 1} 月`;
 }
 
+const MONTH_NAMES = ["JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"];
+
+export function calendarMonthHeading(month: number) {
+  return { name: MONTH_NAMES[month % 12], subtitle: `${Math.floor(month / 12)} — ${String(month % 12 + 1).padStart(2, "0")}` };
+}
+
+// Decorative prototype colors only, not completion types or counts.
+export function calendarCompletionColor(day: number): string {
+  return ["#e5392d", "#1457c9", "#efc832"][(day - 1) % 3];
+}
+
 export function getCalendarRange(registeredOn: string, today: string): CalendarRange | null {
   if (!parseDateKey(registeredOn) || !parseDateKey(today) || registeredOn > today) return null;
   return { first: monthNumber(registeredOn), last: monthNumber(today), registeredOn, today };

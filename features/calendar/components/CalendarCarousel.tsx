@@ -162,7 +162,8 @@ export function CalendarCarousel({ data, placement, snapshot, interactionDisable
       // The first observer delivery isn't a resize. Avoid a redundant sync
       // render during the shared transition when the geometry already matches.
       if (previous && previous.width === metrics.width && previous.height === metrics.height
-        && previous.rowHeight === metrics.rowHeight && previous.labelHeight === metrics.labelHeight) return;
+        && previous.rowHeight === metrics.rowHeight && previous.labelHeight === metrics.labelHeight
+        && previous.fontSize === metrics.fontSize && previous.weekdayFontSize === metrics.weekdayFontSize) return;
       if (previous && (dragRef.current || frameRef.current !== null)) finishImmediately();
       geometryRef.current = metrics;
       setGeometry(metrics);
