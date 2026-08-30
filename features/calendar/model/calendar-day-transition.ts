@@ -2,6 +2,13 @@ import type { CarouselPlacement } from "../../packs/model/arc-carousel-geometry"
 import type { CarouselAssignments } from "../../packs/model/home-carousel-state";
 import { normalizeCarouselAssignments } from "../../packs/model/home-carousel-state.ts";
 import type { PackCarouselReturnState } from "../../packs/model/pack-carousel-return-state";
+import { PACK_CLOSE_TRANSITION_TYPE } from "../../packs/model/pack-transition.ts";
+
+// Keep the date as origin/target; only returning artwork shrinks to a point.
+export const CALENDAR_DAY_TRANSITION_CLASSES = {
+  default: "calendar-day-morph",
+  [PACK_CLOSE_TRANSITION_TYPE]: "calendar-day-dismiss",
+};
 
 export function getDayGalleryId(date: string) {
   return `completed-${date}`;

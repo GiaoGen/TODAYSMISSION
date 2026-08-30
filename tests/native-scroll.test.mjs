@@ -9,6 +9,7 @@ import ts from "typescript";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { isSafariUserAgent, getNativeCopyCount } from "../features/packs/model/safari-scroll.ts";
+import { getContinuousDeckPose, getDeckMetrics } from "../features/packs/model/arc-carousel-geometry.ts";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const require = createRequire(import.meta.url);
@@ -105,6 +106,30 @@ function controllerHarness(options = {}, envOptions = {}) {
   viewport.writes.length = 0; viewport.reads = 0; settled.length = 0;
   return { ...env, viewport, controller, settled };
 }
+
+test("optional visual progress coalesces frames and precedes scrollend without driving scrolling", () => {
+  const progress = [];
+  const h = controllerHarness({ onProgress: value => progress.push(plain(value)) });
+  progress.length = 0;
+  for (const offset of [610, 650, 675]) h.viewport.nativeScroll(offset);
+  assert.equal(h.frames.size, 1);
+  assert.equal(h.viewport.reads, 0);
+  assert.equal(progress.length, 0);
+  h.frame();
+  assert.equal(h.viewport.reads, 1, "read just one native offset per visual frame");
+  assert.deepEqual(progress, [{ index: 1, position: .75, slot: 7 }]);
+  assert.equal(h.viewport.writes.length, 0);
+  assert.equal(h.settled.length, 0, "visual selection must not wait for settling");
+  assert.equal(h.frames.size, 0, "no self-scheduling animation loop");
+  h.viewport.nativeScroll(690);
+  h.controller.freeze();
+  assert.equal(h.frames.size, 0, "freeze paints the current pose and cancels stale work");
+  assert.ok(Math.abs(progress.at(-1).position - .9) < 1e-9);
+  h.controller.resume();
+  h.viewport.nativeScroll(700);
+  h.controller.destroy();
+  assert.equal(h.frames.size, 0);
+});
 
 for (const modern of [true, false]) {
   test(`${modern ? "scrollend" : "legacy"}: moving only records activity, with zero offset/layout reads, writes, active changes or RAF`, () => {
@@ -307,7 +332,7 @@ function galleryHarness({ count = 3, looping = true, modern = true } = {}) {
   });
   let returned = 0;
   const { mountNativeMissionGallery } = load("features/packs/model/native-mission-gallery.ts", env.globals);
-  const gallery = mountNativeMissionGallery({ root: rootElement, viewport, cards, count, copies: () => copies, looping, cardClass: "missionCard", navigateHome() { returned++; } });
+  const gallery = mountNativeMissionGallery({ root: rootElement, viewport, cards, count, copies: () => copies, cardClass: "missionCard", navigateHome() { returned++; } });
   return { ...env, rootElement, viewport, cards, gallery, complete, copies, stride,
     get reads() { return reads; }, get returned() { return returned; },
     expand() { env.frame(); env.advance(1600); },
@@ -321,6 +346,7 @@ for (const looping of [false, true]) for (const count of [1, 2, 8]) {
     h.expand();
     assert.equal(h.rootElement.dataset.phase, "settled");
     assert.equal(h.viewport.dataset.nativeLocked, "false");
+    assert.equal(h.cards[Math.floor(h.copies / 2) * count].dataset.nativeDistance, "0", "date and Pack cards share the center focus");
     const initialReads = h.reads;
     if (count > 1) {
       h.viewport.emit("pointerdown", { clientX: 200 });
@@ -413,7 +439,7 @@ function nodes(tree, predicate) {
 
 // Execute the real Safari Pack component, including effect cleanup and queued
 // state commits. The DOM stand-ins model offsets/events, not browser rendering.
-function packHarness({ count = 6, activeIndex = 0, position = activeIndex } = {}) {
+function packHarness({ count = 6, activeIndex = 0, position = activeIndex, viewport = { width: 375, height: 812, coarsePointer: true } } = {}) {
   const env = environment();
   const scroller = new env.Scroller();
   const rootElement = new env.Element();
@@ -422,7 +448,7 @@ function packHarness({ count = 6, activeIndex = 0, position = activeIndex } = {}
   const effects = [];
   const opened = [];
   const handle = { current: null };
-  let liveViewport = { width: 375, height: 812, coarsePointer: true };
+  let liveViewport = viewport;
   let cursor = 0;
   let dirty = false;
   let tree;
@@ -465,7 +491,10 @@ function packHarness({ count = 6, activeIndex = 0, position = activeIndex } = {}
       nodes(tree, node => node.props?.className === "nativeViewport")[0].props.ref.current = scroller;
       nodes(tree, node => node.type === "li").forEach(node => {
         if (!elements.has(node.key)) elements.set(node.key, new env.Element());
-        node.props.ref(elements.get(node.key));
+        const element = elements.get(node.key);
+        element.card ??= new env.Element();
+        node.props.ref(element);
+        node.props.children.props.ref(element.card);
       });
       effects.splice(0).forEach(run => run());
     } while (dirty);
@@ -477,6 +506,7 @@ function packHarness({ count = 6, activeIndex = 0, position = activeIndex } = {}
     ...env, scroller, handle, opened, render,
     get tree() { return tree; },
     cards: () => nodes(tree, node => node.type === "button" && node.props.className === "card nativeCard"),
+    slots: () => nodes(tree, node => node.type === "li").map(node => elements.get(node.key)),
     resize(next) { liveViewport = next; render(); },
     click(slot) { scroller.emit("pointerdown"); scroller.emit("pointerup"); this.cards()[slot].props.onClick(); render(); },
     cleanup() { cells.forEach(cell => cell?.cleanup?.()); },
@@ -498,6 +528,64 @@ test("actual native Pack: side click centers once, main click opens, freeze rest
   assert.equal(h.opened.length, 1);
   h.cleanup();
   assert.equal(h.scroller.listeners.size, 0);
+});
+
+for (const viewport of [
+  { width: 375, height: 812, coarsePointer: true },
+  { width: 820, height: 1180, coarsePointer: true },
+  { width: 1180, height: 820, coarsePointer: true },
+  { width: 1440, height: 900, coarsePointer: false },
+]) for (const count of [1, 5, 6, 24]) {
+  test(`native Pack matches Chrome continuous poses at ${viewport.width}x${viewport.height}, count ${count}`, () => {
+    const h = packHarness({ count, viewport });
+    const metrics = getDeckMetrics(viewport);
+    const base = Math.round(h.scroller.left / metrics.gap);
+    for (const position of count === 1 ? [0] : [0, .25, .65, 1]) {
+      h.scroller.nativeScroll((base + position) * metrics.gap);
+      h.frame(); h.render();
+      const slots = h.slots();
+      slots.forEach((slot, index) => {
+        const offset = index - h.scroller.left / metrics.gap;
+        if (Math.abs(offset) >= 3) {
+          assert.equal(slot.dataset.nativeVisible === "true", false);
+          return;
+        }
+        const pose = getContinuousDeckPose(offset, metrics);
+        const values = slot.card.style.transform.match(/translate3d\(0, ([^p]+)px, 0\) rotate\(([^d]+)deg\) scale\(([^)]+)\)/);
+        assert.ok(values, "native supplies x; inner artwork matches Chrome y/rotation/scale");
+        for (const [actual, expected] of [[values[1], pose.y], [values[2], pose.rotation], [values[3], pose.scale], [slot.card.style.opacity, pose.opacity]]) {
+          assert.ok(Math.abs(Number(actual) - expected) < 1e-8);
+        }
+        assert.equal(Number(slot.style.zIndex), pose.zIndex);
+      });
+      const current = h.cards().findIndex(card => card.props["aria-current"] === "true");
+      assert.equal(current, base + Math.round(position), "hero and fan switch before scrollend");
+      assert.equal(h.scroller.writes.length, 0);
+    }
+    h.cleanup();
+  });
+}
+
+test("native Pack loop copies share the live hero fan and retain poses across an idle rebase", () => {
+  const h = packHarness();
+  const metrics = getDeckMetrics({ width: 375, height: 812, coarsePointer: true });
+  const base = Math.round(h.scroller.left / metrics.gap);
+  h.scroller.nativeScroll((base + 6) * metrics.gap);
+  h.frame(); h.render();
+  const before = h.slots()[base + 6].card.style.transform;
+  for (const card of [h.cards()[base], h.cards()[base + 6]]) {
+    assert.equal(card.props.children.props.active, true, "fan remains open in equivalent copies");
+  }
+  assert.equal(h.scroller.writes.length, 0);
+  h.scroller.emit("scrollend"); h.render();
+  assert.equal(h.slots()[base].card.style.transform, before);
+  assert.equal(h.slots()[base + 6].card.style.opacity, "0");
+  assert.equal(h.scroller.writes.length, 1);
+  const css = read("features/packs/components/ArcCarousel.module.css");
+  assert.match(css.match(/\.nativeCard\s*\{([^}]+)\}/)[1], /transition: none/);
+  assert.doesNotMatch(css, /data-native-distance/);
+  assert.doesNotMatch(read("features/packs/components/PackDeck.module.css"), /transition-duration: 180ms/);
+  h.cleanup();
 });
 
 test("actual native Pack: mock counts retain the selected pack and switch safely between cyclic and finite layouts", () => {

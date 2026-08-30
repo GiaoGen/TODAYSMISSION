@@ -149,7 +149,8 @@
   position: relative;
   flex: 0 0 auto;
   width: var(--mission-card-width);
-  aspect-ratio: var(--card-ratio);
+  aspect-ratio: 1 / 1.42;
+  pointer-events: none;
   opacity: 0;
   transform: translate3d(var(--mission-collapsed-x, 0), 0, 0) scale(0.8);
   transform-origin: center;
@@ -162,11 +163,6 @@
 .root[data-phase="closing"] .hero,
 .root[data-phase="closing"] .missionCard {
   will-change: transform, opacity;
-}
-
-.root[data-kind="day"][data-phase="collapsed"] .missionCard,
-.root[data-kind="day"][data-phase="closing"] .missionCard {
-  transform: translate3d(var(--mission-collapsed-x, 0), 0, 0) scale(1);
 }
 
 .root[data-kind="day"][data-phase="expanding"] .hero {
@@ -227,12 +223,8 @@
   will-change: transform;
 }
 
-/* Pack-only layers: track = horizontal input; li = expansion/collapse;
-   streamDepth = the prototype's focus effect. The day gallery is unchanged. */
-.root[data-kind="pack"] .missionCard {
-  aspect-ratio: 1 / 1.42;
-  pointer-events: none;
-}
+/* Shared artwork/depth for Pack and date galleries; only Pack loops.
+   track = horizontal input; li = expansion/collapse; streamDepth = focus. */
 .streamDepth {
   width: 100%;
   height: 100%;
@@ -242,8 +234,8 @@
   pointer-events: auto;
 }
 .root[data-depth-moving="true"] .streamDepth { will-change: transform, opacity; }
-.root[data-kind="pack"][data-phase="collapsed"] .missionCard,
-.root[data-kind="pack"][data-phase="closing"] .missionCard {
+.root[data-phase="collapsed"] .missionCard,
+.root[data-phase="closing"] .missionCard {
   transform: translate3d(var(--mission-collapsed-x, 0), 0, 0) scale(var(--stream-collapse-scale, .8));
 }
 .root[data-kind="pack"][data-phase="expanding"] .hero { transition-delay: 700ms; }

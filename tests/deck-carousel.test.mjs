@@ -197,7 +197,7 @@ test("reduced-motion and resize reset depth immediately; transform ownership sta
   const css = read("features/packs/components/MissionGallery.module.css");
   assert.match(css, /\.streamDepth\s*\{[^}]*transform:[^;]*--stream-y/);
   assert.match(css, /\[data-phase="closing"\] \.streamDepth\s*\{[^}]*transform: translate3d\(0, 0, 0\) scale\(1\)/);
-  assert.match(css, /\[data-kind="pack"\] \.missionCard\s*\{[^}]*aspect-ratio: 1 \/ 1\.42/);
+  assert.match(css, /\.missionCard\s*\{[^}]*aspect-ratio: 1 \/ 1\.42/);
   assert.match(css, /prefers-reduced-motion: reduce[\s\S]*\.streamDepth \{ transition: none/);
   assert.doesNotMatch(read("features/packs/components/MissionStreamCard.module.css"), /will-change/);
 });

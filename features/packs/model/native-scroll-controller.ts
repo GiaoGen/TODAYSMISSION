@@ -7,6 +7,7 @@ type NativeScrollOptions = NativeScrollLayout & {
   position?: number;
   disabled?: boolean;
   reducedMotion?: boolean;
+  onProgress?: (selection: NativeScrollSelection) => void;
   onSettled: (selection: NativeScrollSelection) => void;
 };
 
@@ -15,7 +16,8 @@ const STABLE_MS = 100;
 const POSITION_EPSILON = 1;
 
 // Native touch/trackpad scrolling owns the offset. No move listener, velocity
-// integration, animation frame loop, or DOM measurement is used while scrolling.
+// integration or DOM measurement is used while scrolling. Optional visual work
+// is coalesced into one frame; it never drives the native scroll offset.
 export function createNativeScrollController(viewport: HTMLElement, options: NativeScrollOptions) {
   let layout: NativeScrollLayout = options;
   let locked = options.disabled ?? false;
@@ -30,6 +32,7 @@ export function createNativeScrollController(viewport: HTMLElement, options: Nat
   let calibrated = false;
   let silentOffset: number | null = null;
   let idleWork: (() => void) | null = null;
+  let visualFrame: number | null = null;
   const supportsScrollEnd = Reflect.has(viewport, "onscrollend");
   const baseSlot = () => Math.floor(layout.copies / 2) * layout.count;
   const maxOffset = () => Math.max(0, layout.count * layout.copies - 1) * layout.stride;
@@ -40,9 +43,19 @@ export function createNativeScrollController(viewport: HTMLElement, options: Nat
     moving = value;
     viewport.dataset.nativeScrolling = String(value);
   };
-  const publish = () => {
+  const cancelVisualFrame = () => {
+    if (visualFrame !== null) cancelAnimationFrame(visualFrame);
+    visualFrame = null;
+  };
+  const selection = () => {
     const value = position();
-    options.onSettled({ position: value, index: wrapNativeIndex(Math.round(value), layout.count), slot: Math.round(value) + baseSlot() });
+    return { position: value, index: wrapNativeIndex(Math.round(value), layout.count), slot: Math.round(value) + baseSlot() };
+  };
+  const publish = () => {
+    cancelVisualFrame();
+    const value = selection();
+    options.onProgress?.(value);
+    options.onSettled(value);
   };
   const jump = (left: number) => {
     silentOffset = left;
@@ -103,8 +116,8 @@ export function createNativeScrollController(viewport: HTMLElement, options: Nat
   }
   const onScroll = () => {
     if (disposed || locked) return;
-    // No offset read here. An initialization/rebase event may schedule one idle
-    // check, but cannot write, recenter, or update card appearance in this path.
+    // No offset read/write here. Only the visible artwork consumes progress,
+    // once per rendering frame, independently of scrollend and snap correction.
     revision++;
     lastScrollTime = performance.now();
     if (!moving) {
@@ -112,6 +125,12 @@ export function createNativeScrollController(viewport: HTMLElement, options: Nat
       markMoving(true);
     }
     scheduleQuietCheck();
+    if (options.onProgress && visualFrame === null) {
+      visualFrame = requestAnimationFrame(() => {
+        visualFrame = null;
+        if (!disposed && !locked) options.onProgress?.(selection());
+      });
+    }
   };
   const onScrollEnd = () => {
     if (moving) finish();
@@ -177,6 +196,8 @@ export function createNativeScrollController(viewport: HTMLElement, options: Nat
       scheduleQuietCheck();
     },
     freeze() {
+      cancelVisualFrame();
+      if (options.onProgress) options.onProgress(selection());
       const current = position();
       locked = true;
       touching = false;
@@ -197,6 +218,7 @@ export function createNativeScrollController(viewport: HTMLElement, options: Nat
     destroy() {
       disposed = true;
       clearTimer();
+      cancelVisualFrame();
       idleWork = null;
       listeners.forEach(([name, handler]) => viewport.removeEventListener(name, handler));
     },

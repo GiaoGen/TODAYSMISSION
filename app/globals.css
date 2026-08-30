@@ -72,10 +72,12 @@ select {
   isolation: auto;
 }
 
-::view-transition-group(.calendar-day-morph) {
+::view-transition-group(.calendar-day-morph),
+::view-transition-group(.calendar-day-dismiss) {
   z-index: 3000;
   animation-duration: 520ms;
   animation-timing-function: cubic-bezier(0.22, 0.72, 0.18, 1);
+  overflow: visible;
 }
 
 /* The calendar anchor is transparent: only the Mission artwork travels, never
@@ -84,11 +86,24 @@ select {
   animation: calendar-card-appear 180ms ease-out both;
 }
 
-::view-transition-old(.calendar-day-morph) {
-  /* Keep the artwork visible for the entire reverse morph. The browser removes
-     this snapshot only after it reaches the transparent date-sized target. */
+::view-transition-old(.calendar-day-morph),
+::view-transition-old(.calendar-day-dismiss) {
+  /* The image pair owns the final shrink/fade, not the snapshot's removal. */
   animation: none;
   opacity: 1;
+}
+
+/* Keep the original date-directed path. Shrink around the moving center until
+   only a point remains, then fade that point before the snapshot is removed. */
+::view-transition-image-pair(.calendar-day-dismiss) {
+  transform-origin: 50% 50%;
+  animation: calendar-card-shrink-away 520ms linear both;
+}
+
+@keyframes calendar-card-shrink-away {
+  from { transform: scale(1); opacity: 1; }
+  80% { transform: scale(.04); opacity: 1; }
+  to { transform: scale(0); opacity: 0; }
 }
 
 @keyframes calendar-card-appear { from { opacity: 0; } to { opacity: 1; } }
@@ -145,7 +160,8 @@ select {
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-old(*),
   ::view-transition-new(*),
-  ::view-transition-group(*) {
+  ::view-transition-group(*),
+  ::view-transition-image-pair(.calendar-day-dismiss) {
     animation-duration: 0s !important;
     animation-delay: 0s !important;
   }

@@ -2,7 +2,7 @@ import { memo, ViewTransition } from "react";
 import type { CalendarRange } from "../model/calendar-month";
 import { calendarCompletionColor, calendarMonthHeading, getMonthDays, monthLabel } from "../model/calendar-month";
 import { calendarCell, calendarCellPath, calendarDayAnchor, getCalendarGridPaths, type CalendarGeometry } from "../model/calendar-geometry";
-import { getDayTransitionName } from "../model/calendar-day-transition";
+import { CALENDAR_DAY_TRANSITION_CLASSES, getDayTransitionName } from "../model/calendar-day-transition";
 import styles from "./CalendarCarousel.module.css";
 
 type CalendarMonthProps = {
@@ -67,7 +67,7 @@ export const CalendarMonth = memo(function CalendarMonth({ month, range, geometr
       </svg>
       {active && days.filter((day) => day.completed).map((day) => {
         const anchor = calendarDayAnchor(day.row + 1, day.column, geometry);
-        return <ViewTransition key={day.date} default="none" name={getDayTransitionName(day.date, geometry.placement)} share="calendar-day-morph">
+        return <ViewTransition key={day.date} default="none" name={getDayTransitionName(day.date, geometry.placement)} share={CALENDAR_DAY_TRANSITION_CLASSES}>
           <span aria-hidden="true" className={styles.dayAnchor} style={{
             left: anchor.x, top: anchor.y, width: anchor.width, height: anchor.height,
           }} />

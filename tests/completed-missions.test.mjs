@@ -8,7 +8,7 @@ import test from "node:test";
 import ts from "typescript";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { getGalleryCopyCount } from "../features/packs/model/mission-gallery-layout.ts";
+import { getGalleryCopyCount, getMissionStreamMetrics } from "../features/packs/model/mission-gallery-layout.ts";
 import { MissionStreamDepth } from "../features/packs/model/mission-stream-depth.ts";
 import * as dayTransitions from "../features/calendar/model/calendar-day-transition.ts";
 import * as returnStates from "../features/packs/model/pack-carousel-return-state.ts";
@@ -100,8 +100,70 @@ test("actual day gallery renders exactly the day's card count, never loop copies
     const primaryCards = [...track.matchAll(/<li\b([^>]*)>/g)].filter(match => !match[1].includes('aria-hidden="true"'));
     assert.equal(primaryCards.length, day.missions.length);
     assert.equal((track.match(/<li\b/g) ?? []).length, day.missions.length);
-    assert.doesNotMatch(track, /class="streamDepth"|class="mission"|FIELD/);
+    assert.equal((track.match(/class="streamDepth"/g) ?? []).length, day.missions.length);
+    assert.equal((track.match(/class="mission"/g) ?? []).length, day.missions.length);
+    assert.deepEqual([...track.matchAll(/data-mission-id="([^"]+)"/g)].map(match => match[1]), plain(day.missions.map(mission => mission.id)));
+    assert.doesNotMatch(html, /<img|class="cover"/);
+    const firstCard = track.match(/<article\b[\s\S]*?<\/article>/)?.[0];
+    const heroCard = html.match(/<article\b[\s\S]*?<\/article>/)?.[0];
+    assert.equal(heroCard, firstCard, "the opening/closing carrier uses the same new Mission artwork");
   }
+});
+
+for (const nativeScrolling of [false, true]) {
+  test(`${nativeScrolling ? "Safari" : "Chrome"}: date stream uses Pack dimensions at phone/tablet/desktop sizes but never duplicates Missions`, () => {
+    for (const viewport of [
+      { width: 375, height: 812, coarsePointer: true },
+      { width: 820, height: 1180, coarsePointer: true },
+      { width: 1180, height: 820, coarsePointer: true },
+      { width: 1920, height: 1080, coarsePointer: false },
+    ]) {
+      const { MissionGallery } = loadModule("features/packs/components/MissionGallery.tsx", {
+        react: { ...require("react"), ViewTransition: ({ children }) => children },
+        "next/navigation": { useRouter: () => ({}) },
+        "@/features/packs/model/use-deck-viewport": { useDeckViewport: () => viewport },
+        "@/features/packs/model/use-safari-scroll": { useSafariScroll: () => nativeScrolling },
+      });
+      const day = repository.getCompletedMissionsByDate("2026-08-26");
+      const html = renderToStaticMarkup(createElement(MissionGallery, {
+        id: dayTransitions.getDayGalleryId(day.date), title: day.date, hero: day.missions[0], missions: day.missions, completedDate: day.date,
+      }));
+      const metrics = getMissionStreamMetrics(viewport);
+      assert.ok(html.includes(`--mission-card-width:${metrics.cardWidth}px`));
+      assert.ok(html.includes(`--detail-gap:${metrics.gap}px`));
+      assert.ok(html.includes(`--stream-unit:${metrics.unit}px`));
+      assert.ok(html.includes("--stream-collapse-scale:1"));
+      assert.equal((html.match(/<li\b/g) ?? []).length, day.missions.length);
+      assert.doesNotMatch(html, /<img/);
+    }
+  });
+}
+
+test("day opening keeps its date anchor while only closing selects the shrink-to-point animation", () => {
+  const transitions = [];
+  const overrides = {
+    react: { ...require("react"), ViewTransition: ({ name, share, children }) => { if (name) transitions.push({ name, share }); return children; } },
+    "next/navigation": { useRouter: () => ({}) },
+  };
+  const date = "2026-08-28";
+  const day = repository.getCompletedMissionsByDate(date);
+  const { CalendarMonth } = loadModule("features/calendar/components/CalendarMonth.tsx", overrides);
+  renderToStaticMarkup(createElement(CalendarMonth, {
+    month: months.monthNumber("2026-08"), range: months.getCalendarRange("2026-05-12", "2026-08-31"),
+    geometry: geometry.getCalendarGeometry(375, 812, true, "top"), completedOn: new Set([date]), onOpenDate() {},
+  }));
+  const { MissionGallery } = loadModule("features/packs/components/MissionGallery.tsx", overrides);
+  renderToStaticMarkup(createElement(MissionGallery, {
+    id: dayTransitions.getDayGalleryId(date), title: date, hero: day.missions[0], missions: day.missions, completedDate: date,
+  }));
+  assert.equal(transitions.length, 2);
+  assert.equal(transitions[0].name, transitions[1].name);
+  for (const transition of transitions) {
+    assert.deepEqual(plain(transition.share), { default: "calendar-day-morph", "pack-close": "calendar-day-dismiss" });
+  }
+  transitions.length = 0;
+  renderToStaticMarkup(createElement(MissionGallery, { id: packs[0].id, title: packs[0].title, hero: packs[0], missions: packs[0].missions }));
+  assert.equal(transitions[0].share, "pack-card-morph", "normal Pack morph is unchanged");
 });
 
 test("refresh/deep-link return opens the correct calendar month without mutating permanent settings", () => {
@@ -440,10 +502,14 @@ for (const count of [2, 3, 8]) {
     const last = first - (count - 1) * 272;
     for (let i = 0; i < 5; i++) gallery.event("wheel", { deltaX: 100000, deltaY: 0 });
     assert.equal(trackPosition(gallery), last);
+    assert.equal(Number(gallery.cards[count - 1].style["--stream-scale"]), 1);
+    assert.equal(Number(gallery.cards[count - 1].style["--stream-y"]), 0);
     gallery.event("keydown", { key: "ArrowRight" });
     assert.equal(trackPosition(gallery), last);
     for (let i = 0; i < 5; i++) gallery.event("wheel", { deltaX: -100000, deltaY: 0 });
     assert.equal(trackPosition(gallery), first);
+    assert.equal(Number(gallery.cards[0].style["--stream-scale"]), 1);
+    assert.equal(Number(gallery.cards[0].style["--stream-y"]), 0);
     gallery.event("keydown", { key: "ArrowLeft" });
     assert.equal(trackPosition(gallery), first);
     gallery.cleanup();
@@ -520,11 +586,20 @@ test("calendar's initial DOM measurement doesn't schedule a second render when g
   assert.equal(updates, 1);
 });
 
-test("the returning Mission snapshot stays opaque through the whole date morph", () => {
+test("the returning Mission follows its date path and shrinks to an invisible point before cleanup", () => {
   const css = read("app/globals.css");
-  assert.match(css, /::view-transition-old\(\.calendar-day-morph\)\s*\{[^}]*animation:\s*none;[^}]*opacity:\s*1;/);
+  assert.match(css, /::view-transition-old\(\.calendar-day-dismiss\)\s*\{[^}]*animation:\s*none;[^}]*opacity:\s*1;/);
   assert.doesNotMatch(css, /calendar-card-disappear/);
-  assert.match(css, /::view-transition-group\(\.calendar-day-morph\)\s*\{[^}]*animation-duration:\s*520ms/);
+  assert.match(css, /::view-transition-group\(\.calendar-day-dismiss\)\s*\{[^}]*animation-duration:\s*520ms/);
+  assert.match(css, /::view-transition-image-pair\(\.calendar-day-dismiss\)\s*\{[^}]*transform-origin: 50% 50%;[^}]*animation: calendar-card-shrink-away 520ms linear both/);
+  const shrink = css.match(/@keyframes calendar-card-shrink-away\s*\{\s*from\s*\{[^}]*\}\s*80%\s*\{[^}]*\}\s*to\s*\{[^}]*\}\s*\}/)?.[0];
+  assert.ok(shrink);
+  assert.match(shrink, /from\s*\{\s*transform: scale\(1\); opacity: 1;/);
+  assert.match(shrink, /80%\s*\{\s*transform: scale\(\.04\); opacity: 1;/);
+  assert.match(shrink, /to\s*\{\s*transform: scale\(0\); opacity: 0;/);
+  assert.doesNotMatch(shrink, /translate|display|visibility|vh/);
+  assert.doesNotMatch(css, /calendar-card-fly-out/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)[\s\S]*::view-transition-image-pair\(\.calendar-day-dismiss\)\s*\{[^}]*animation-duration: 0s !important/);
 });
 
 test("live calendar and other wheel snapshots survive gallery close unchanged", async () => {

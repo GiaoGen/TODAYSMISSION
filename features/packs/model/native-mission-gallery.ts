@@ -6,14 +6,13 @@ type NativeMissionGalleryOptions = {
   cards: readonly (HTMLLIElement | null)[];
   count: number;
   copies: () => number;
-  looping: boolean;
   cardClass: string;
   navigateHome: () => void;
 };
 
 // The existing shared hero and route boundary are retained. Only the horizontal
 // interaction layer differs; expansion/collapse remain short CSS transitions.
-export function mountNativeMissionGallery({ root, viewport, cards, count, copies, looping, cardClass, navigateHome }: NativeMissionGalleryOptions) {
+export function mountNativeMissionGallery({ root, viewport, cards, count, copies, cardClass, navigateHome }: NativeMissionGalleryOptions) {
   let controller: NativeScrollController | undefined;
   let disposed = false;
   let interactive = false;
@@ -64,7 +63,7 @@ export function mountNativeMissionGallery({ root, viewport, cards, count, copies
     if (controller) controller.restore(layout, lastPosition);
     else controller = createNativeScrollController(viewport, {
       ...layout, disabled: true, reducedMotion: reduced,
-      onSettled: ({ slot, position }) => { lastPosition = position; if (looping) paintFocus(slot); },
+      onSettled: ({ slot, position }) => { lastPosition = position; paintFocus(slot); },
     });
     if (!interactive) updateCollapsedOffsets();
   };

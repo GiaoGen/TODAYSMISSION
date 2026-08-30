@@ -108,19 +108,13 @@
 .nativeCard {
   top: 0;
   margin-top: 0;
-  opacity: .66;
-  transform: translateY(calc(22 * var(--deck-unit) * var(--native-direction))) scale(.82);
-  transition: transform 180ms ease-out, opacity 180ms ease-out;
+  opacity: 0;
+  pointer-events: none;
+  /* Continuous Chrome poses follow native progress without an easing delay. */
+  transition: none;
 }
-.nativeSlot[data-native-distance="0"] { z-index: 10; }
-.nativeSlot[data-native-distance="0"] .nativeCard { transform: none; opacity: 1; }
-.nativeSlot[data-native-distance="2"] .nativeCard {
-  transform: translateY(calc(32 * var(--deck-unit) * var(--native-direction))) scale(.76);
-  opacity: .44;
-}
-.nativeViewport[data-native-scrolling="true"] .nativeSlot[data-native-distance] .nativeCard {
-  transform: translateY(calc(22 * var(--deck-unit) * var(--native-direction))) scale(.82);
-  opacity: .66;
+.nativeViewport[data-native-scrolling="true"] .nativeSlot[data-native-visible="true"] .nativeCard {
+  will-change: transform, opacity;
 }
 .nativeViewport:focus-visible { outline: 2px solid currentColor; outline-offset: -6px; }
 

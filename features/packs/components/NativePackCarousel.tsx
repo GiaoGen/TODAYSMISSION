@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import type { ArcCarouselProps } from "./ArcCarousel";
 import { PackDeck } from "./PackDeck";
 import { COLLECTION_LABELS } from "../model/home-carousel-state";
-import { getDeckMetrics } from "../model/arc-carousel-geometry";
+import { getContinuousDeckPose, getDeckMetrics } from "../model/arc-carousel-geometry";
 import { getInitialCarouselState, getPackCarouselReturnState } from "../model/pack-carousel-return-state";
 import { getNativeCopyCount, wrapNativeIndex } from "../model/safari-scroll";
 import { createNativeScrollController, type NativeScrollController } from "../model/native-scroll-controller";
@@ -31,28 +31,52 @@ export function NativePackCarousel({ packs, placement = "bottom", collection = p
   const positionRef = useRef(initial.position);
   const lockedRef = useRef(interactionDisabled);
   const slotRefs = useRef<Array<HTMLLIElement | null>>([]);
+  const cardRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const focusRef = useRef(-1);
+  const activeRef = useRef(initial.activeIndex);
+  const metricsRef = useRef(metrics);
   const nativeLayoutRef = useRef({ count, copies, stride: metrics.gap });
+
+  useLayoutEffect(() => { metricsRef.current = metrics; });
 
   useLayoutEffect(() => {
     const scroller = scrollRef.current;
     if (!scroller) return;
     const paintSelection = ({ index, slot, position }: { index: number; slot: number; position: number }) => {
       positionRef.current = position;
-      for (let current = Math.max(0, focusRef.current - 2); current <= focusRef.current + 2; current++) {
-        if (slotRefs.current[current]) delete slotRefs.current[current]!.dataset.nativeDistance;
+      const layout = nativeLayoutRef.current;
+      const center = Math.floor(layout.copies / 2) * layout.count + position;
+      // Only the old/new visible window needs work, including across loop seams.
+      for (let current = Math.max(0, focusRef.current - 3); current <= focusRef.current + 3; current++) {
+        if (Math.abs(current - slot) <= 3) continue;
+        const card = cardRefs.current[current];
+        if (card) { card.style.opacity = "0"; card.style.pointerEvents = "none"; }
+        if (slotRefs.current[current]) slotRefs.current[current]!.dataset.nativeVisible = "false";
       }
       focusRef.current = slot;
-      for (let current = Math.max(0, slot - 2); current <= slot + 2; current++) {
-        if (slotRefs.current[current]) slotRefs.current[current]!.dataset.nativeDistance = String(Math.abs(current - slot));
+      for (let current = Math.max(0, slot - 3); current <= slot + 3; current++) {
+        const card = cardRefs.current[current];
+        const element = slotRefs.current[current];
+        if (!card || !element || current >= layout.count * layout.copies) continue;
+        const pose = getContinuousDeckPose(current - center, metricsRef.current);
+        // Native scrolling already supplies pose.x; do not translate it twice.
+        card.style.transform = `translate3d(0, ${pose.y}px, 0) rotate(${pose.rotation}deg) scale(${pose.scale})`;
+        card.style.opacity = String(pose.opacity);
+        card.style.pointerEvents = pose.visible ? "auto" : "none";
+        element.style.zIndex = String(pose.zIndex);
+        element.dataset.nativeVisible = String(pose.visible);
       }
-      setActiveIndex(previous => previous === index ? previous : index);
+      if (activeRef.current !== index) {
+        activeRef.current = index;
+        setActiveIndex(index);
+      }
     };
     const controller = createNativeScrollController(scroller, {
       ...nativeLayoutRef.current, position: positionRef.current,
       disabled: lockedRef.current,
       reducedMotion: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
-      onSettled: paintSelection,
+      onProgress: paintSelection,
+      onSettled: ({ position }) => { positionRef.current = position; },
     });
     controllerRef.current = controller;
     return () => {
@@ -111,7 +135,6 @@ export function NativePackCarousel({ packs, placement = "bottom", collection = p
     "--deck-unit": `${metrics.unit}px`, "--deck-title-size": `${metrics.titleSize}px`,
     "--native-stride": `${metrics.gap}px`, "--native-edge": `${Math.max(0, (viewport.width - metrics.gap) / 2)}px`,
     "--native-center-y": `${metrics.centerY - (placement === "bottom" ? viewport.height / 2 : 0)}px`,
-    "--native-direction": placement === "top" ? -1 : 1,
   } as CSSProperties;
   const enterClass = placement === "top" ? "pack-home-top-enter" : "pack-home-enter";
   const exitClass = placement === "top" ? "pack-home-top-exit" : "pack-home-exit";
@@ -131,11 +154,13 @@ export function NativePackCarousel({ packs, placement = "bottom", collection = p
             {Array.from({ length: copies }, (_, copy) => packs.slice(0, count).map((pack, index) => {
               const slot = copy * count + index;
               const primary = copy === primaryCopy;
-              const active = primary && index === activeIndex;
+              // Equivalent loop copies share the fan state before rebasing.
+              const active = index === activeIndex;
               const name = getPackTransitionName(pack.id, placement);
               return (
                 <li className={styles.nativeSlot} key={`${copy}-${pack.id}`} aria-hidden={primary ? undefined : true} ref={element => { slotRefs.current[slot] = element; }}>
-                  <button className={`${styles.card} ${styles.nativeCard}`} type="button" tabIndex={primary ? 0 : -1} aria-current={active ? "true" : undefined}
+                  <button className={`${styles.card} ${styles.nativeCard}`} type="button" tabIndex={primary ? 0 : -1} aria-current={primary && active ? "true" : undefined}
+                    ref={element => { cardRefs.current[slot] = element; }}
                     aria-label={`${pack.title}, ${index + 1} / ${count}`} onClick={() => openCard(slot, index)}>
                     <PackDeck pack={pack} active={active} placement={placement} native transitionName={primary ? name : undefined} />
                   </button>

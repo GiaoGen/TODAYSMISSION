@@ -16,8 +16,6 @@
 .shell[data-placement="top"] { --deck-direction: -1; }
 
 .shell[data-native="true"] { transform-style: flat; }
-.shell[data-native="true"] .missionPeek,
-.shell[data-native="true"] .coverOffset { transition-duration: 180ms; }
 
 .missionPeek,
 .cover,

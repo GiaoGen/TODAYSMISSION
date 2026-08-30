@@ -4,14 +4,13 @@ import type { CSSProperties } from "react";
 import { useLayoutEffect, useRef, useState, ViewTransition } from "react";
 import { useRouter } from "next/navigation";
 
-import { PackCard } from "@/components/card/PackCard";
 import { getDeckMetrics } from "@/features/packs/model/arc-carousel-geometry";
 import { useDeckViewport } from "@/features/packs/model/use-deck-viewport";
 import { useSafariScroll } from "@/features/packs/model/use-safari-scroll";
 import { getNativeCopyCount, isSafariUserAgent } from "@/features/packs/model/safari-scroll";
 import { mountNativeMissionGallery } from "@/features/packs/model/native-mission-gallery";
 import type { MissionSummary, PackSummary } from "@/data/contracts/pack-summary";
-import { createDirectDayReturnState, getDayTransitionName } from "@/features/calendar/model/calendar-day-transition";
+import { CALENDAR_DAY_TRANSITION_CLASSES, createDirectDayReturnState, getDayTransitionName } from "@/features/calendar/model/calendar-day-transition";
 import { carouselSettingsStore } from "@/features/packs/model/carousel-settings";
 import { getGalleryCopyCount, getMissionStreamMetrics } from "@/features/packs/model/mission-gallery-layout";
 import { MissionStreamDepth } from "@/features/packs/model/mission-stream-depth";
@@ -67,14 +66,12 @@ function clamp(value: number, minimum: number, maximum: number) {
 }
 
 function MissionArtwork({
-  stream,
   primaryCopy,
   mission,
   refIndex,
   setRef,
   slot,
 }: {
-  stream: boolean;
   primaryCopy: boolean;
   mission: MissionSummary;
   refIndex: number;
@@ -92,13 +89,11 @@ function MissionArtwork({
       ref={(element) => setRef(refIndex, element)}
       style={style}
     >
-      <div className={styles.missionMotion}>{stream ? <div className={styles.streamDepth}>
-        <MissionStreamCard mission={mission} number={slot + 1} />
-      </div> : <PackCard
-        eager={primaryCopy && (slot === 0 || slot === 1)}
-        pack={mission}
-        sizes="(max-width: 599px) 70vw, (orientation: portrait) and (pointer: coarse) 54vw, (pointer: coarse) 34vw, 240px"
-      />}</div>
+      <div className={styles.missionMotion}>
+        <div className={styles.streamDepth}>
+          <MissionStreamCard mission={mission} number={slot + 1} />
+        </div>
+      </div>
     </li>
   );
 }
@@ -120,14 +115,17 @@ export function MissionGallery({ id, title, hero, missions, completedDate }: Mis
   const viewportWidth = viewport.width;
   const deckMetrics = getDeckMetrics(viewport);
   const streamMetrics = getMissionStreamMetrics(viewport);
-  const streamStyle: StreamStyle | undefined = looping ? {
+  const streamStyle: StreamStyle = {
     "--mission-card-width": `${streamMetrics.cardWidth}px`,
     "--detail-gap": `${streamMetrics.gap}px`,
     "--stream-unit": `${streamMetrics.unit}px`,
     "--stream-mobile-unit": `${streamMetrics.mobileUnit}px`,
-    "--stream-collapse-scale": deckMetrics.cardWidth / streamMetrics.cardWidth,
-  } : undefined;
-  const heroStyle: PackHeroStyle | undefined = completedDate ? undefined : {
+    "--stream-collapse-scale": completedDate ? 1 : deckMetrics.cardWidth / streamMetrics.cardWidth,
+  };
+  const heroStyle: CSSProperties | PackHeroStyle = completedDate ? {
+    width: streamMetrics.cardWidth,
+    aspectRatio: "1 / 1.42",
+  } : {
     width: deckMetrics.cardWidth,
     aspectRatio: "1 / 1.42",
     "--deck-unit": `${deckMetrics.unit}px`,
@@ -170,7 +168,7 @@ export function MissionGallery({ id, title, hero, missions, completedDate }: Mis
       router.prefetch("/");
       const native = mountNativeMissionGallery({
         root, viewport: scrollRef.current, cards, count: missionCount,
-        copies: () => 2 * primaryCopyRef.current + 1, looping,
+        copies: () => 2 * primaryCopyRef.current + 1,
         cardClass: styles.missionCard, navigateHome,
       });
       measureRef.current = native.measure;
@@ -228,14 +226,12 @@ export function MissionGallery({ id, title, hero, missions, completedDate }: Mis
 
     const renderTrack = () => {
       track.style.transform = `translate3d(${position}px, -50%, 0)`;
-      if (looping) {
-        const center = stride ? missionCount * primaryCopyRef.current + Math.round((origin - position) / stride) : 0;
-        depth.update(cards.length, center, performance.now(), depthRebase, resetDepth || prefersReducedMotion);
-        depthRebase = 0;
-        resetDepth = false;
-        cancelAnimationFrame(depthFrame);
-        paintDepth();
-      }
+      const center = stride ? missionCount * primaryCopyRef.current + Math.round((origin - position) / stride) : 0;
+      depth.update(cards.length, center, performance.now(), depthRebase, resetDepth || prefersReducedMotion);
+      depthRebase = 0;
+      resetDepth = false;
+      cancelAnimationFrame(depthFrame);
+      paintDepth();
     };
 
     const normalizePosition = () => {
@@ -644,10 +640,10 @@ export function MissionGallery({ id, title, hero, missions, completedDate }: Mis
         <ViewTransition
           default="none"
           name={completedDate ? getDayTransitionName(completedDate, source) : getPackTransitionName(id, source)}
-          share={completedDate ? "calendar-day-morph" : "pack-card-morph"}
+          share={completedDate ? CALENDAR_DAY_TRANSITION_CLASSES : "pack-card-morph"}
         >
           <div aria-hidden="true" className={styles.hero} style={heroStyle}>
-            {completedDate ? <PackCard eager pack={hero} /> : <PackDeckCover pack={hero} />}
+            {completedDate ? <MissionStreamCard mission={hero} number={1} /> : <PackDeckCover pack={hero} />}
           </div>
         </ViewTransition>
 
@@ -659,7 +655,6 @@ export function MissionGallery({ id, title, hero, missions, completedDate }: Mis
 
               return (
                 <MissionArtwork
-                  stream={looping}
                   primaryCopy={copyIndex === primaryCopy}
                   key={`${copyIndex}-${mission.id}`}
                   mission={mission}
