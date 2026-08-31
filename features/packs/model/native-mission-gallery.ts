@@ -23,6 +23,8 @@ export function mountNativeMissionGallery({ root, viewport, cards, count, copies
   let focusedSlot = -1;
   let lastPosition = 0;
   let closeFrame = 0;
+  let readyTimer = 0;
+  const isDay = root.dataset.kind === "day";
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   const paintFocus = (slot: number) => {
@@ -40,7 +42,9 @@ export function mountNativeMissionGallery({ root, viewport, cards, count, copies
     cards.forEach((card, index) => {
       if (!card) return;
       const center = edge + index * stride + cardWidth / 2 - left;
-      const visible = center > -cardWidth && center < width + cardWidth;
+      // The first day card is also the shared return card, even after scrolling
+      // it offscreen. Keep its live collapse offset and never cull it on close.
+      const visible = (isDay && index === 0) || (center > -cardWidth && center < width + cardWidth);
       card.dataset.nativeVisible = String(visible);
       if (!visible) return;
       card.style.setProperty("--mission-collapsed-x", `${width / 2 - center}px`);
@@ -104,14 +108,22 @@ export function mountNativeMissionGallery({ root, viewport, cards, count, copies
   observer.observe(viewport);
   root.addEventListener("click", onClick);
   root.addEventListener("keydown", onKeyDown);
-  const expandFrame = requestAnimationFrame(() => { root.dataset.phase = "expanding"; });
-  const readyTimer = window.setTimeout(() => {
+  const finishExpansion = () => {
     if (disposed) return;
     root.dataset.phase = "settled";
     interactive = true;
     controller?.resume();
     root.focus({ preventScroll: true });
-  }, reduced ? 320 : 1600);
+  };
+  const expandFrame = requestAnimationFrame(() => {
+    if (isDay) root.getAnimations({ subtree: true });
+    root.dataset.phase = "expanding";
+    if (isDay) {
+      void Promise.allSettled(root.getAnimations({ subtree: true }).map(animation => animation.finished))
+        .then(finishExpansion);
+    }
+  });
+  if (!isDay) readyTimer = window.setTimeout(finishExpansion, reduced ? 320 : 1600);
 
   return {
     measure,

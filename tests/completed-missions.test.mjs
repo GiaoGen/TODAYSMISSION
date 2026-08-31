@@ -104,9 +104,8 @@ test("actual day gallery renders exactly the day's card count, never loop copies
     assert.equal((track.match(/class="mission"/g) ?? []).length, day.missions.length);
     assert.deepEqual([...track.matchAll(/data-mission-id="([^"]+)"/g)].map(match => match[1]), plain(day.missions.map(mission => mission.id)));
     assert.doesNotMatch(html, /<img|class="cover"/);
-    const firstCard = track.match(/<article\b[\s\S]*?<\/article>/)?.[0];
-    const heroCard = html.match(/<article\b[\s\S]*?<\/article>/)?.[0];
-    assert.equal(heroCard, firstCard, "the opening/closing carrier uses the same new Mission artwork");
+    assert.doesNotMatch(html, /class="hero"/, "the real first card carries the transition, without a duplicate overlay");
+    assert.equal((html.match(/<article\b/g) ?? []).length, day.missions.length);
   }
 });
 
@@ -338,6 +337,8 @@ function galleryHarness(count, { reduced = false, saved = null, looping = false 
   let returned = saved;
   let finishCollapse;
   const animationFinished = new Promise(resolve => { finishCollapse = resolve; });
+  let finishExpansion;
+  const expansionFinished = new Promise(resolve => { finishExpansion = resolve; });
   class Element {
     constructor(card = false) { this.card = card; }
     closest() { return this.card ? this : null; }
@@ -346,7 +347,8 @@ function galleryHarness(count, { reduced = false, saved = null, looping = false 
     clientWidth: 1920, dataset: {}, focus() {},
     addEventListener: (name, handler) => listeners.set(name, handler),
     removeEventListener: name => listeners.delete(name),
-    getAnimations: () => [{ finished: animationFinished }],
+    getAnimations: () => root.dataset.phase === "closing" ? [{ finished: animationFinished }]
+      : root.dataset.phase === "expanding" && count > 1 ? [{ finished: expansionFinished }] : [],
     hasPointerCapture: id => capture === id,
     setPointerCapture: id => { capture = id; }, releasePointerCapture: () => { capture = null; },
   });
@@ -381,9 +383,13 @@ function galleryHarness(count, { reduced = false, saved = null, looping = false 
     pending.forEach(fn => fn(now));
   };
   return {
-    root, track, cards, env, frames, timers, listeners, navigations, cleanup, frame, finishCollapse,
+    root, track, cards, env, frames, timers, listeners, navigations, cleanup, frame, finishCollapse, finishExpansion,
     returned: () => returned,
-    expand() { frame(); [...timers.values()].forEach(fn => fn()); timers.clear(); },
+    async expand() {
+      frame(); finishExpansion();
+      [...timers.values()].forEach(fn => fn()); timers.clear();
+      await new Promise(resolve => setImmediate(resolve));
+    },
     event(name, extra = {}) { now += 16; listeners.get(name)?.({ type: name, button: 0, pointerId: 1, clientX: 100, target: root, preventDefault() {}, ...extra }); },
     cardTarget: () => new Element(true),
   };
@@ -395,7 +401,7 @@ for (const count of [1, 2, 3, 8]) for (const reduced of [false, true]) {
     assert.equal(gallery.cards.length, count);
     assert.equal(gallery.track.style.transform, "translate3d(840px, -50%, 0)");
     assert.equal(gallery.root.dataset.phase, "collapsed");
-    gallery.expand();
+    await gallery.expand();
     assert.equal(gallery.root.dataset.phase, "settled");
     gallery.event("click", { target: gallery.cardTarget() });
     assert.equal(gallery.root.dataset.phase, "settled", "card click must not dismiss");
@@ -417,9 +423,72 @@ for (const count of [1, 2, 3, 8]) for (const reduced of [false, true]) {
   });
 }
 
-test("single card cannot be dragged off center or create NaN snaps; a drag release never closes", () => {
+test("day unlock waits for every actual entry animation, not a fixed timer", async () => {
+  const gallery = galleryHarness(8);
+  let completeMotion, cancelFade;
+  const animations = [
+    { finished: new Promise(resolve => { completeMotion = resolve; }) },
+    { finished: new Promise((_, reject) => { cancelFade = reject; }) },
+  ];
+  gallery.root.getAnimations = () => gallery.root.dataset.phase === "expanding" ? animations : [];
+  gallery.frame();
+  assert.equal(gallery.timers.size, 0, "day mode must not schedule the Pack's 1600ms lock");
+  gallery.event("click");
+  assert.equal(gallery.root.dataset.phase, "expanding");
+  completeMotion();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(gallery.root.dataset.phase, "expanding", "one finished property must not unlock the remaining animations");
+  cancelFade(new Error("CSS transition cancelled"));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(gallery.root.dataset.phase, "settled", "cancellation must not leave the gallery locked");
+  gallery.event("click");
+  assert.equal(gallery.root.dataset.phase, "closing");
+  gallery.cleanup();
+});
+
+test("a single date card with no local motion unlocks and returns without artificial waits", async () => {
   const gallery = galleryHarness(1);
-  gallery.expand();
+  gallery.root.getAnimations = () => [];
+  await gallery.expand();
+  assert.equal(gallery.root.dataset.phase, "settled");
+  assert.equal(gallery.timers.size, 0);
+  gallery.event("click");
+  gallery.frame();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(gallery.navigations.length, 1);
+  gallery.cleanup();
+});
+
+test("day entry animation completion cannot unlock or focus an unmounted gallery", async () => {
+  const gallery = galleryHarness(3);
+  let focusCalls = 0;
+  gallery.root.focus = () => { focusCalls++; };
+  gallery.frame();
+  gallery.cleanup();
+  gallery.finishExpansion();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(gallery.root.dataset.phase, "expanding");
+  assert.equal(focusCalls, 0);
+  assert.equal(gallery.frames.size, 0);
+  assert.equal(gallery.timers.size, 0);
+});
+
+test("the real first date card stays opaque through every phase in both drivers", () => {
+  const css = read("features/packs/components/MissionGallery.module.css");
+  assert.match(css, /\.root\[data-kind="day"\] \.missionCard:first-child\s*\{[^}]*z-index: 1;[^}]*opacity: 1;/);
+  assert.match(css, /\.root\[data-kind="day"\]\[data-native-scroll="true"\] \.missionCard:first-child \.missionMotion\s*\{[^}]*opacity: 1;/);
+  assert.doesNotMatch(css, /\[data-kind="day"\][^{]*\.hero/);
+  assert.match(css, /\.root\[data-kind="day"\]\s*\{[^}]*--stream-expand-delay: 520ms;[^}]*--stream-collapse-duration: 360ms;/);
+  assert.match(css, /\.root\[data-kind="day"\] \.track\s*\{[^}]*transform: translate3d\(calc\(\(100vw - var\(--mission-card-width\)\) \/ 2\), -50%, 0\);/);
+  // The same native focus selectors cover expansion and settled, so phase
+  // completion cannot introduce a second scale/opacity correction.
+  const sharedFocus = ':is([data-phase="settled"], :where([data-kind="day"])[data-phase="expanding"])';
+  assert.equal(css.split(sharedFocus).length - 1, 4);
+});
+
+test("single card cannot be dragged off center or create NaN snaps; a drag release never closes", async () => {
+  const gallery = galleryHarness(1);
+  await gallery.expand();
   const initial = gallery.track.style.transform;
   gallery.event("pointerdown");
   gallery.event("pointermove", { clientX: 20 });
@@ -437,7 +506,7 @@ test("single card cannot be dragged off center or create NaN snaps; a drag relea
 
 test("loop can wrap repeatedly without drift and cleanup during collapse prevents late navigation", async () => {
   const gallery = galleryHarness(2, { reduced: true, looping: true });
-  gallery.expand();
+  await gallery.expand();
   const initial = gallery.track.style.transform;
   for (let index = 0; index < 40; index++) gallery.event("wheel", { deltaX: 544, deltaY: 0 });
   const before = gallery.track.style.transform;
@@ -462,7 +531,7 @@ for (const source of ["top", "bottom"]) for (const count of [1, 2, 3, 8]) {
     const center = count * gallery.env.primaryCopyRef.current;
     assert.equal(Number(gallery.cards[center].style["--stream-scale"]), 1);
     if (count > 1) assert.equal(Number(gallery.cards[center + 1].style["--stream-y"]), 28);
-    gallery.expand();
+    await gallery.expand();
     gallery.event("pointerdown", { clientX: 300, pointerType: "touch" });
     gallery.event("pointermove", { clientX: 60, pointerType: "touch" });
     gallery.event("pointerup", { clientX: 60, pointerType: "touch" });
@@ -495,9 +564,9 @@ function settleGallery(gallery) {
 }
 
 for (const count of [2, 3, 8]) {
-  test(`${count} date Missions: wheel and keyboard stop at both endpoints without wrapping`, () => {
+  test(`${count} date Missions: wheel and keyboard stop at both endpoints without wrapping`, async () => {
     const gallery = galleryHarness(count, { reduced: true });
-    gallery.expand();
+    await gallery.expand();
     const first = trackPosition(gallery);
     const last = first - (count - 1) * 272;
     for (let i = 0; i < 5; i++) gallery.event("wheel", { deltaX: 100000, deltaY: 0 });
@@ -515,9 +584,9 @@ for (const count of [2, 3, 8]) {
     gallery.cleanup();
   });
 
-  test(`${count} date Missions: drag bounds resist then spring back; collapse starts at the actual browsing position`, () => {
+  test(`${count} date Missions: drag bounds resist then spring back; collapse starts at the actual browsing position`, async () => {
     const gallery = galleryHarness(count);
-    gallery.expand();
+    await gallery.expand();
     const first = trackPosition(gallery);
     const last = first - (count - 1) * 272;
     gallery.event("pointerdown");
@@ -609,7 +678,7 @@ test("live calendar and other wheel snapshots survive gallery close unchanged", 
     carousels: { top: { count: 5, activeIndex: 2, packId: "mock-pack-03", position: 2.2 }, bottom: { month: "2026-08", position: months.monthNumber("2026-08") } },
   };
   const gallery = galleryHarness(2, { saved });
-  gallery.expand(); gallery.event("click"); gallery.frame(); gallery.finishCollapse();
+  await gallery.expand(); gallery.event("click"); gallery.frame(); gallery.finishCollapse();
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(gallery.returned(), saved, "normal close must not replace the captured live view with defaults");
   gallery.cleanup();

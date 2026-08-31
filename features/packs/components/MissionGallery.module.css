@@ -2,6 +2,8 @@
   --detail-card-width: clamp(172px, 16vw, 236px);
   --mission-card-width: clamp(160px, 16vw, 240px);
   --detail-gap: clamp(20px, 2vw, 32px);
+  --stream-expand-delay: 700ms;
+  --stream-collapse-duration: 540ms;
 
   position: relative;
   width: 100%;
@@ -23,8 +25,13 @@
 
 .root[data-single="true"] { cursor: default; }
 
-/* A day's first Mission is the temporary carrier, not an extra Pack cover. */
-.root[data-kind="day"] .hero { width: var(--mission-card-width); }
+/* One real Mission carries the date transition; no duplicate hero crossfade. */
+.root[data-kind="day"] {
+  --stream-expand-delay: 520ms;
+  --stream-collapse-duration: 360ms;
+}
+.root[data-kind="day"] .missionCard:first-child { z-index: 1; opacity: 1; }
+.root[data-kind="day"][data-native-scroll="true"] .missionCard:first-child .missionMotion { opacity: 1; }
 
 .root[data-single="true"] .hero { pointer-events: none; }
 
@@ -62,6 +69,12 @@
   gap: var(--detail-gap);
   list-style: none;
   transform: translate3d(0, -50%, 0);
+}
+
+/* Center the shared day card even before hydration installs either driver.
+   Measured inline transforms (Chrome) / scroller padding (Safari) take over. */
+.root[data-kind="day"] .track {
+  transform: translate3d(calc((100vw - var(--mission-card-width)) / 2), -50%, 0);
 }
 
 .scrollViewport { display: contents; }
@@ -108,7 +121,7 @@
   opacity: 1;
   transform: translate3d(0, 0, 0) scale(1);
   transition: transform 620ms cubic-bezier(.2, .75, .24, 1), opacity 260ms ease-out;
-  transition-delay: calc(700ms + var(--mission-delay));
+  transition-delay: calc(var(--stream-expand-delay) + var(--mission-delay));
 }
 .root[data-native-scroll="true"][data-phase="settled"] .missionMotion {
   opacity: 1;
@@ -117,26 +130,26 @@
 .root[data-native-scroll="true"][data-phase="closing"] .missionMotion {
   opacity: 0;
   transform: translate3d(var(--mission-collapsed-x, 0), 0, 0) scale(var(--stream-collapse-scale, 1));
-  transition: transform 540ms cubic-bezier(.32, 0, .22, 1), opacity 220ms ease-in 280ms;
+  transition: transform var(--stream-collapse-duration) cubic-bezier(.32, 0, .22, 1), opacity 220ms ease-in calc(var(--stream-collapse-duration) - 260ms);
 }
 .root[data-native-scroll="true"]:not([data-phase="settled"]) .missionCard[data-native-visible="false"] {
   visibility: hidden;
 }
-.root[data-native-scroll="true"][data-phase="settled"] .streamDepth {
+.root[data-native-scroll="true"]:is([data-phase="settled"], :where([data-kind="day"])[data-phase="expanding"]) .streamDepth {
   transform: scale(.88);
   opacity: .78;
   transition: transform 180ms ease-out, opacity 180ms ease-out;
   will-change: auto;
 }
-.root[data-native-scroll="true"][data-phase="settled"] .missionCard[data-native-distance="1"] .streamDepth {
+.root[data-native-scroll="true"]:is([data-phase="settled"], :where([data-kind="day"])[data-phase="expanding"]) .missionCard[data-native-distance="1"] .streamDepth {
   transform: scale(.94);
   opacity: .9;
 }
-.root[data-native-scroll="true"][data-phase="settled"] .missionCard[data-native-distance="0"] .streamDepth {
+.root[data-native-scroll="true"]:is([data-phase="settled"], :where([data-kind="day"])[data-phase="expanding"]) .missionCard[data-native-distance="0"] .streamDepth {
   transform: none;
   opacity: 1;
 }
-.root[data-native-scroll="true"][data-phase="settled"] .missionCard[data-native-distance="2"] .streamDepth {
+.root[data-native-scroll="true"]:is([data-phase="settled"], :where([data-kind="day"])[data-phase="expanding"]) .missionCard[data-native-distance="2"] .streamDepth {
   transform: scale(.78);
   opacity: .65;
 }
@@ -165,11 +178,6 @@
   will-change: transform, opacity;
 }
 
-.root[data-kind="day"][data-phase="expanding"] .hero {
-  transform: translate3d(-50%, -50%, 0) scale(1);
-  transition: opacity 180ms ease-out 700ms;
-}
-
 .root[data-phase="expanding"] .hero {
   opacity: 0;
   transform: translate3d(-50%, -50%, 0) scale(0.88);
@@ -185,7 +193,7 @@
   transition:
     transform 620ms cubic-bezier(0.2, 0.75, 0.24, 1),
     opacity 260ms ease-out;
-  transition-delay: calc(700ms + var(--mission-delay));
+  transition-delay: calc(var(--stream-expand-delay) + var(--mission-delay));
 }
 
 .root[data-phase="settled"] .hero {
@@ -214,8 +222,8 @@
   opacity: 0;
   transform: translate3d(var(--mission-collapsed-x, 0), 0, 0) scale(0.8);
   transition:
-    transform 540ms cubic-bezier(0.32, 0, 0.22, 1),
-    opacity 220ms ease-in 280ms;
+    transform var(--stream-collapse-duration) cubic-bezier(0.32, 0, 0.22, 1),
+    opacity 220ms ease-in calc(var(--stream-collapse-duration) - 260ms);
 }
 
 .root[data-moving="true"] .track,
@@ -246,10 +254,10 @@
 }
 .root[data-phase="expanding"] .streamDepth {
   transition: transform 620ms cubic-bezier(.2, .75, .24, 1), opacity 450ms cubic-bezier(.2, .75, .2, 1);
-  transition-delay: calc(700ms + var(--mission-delay));
+  transition-delay: calc(var(--stream-expand-delay) + var(--mission-delay));
 }
 .root[data-phase="closing"] .streamDepth {
-  transition: transform 540ms cubic-bezier(.32, 0, .22, 1), opacity 320ms ease-out;
+  transition: transform var(--stream-collapse-duration) cubic-bezier(.32, 0, .22, 1), opacity 320ms ease-out;
   pointer-events: none;
 }
 
@@ -294,9 +302,6 @@
   .root[data-native-scroll="true"][data-phase] .streamDepth { transition: none; }
   .root[data-phase] .streamDepth { transition: none; }
   .root[data-kind="pack"][data-phase="expanding"] .hero { transition-delay: 0ms; }
-  .root[data-kind="day"][data-phase="expanding"] .hero {
-    transition: opacity 120ms linear;
-  }
   .root[data-phase="expanding"] .hero {
     transform: translate3d(-50%, -50%, 0);
     transition: opacity 120ms linear;

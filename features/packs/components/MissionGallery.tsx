@@ -71,16 +71,23 @@ function MissionArtwork({
   refIndex,
   setRef,
   slot,
+  dayTransitionName,
 }: {
   primaryCopy: boolean;
   mission: MissionSummary;
   refIndex: number;
   setRef: (index: number, element: HTMLLIElement | null) => void;
   slot: number;
+  dayTransitionName?: string;
 }) {
   const style: MissionCardStyle = {
     "--mission-delay": `${slot * 36}ms`,
   };
+  const artwork = (
+    <div className={styles.streamDepth}>
+      <MissionStreamCard mission={mission} number={slot + 1} />
+    </div>
+  );
 
   return (
     <li
@@ -90,9 +97,11 @@ function MissionArtwork({
       style={style}
     >
       <div className={styles.missionMotion}>
-        <div className={styles.streamDepth}>
-          <MissionStreamCard mission={mission} number={slot + 1} />
-        </div>
+        {dayTransitionName ? (
+          <ViewTransition default="none" name={dayTransitionName} share={CALENDAR_DAY_TRANSITION_CLASSES}>
+            {artwork}
+          </ViewTransition>
+        ) : artwork}
       </div>
     </li>
   );
@@ -122,10 +131,7 @@ export function MissionGallery({ id, title, hero, missions, completedDate }: Mis
     "--stream-mobile-unit": `${streamMetrics.mobileUnit}px`,
     "--stream-collapse-scale": completedDate ? 1 : deckMetrics.cardWidth / streamMetrics.cardWidth,
   };
-  const heroStyle: CSSProperties | PackHeroStyle = completedDate ? {
-    width: streamMetrics.cardWidth,
-    aspectRatio: "1 / 1.42",
-  } : {
+  const heroStyle: PackHeroStyle = {
     width: deckMetrics.cardWidth,
     aspectRatio: "1 / 1.42",
     "--deck-unit": `${deckMetrics.unit}px`,
@@ -555,7 +561,7 @@ export function MissionGallery({ id, title, hero, missions, completedDate }: Mis
       root.dataset.phase = "closing";
 
       // Wait for the actual collapse, not a second, independently timed delay.
-      // getAnimations flushes the changed styles and includes the hero's reveal.
+      // getAnimations flushes the changed styles, including the shared card.
       closeFrame = requestAnimationFrame(() => {
         const animations = root.getAnimations({ subtree: true });
         void Promise.allSettled(animations.map((animation) => animation.finished)).then(() => {
@@ -578,15 +584,24 @@ export function MissionGallery({ id, title, hero, missions, completedDate }: Mis
     root.addEventListener("keydown", onKeyDown);
     root.addEventListener("click", onBlankClick);
 
-    expandFrame = requestAnimationFrame(() => {
-      root.dataset.phase = "expanding";
-    });
-    const settleDuration = prefersReducedMotion ? 320 : EXPANSION_SETTLE_MS;
-    settleTimer = window.setTimeout(() => {
+    const finishExpansion = () => {
+      if (disposed) return;
       root.dataset.phase = "settled";
       interactive = true;
       root.focus({ preventScroll: true });
-    }, settleDuration);
+    };
+    expandFrame = requestAnimationFrame(() => {
+      // Flush the measured starting pose before starting the day's transitions.
+      if (completedDate) root.getAnimations({ subtree: true });
+      root.dataset.phase = "expanding";
+      if (completedDate) {
+        void Promise.allSettled(root.getAnimations({ subtree: true }).map(animation => animation.finished))
+          .then(finishExpansion);
+      }
+    });
+    if (!completedDate) {
+      settleTimer = window.setTimeout(finishExpansion, prefersReducedMotion ? 320 : EXPANSION_SETTLE_MS);
+    }
 
     return () => {
       disposed = true;
@@ -637,15 +652,13 @@ export function MissionGallery({ id, title, hero, missions, completedDate }: Mis
         ref={rootRef}
         tabIndex={0}
       >
-        <ViewTransition
-          default="none"
-          name={completedDate ? getDayTransitionName(completedDate, source) : getPackTransitionName(id, source)}
-          share={completedDate ? CALENDAR_DAY_TRANSITION_CLASSES : "pack-card-morph"}
-        >
-          <div aria-hidden="true" className={styles.hero} style={heroStyle}>
-            {completedDate ? <MissionStreamCard mission={hero} number={1} /> : <PackDeckCover pack={hero} />}
-          </div>
-        </ViewTransition>
+        {!completedDate && (
+          <ViewTransition default="none" name={getPackTransitionName(id, source)} share="pack-card-morph">
+            <div aria-hidden="true" className={styles.hero} style={heroStyle}>
+              <PackDeckCover pack={hero} />
+            </div>
+          </ViewTransition>
+        )}
 
         <div className={styles.scrollViewport} ref={scrollRef}>
           <ol aria-label="Missions" className={styles.track} ref={trackRef}>
@@ -663,6 +676,7 @@ export function MissionGallery({ id, title, hero, missions, completedDate }: Mis
                     missionRefs.current[index] = element;
                   }}
                   slot={slot}
+                  dayTransitionName={completedDate && slot === 0 ? getDayTransitionName(completedDate, source) : undefined}
                 />
               );
             }),

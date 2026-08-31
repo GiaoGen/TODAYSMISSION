@@ -314,10 +314,14 @@ function galleryHarness({ count = 3, looping = true, modern = true } = {}) {
   const env = environment({ modern });
   const viewport = new env.Scroller();
   const rootElement = new env.Element();
+  rootElement.dataset.kind = looping ? "pack" : "day";
   rootElement.focus = () => {};
   let complete;
   const finished = new Promise(resolve => { complete = resolve; });
-  rootElement.getAnimations = () => [{ finished }];
+  let finishExpansion;
+  const expansionFinished = new Promise(resolve => { finishExpansion = resolve; });
+  rootElement.getAnimations = () => rootElement.dataset.phase === "closing" ? [{ finished }]
+    : rootElement.dataset.phase === "expanding" && count > 1 ? [{ finished: expansionFinished }] : [];
   const copies = looping && count > 1 ? 5 : 1;
   const cardWidth = 200;
   const stride = 220;
@@ -333,9 +337,13 @@ function galleryHarness({ count = 3, looping = true, modern = true } = {}) {
   let returned = 0;
   const { mountNativeMissionGallery } = load("features/packs/model/native-mission-gallery.ts", env.globals);
   const gallery = mountNativeMissionGallery({ root: rootElement, viewport, cards, count, copies: () => copies, cardClass: "missionCard", navigateHome() { returned++; } });
-  return { ...env, rootElement, viewport, cards, gallery, complete, copies, stride,
+  return { ...env, rootElement, viewport, cards, gallery, complete, copies, stride, finishExpansion,
     get reads() { return reads; }, get returned() { return returned; },
-    expand() { env.frame(); env.advance(1600); },
+    async expand() {
+      env.frame(); finishExpansion();
+      if (looping) env.advance(1600);
+      await new Promise(resolve => setImmediate(resolve));
+    },
   };
 }
 
@@ -343,7 +351,7 @@ for (const looping of [false, true]) for (const count of [1, 2, 8]) {
   test(`${looping ? "Pack" : "day"}/${count}: native gallery expands, scrolls without layout reads, and collapses from the live position`, async () => {
     const h = galleryHarness({ count, looping });
     assert.equal(h.rootElement.dataset.phase, "collapsed");
-    h.expand();
+    await h.expand();
     assert.equal(h.rootElement.dataset.phase, "settled");
     assert.equal(h.viewport.dataset.nativeLocked, "false");
     assert.equal(h.cards[Math.floor(h.copies / 2) * count].dataset.nativeDistance, "0", "date and Pack cards share the center focus");
@@ -381,11 +389,70 @@ for (const looping of [false, true]) for (const count of [1, 2, 8]) {
 }
 
 test("native gallery disposal cancels pending collapse navigation", async () => {
-  const h = galleryHarness(); h.expand();
+  const h = galleryHarness(); await h.expand();
   h.rootElement.emit("keydown", { key: "Escape", preventDefault() {} }); h.frame();
   h.gallery.destroy(); h.complete();
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(h.returned, 0);
+});
+
+test("native day unlocks on actual animation completion and never schedules the Pack timer", async () => {
+  const h = galleryHarness({ looping: false, count: 8 });
+  h.frame();
+  assert.equal(h.rootElement.dataset.phase, "expanding");
+  assert.equal(h.viewport.dataset.nativeLocked, "true");
+  assert.equal(h.timers.size, 0);
+  h.advance(5000);
+  assert.equal(h.rootElement.dataset.phase, "expanding", "elapsed time cannot finish a still-running animation");
+  h.finishExpansion();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.rootElement.dataset.phase, "settled");
+  assert.equal(h.viewport.dataset.nativeLocked, "false");
+  h.gallery.destroy();
+});
+
+test("native single day with no local animations can close immediately after entry", async () => {
+  const h = galleryHarness({ looping: false, count: 1 });
+  h.rootElement.getAnimations = () => [];
+  await h.expand();
+  assert.equal(h.rootElement.dataset.phase, "settled");
+  assert.equal(h.timers.size, 0);
+  h.rootElement.emit("click");
+  h.frame();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.returned, 1);
+  h.gallery.destroy();
+});
+
+test("native day returns its original first card even when it was scrolled completely offscreen", async () => {
+  const h = galleryHarness({ looping: false, count: 8 });
+  await h.expand();
+  const left = 7 * h.stride;
+  h.viewport.nativeScroll(left);
+  h.viewport.emit("scrollend");
+  const writes = h.viewport.writes.length;
+  h.rootElement.emit("keydown", { key: "Escape", preventDefault() {} });
+  assert.equal(h.viewport.left, left);
+  assert.deepEqual(h.viewport.writes.slice(writes), [{ left, behavior: "instant" }],
+    "freezing may stop native inertia at the current offset, never scroll back to the first card");
+  assert.equal(h.cards[0].dataset.nativeVisible, "true", "the shared date carrier cannot be culled");
+  assert.equal(Number.parseFloat(h.cards[0].style["--mission-collapsed-x"]), left);
+  h.frame(); h.complete();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.returned, 1);
+  h.gallery.destroy();
+});
+
+test("native day entry completion is ignored after disposal", async () => {
+  const h = galleryHarness({ looping: false });
+  let focuses = 0;
+  h.rootElement.focus = () => { focuses++; };
+  h.frame(); h.gallery.destroy(); h.finishExpansion();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.rootElement.dataset.phase, "expanding");
+  assert.equal(focuses, 0);
+  assert.equal(h.frames.size, 0);
+  assert.equal(h.timers.size, 0);
 });
 
 test("Safari wrapper selects exactly one driver, with hydration-safe server snapshots", () => {
