@@ -3,6 +3,7 @@
 import type { MissionSummary } from "@/data/contracts/pack-summary";
 import type { MissionActionStatus } from "@/features/missions/model/mission-action-state";
 import { MissionCompleteSlider } from "./MissionCompleteSlider";
+import { MissionProofRecorder } from "./MissionProofRecorder";
 import styles from "./MissionActionLayer.module.css";
 
 type MissionActionLayerProps = {
@@ -12,6 +13,7 @@ type MissionActionLayerProps = {
   currentStatus: MissionActionStatus;
   isTakePending: boolean;
   onCompletionRequested: () => void;
+  onCompleted: () => void;
   onTake: () => void;
   takeError: string | null;
 };
@@ -23,6 +25,7 @@ export function MissionActionLayer({
   currentStatus,
   isTakePending,
   onCompletionRequested,
+  onCompleted,
   onTake,
   takeError,
 }: MissionActionLayerProps) {
@@ -41,12 +44,12 @@ export function MissionActionLayer({
           </button>
         )}
 
-        {currentStatus === "taken" && <MissionCompleteSlider onCompletionRequested={onCompletionRequested} />}
+        {currentStatus === "taken" && !completionRequested && (
+          <MissionCompleteSlider onCompletionRequested={onCompletionRequested} />
+        )}
 
         {currentStatus === "taken" && completionRequested && (
-          <p aria-live="polite" className={styles.notice}>
-            Audio proof required to complete.
-          </p>
+          <MissionProofRecorder key={activeMission.id} missionId={activeMission.id} onCompleted={onCompleted} />
         )}
 
         {currentStatus === "completed" && (

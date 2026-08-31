@@ -18,6 +18,7 @@ export type Database = {
         Row: {
           completed_at: string | null
           mission_id: string
+          proof_path: string | null
           status: string
           taken_at: string
           user_id: string
@@ -25,6 +26,7 @@ export type Database = {
         Insert: {
           completed_at?: string | null
           mission_id: string
+          proof_path?: string | null
           status?: string
           taken_at?: string
           user_id: string
@@ -32,6 +34,7 @@ export type Database = {
         Update: {
           completed_at?: string | null
           mission_id?: string
+          proof_path?: string | null
           status?: string
           taken_at?: string
           user_id?: string
@@ -146,7 +149,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      complete_mission_with_audio: {
+        Args: { p_mission_id: string; p_proof_path: string }
+        Returns: {
+          completed_at: string
+          status: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

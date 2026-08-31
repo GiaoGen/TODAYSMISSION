@@ -61,6 +61,12 @@ export function MissionPackDetail({ pack, authenticated, initialMissionStatuses 
     });
   };
 
+  const handleCompleted = () => {
+    if (!activeMission) return;
+    setMissionStatuses((current) => ({ ...current, [activeMission.id]: "completed" }));
+    setCompletionRequestedMissionId(null);
+  };
+
   return (
     <>
       <MissionGallery
@@ -78,6 +84,7 @@ export function MissionPackDetail({ pack, authenticated, initialMissionStatuses 
           currentStatus={currentStatus}
           isTakePending={isTaking}
           onCompletionRequested={() => setCompletionRequestedMissionId(activeMission.id)}
+          onCompleted={handleCompleted}
           onTake={handleTake}
           takeError={takeErrorMissionId === activeMission.id ? takeError : null}
         />

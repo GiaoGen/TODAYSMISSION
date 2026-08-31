@@ -11,9 +11,25 @@ export type TakeMissionActionResult =
   | { ok: true; status: MissionProgressStatus }
   | { ok: false; error: string };
 
+export type MissionProofUploadTargetResult =
+  | { ok: true; pathBase: string }
+  | { ok: false; error: string };
+
+export type CompleteMissionWithAudioResult =
+  | { ok: true; status: "completed"; completedAt: string }
+  | { ok: false; error: string };
+
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function failedTake(message: string): TakeMissionActionResult {
+  return { ok: false, error: message };
+}
+
+function failedProof(message: string): MissionProofUploadTargetResult {
+  return { ok: false, error: message };
+}
+
+function failedCompletion(message: string): CompleteMissionWithAudioResult {
   return { ok: false, error: message };
 }
 
@@ -93,4 +109,71 @@ export async function takeMissionAction(missionId: string): Promise<TakeMissionA
   }
 
   return failedTake("We couldn't take this mission right now. Please try again.");
+}
+
+export async function createMissionProofUploadTarget(missionId: string): Promise<MissionProofUploadTargetResult> {
+  if (!UUID_PATTERN.test(missionId)) return failedProof("That mission is unavailable.");
+
+  const supabase = await createClient();
+  const { data: userData, error: authError } = await supabase.auth.getUser();
+
+  if (authError) {
+    if (isAuthSessionMissingError(authError)) return failedProof("Please log in to complete a mission.");
+    return failedProof("We couldn't verify your login. Please try again.");
+  }
+
+  const user = userData.user;
+  if (!user) return failedProof("Please log in to complete a mission.");
+
+  const { data: progress, error: progressError } = await supabase
+    .from("mission_progress")
+    .select("status")
+    .eq("user_id", user.id)
+    .eq("mission_id", missionId)
+    .maybeSingle();
+
+  if (progressError) return failedProof("We couldn't verify this mission. Please try again.");
+  if (!progress || progress.status !== "taken") return failedProof("Take this mission before completing it.");
+
+  return {
+    ok: true,
+    pathBase: `${user.id}/${missionId}/${crypto.randomUUID()}`,
+  };
+}
+
+export async function completeMissionWithAudioAction(
+  missionId: string,
+  proofPath: string,
+): Promise<CompleteMissionWithAudioResult> {
+  if (!UUID_PATTERN.test(missionId) || typeof proofPath !== "string" || proofPath.length > 300) {
+    return failedCompletion("That mission proof is invalid.");
+  }
+
+  const supabase = await createClient();
+  const { data: userData, error: authError } = await supabase.auth.getUser();
+
+  if (authError) {
+    if (isAuthSessionMissingError(authError)) return failedCompletion("Please log in to complete a mission.");
+    return failedCompletion("We couldn't verify your login. Please try again.");
+  }
+
+  if (!userData.user) return failedCompletion("Please log in to complete a mission.");
+
+  const { data, error } = await supabase.rpc("complete_mission_with_audio", {
+    p_mission_id: missionId,
+    p_proof_path: proofPath,
+  });
+
+  if (error) return failedCompletion("We couldn't verify the audio proof. Please try again.");
+
+  const completion = data[0];
+  if (!completion || completion.status !== "completed" || !completion.completed_at) {
+    return failedCompletion("We couldn't complete this mission. Please try again.");
+  }
+
+  return {
+    ok: true,
+    status: "completed",
+    completedAt: completion.completed_at,
+  };
 }
