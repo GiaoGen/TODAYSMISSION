@@ -1,0 +1,124 @@
+.layer {
+  position: fixed;
+  z-index: 30;
+  right: 0;
+  bottom: clamp(18px, 4dvh, 40px);
+  left: 0;
+  display: flex;
+  justify-content: center;
+  padding: 0 16px;
+  pointer-events: none;
+}
+
+.panel {
+  display: grid;
+  width: min(100%, 360px);
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--menu-border);
+  border-radius: 20px;
+  background: var(--page-background);
+  color: var(--ui-text);
+  pointer-events: auto;
+}
+
+.primary,
+.nervous {
+  min-height: 48px;
+  border-radius: 14px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.primary {
+  border: 1px solid var(--ui-text);
+  background: var(--ui-text);
+  color: var(--page-background);
+}
+
+.nervous {
+  border: 0;
+  background: transparent;
+  color: var(--ui-muted);
+  cursor: default;
+  font-size: 13px;
+}
+
+.completed {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--ui-text);
+  font-size: 14px;
+}
+
+.slider {
+  position: relative;
+  min-height: 52px;
+  overflow: hidden;
+  border: 1px solid var(--menu-border);
+  border-radius: 16px;
+  background: var(--menu-surface);
+  cursor: ew-resize;
+  outline: none;
+  touch-action: none;
+  user-select: none;
+}
+
+.slider:focus-visible {
+  outline: 2px solid var(--ui-text);
+  outline-offset: 2px;
+}
+
+.sliderFill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--ui-text);
+  opacity: 0.12;
+}
+
+.sliderThumb {
+  position: absolute;
+  top: 50%;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--ui-text);
+  border-radius: 50%;
+  background: var(--page-background);
+  transform: translate(-50%, -50%);
+}
+
+.sliderLabel,
+.sliderHint,
+.sliderThreshold {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.sliderLabel {
+  left: 18px;
+  font-size: 13px;
+}
+
+.sliderHint {
+  right: 18px;
+  color: var(--ui-muted);
+  font-size: 11px;
+}
+
+.sliderThreshold {
+  right: 8%;
+  color: var(--ui-muted);
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+@media (max-width: 599px) {
+  .layer { bottom: 16px; }
+  .panel { width: min(100%, 340px); }
+}

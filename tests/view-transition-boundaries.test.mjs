@@ -16,6 +16,7 @@ const componentFiles = {
   PackDetailPage: "app/pack/[slug]/page.tsx",
   MissionPackDetail: "features/packs/components/MissionPackDetail.tsx",
   MissionGallery: "features/packs/components/MissionGallery.tsx",
+  MissionActionLayer: "features/missions/components/MissionActionLayer.tsx",
   CompletedMissionsPage: "app/completed/[date]/page.tsx",
 };
 

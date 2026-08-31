@@ -356,6 +356,8 @@ function galleryHarness(count, { reduced = false, saved = null, looping = false 
     isSafariUserAgent: () => false,
     rootRef: { current: root }, trackRef: { current: track }, missionRefs: { current: cards },
     primaryCopyRef: { current: Math.floor(copies / 2) }, measureRef: { current: null },
+    missionIdsRef: { current: Array.from({ length: count }, (_, index) => `mission-${index}`) },
+    onActiveMissionChangeRef: { current: null }, activeMissionIdRef: { current: null },
     MissionStreamDepth, missionCount: count, looping, id: looping ? "mock-pack-01" : dayTransitions.getDayGalleryId("2026-08-28"),
     completedDate: looping ? undefined : "2026-08-28",
     performance: { now: () => now }, Element, styles: { missionCard: "missionCard" },

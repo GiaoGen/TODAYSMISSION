@@ -59,6 +59,7 @@ type MissionGalleryProps = {
   hero: MissionSummary | PackSummary;
   missions: readonly MissionSummary[];
   completedDate?: string;
+  onActiveMissionChange?: (missionId: string) => void;
 };
 
 function clamp(value: number, minimum: number, maximum: number) {
@@ -111,7 +112,7 @@ function MissionArtwork({
   );
 }
 
-export function MissionGallery({ id, title, hero, missions, completedDate }: MissionGalleryProps) {
+export function MissionGallery({ id, title, hero, missions, completedDate, onActiveMissionChange }: MissionGalleryProps) {
   const router = useRouter();
   const nativeScrolling = useSafariScroll();
   const source = completedDate ? "top" : "bottom";
@@ -146,6 +147,14 @@ export function MissionGallery({ id, title, hero, missions, completedDate }: Mis
   const primaryCopy = Math.floor(copies / 2);
   const primaryCopyRef = useRef(primaryCopy);
   const measureRef = useRef<(() => void) | null>(null);
+  const missionIdsRef = useRef(missions.map((mission) => mission.id));
+  const onActiveMissionChangeRef = useRef(onActiveMissionChange);
+  const activeMissionIdRef = useRef<string | null>(null);
+
+  useLayoutEffect(() => {
+    missionIdsRef.current = missions.map((mission) => mission.id);
+    onActiveMissionChangeRef.current = onActiveMissionChange;
+  }, [missions, onActiveMissionChange]);
 
   useLayoutEffect(() => {
     primaryCopyRef.current = primaryCopy;
@@ -164,6 +173,13 @@ export function MissionGallery({ id, title, hero, missions, completedDate }: Mis
     // before attaching any driver; never briefly install Chrome's handlers.
     if (!nativeScrolling && isSafariUserAgent(window.navigator?.userAgent ?? "")) return;
 
+    const notifyActiveMission = (index: number) => {
+      const missionId = missionIdsRef.current[index];
+      if (!missionId || activeMissionIdRef.current === missionId) return;
+      activeMissionIdRef.current = missionId;
+      onActiveMissionChangeRef.current?.(missionId);
+    };
+
     const navigateHome = () => {
       const savedState = getPackCarouselReturnState();
       if (savedState?.packId !== id) {
@@ -180,6 +196,7 @@ export function MissionGallery({ id, title, hero, missions, completedDate }: Mis
         root, viewport: scrollRef.current, cards, count: missionCount,
         copies: () => 2 * primaryCopyRef.current + 1,
         cardClass: styles.missionCard, navigateHome,
+        onActiveMissionChange: notifyActiveMission,
       });
       measureRef.current = native.measure;
       nativeIdleRef.current = native.whenIdle;
@@ -237,6 +254,8 @@ export function MissionGallery({ id, title, hero, missions, completedDate }: Mis
     const renderTrack = () => {
       track.style.transform = `translate3d(${position}px, -50%, 0)`;
       const center = stride ? missionCount * primaryCopyRef.current + Math.round((origin - position) / stride) : 0;
+      const activeIndex = missionCount > 0 ? ((center % missionCount) + missionCount) % missionCount : -1;
+      notifyActiveMission(activeIndex);
       depth.update(cards.length, center, performance.now(), depthRebase, resetDepth || prefersReducedMotion);
       depthRebase = 0;
       resetDepth = false;
