@@ -43,6 +43,7 @@ function loadModule(file, cache = new Map()) {
 }
 
 const mapper = loadModule("data/mappers/pack-mapper.ts");
+const progressMapper = loadModule("data/mappers/mission-progress-mapper.ts");
 
 const packRow = (overrides = {}) => ({
   id: "pack-1",
@@ -133,4 +134,34 @@ test("does not replace invalid core content with fixture values", () => {
     () => mapper.mapMissionSummary(missionRow({ title: "" })),
     /Mission: title must be non-empty/,
   );
+});
+
+test("maps mission progress without exposing user identity", () => {
+  assert.deepEqual(plain(progressMapper.mapMissionProgressRows([
+    {
+      mission_id: "mission-taken",
+      status: "taken",
+      taken_at: "2026-08-31T00:00:00Z",
+      completed_at: null,
+    },
+    {
+      mission_id: "mission-completed",
+      status: "completed",
+      taken_at: "2026-08-30T00:00:00Z",
+      completed_at: "2026-08-31T00:00:00Z",
+    },
+  ])), {
+    "mission-taken": {
+      missionId: "mission-taken",
+      status: "taken",
+      takenAt: "2026-08-31T00:00:00Z",
+      completedAt: null,
+    },
+    "mission-completed": {
+      missionId: "mission-completed",
+      status: "completed",
+      takenAt: "2026-08-30T00:00:00Z",
+      completedAt: "2026-08-31T00:00:00Z",
+    },
+  });
 });

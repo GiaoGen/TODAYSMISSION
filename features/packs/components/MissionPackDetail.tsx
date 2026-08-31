@@ -1,25 +1,39 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 
 import type { PackDetail } from "@/data/contracts/pack-summary";
+import { takeMissionAction } from "@/features/missions/actions";
 import {
-  completeMission,
-  createMissionActionState,
+  applyTakeResult,
   getMissionLoginDestination,
-  takeMission,
   type MissionActionStatus,
 } from "@/features/missions/model/mission-action-state";
 import { MissionActionLayer } from "@/features/missions/components/MissionActionLayer";
 import { MissionGallery } from "./MissionGallery";
 
-export function MissionPackDetail({ pack, authenticated }: { pack: PackDetail; authenticated: boolean }) {
+type MissionPackDetailProps = {
+  pack: PackDetail;
+  authenticated: boolean;
+  initialMissionStatuses: Record<string, MissionActionStatus>;
+};
+
+export function MissionPackDetail({ pack, authenticated, initialMissionStatuses }: MissionPackDetailProps) {
   const [activeMissionId, setActiveMissionId] = useState(pack.missions[0]?.id ?? null);
-  const [missionStatuses, setMissionStatuses] = useState<Record<string, MissionActionStatus>>(
-    () => createMissionActionState(pack.missions.map((mission) => mission.id)),
-  );
+  const [missionStatuses, setMissionStatuses] = useState(initialMissionStatuses);
+  const [isTaking, startTaking] = useTransition();
+  const [takeErrorMissionId, setTakeErrorMissionId] = useState<string | null>(null);
+  const [takeError, setTakeError] = useState<string | null>(null);
+  const [completionRequestedMissionId, setCompletionRequestedMissionId] = useState<string | null>(null);
   const activeMission = pack.missions.find((mission) => mission.id === activeMissionId) ?? pack.missions[0];
   const currentStatus = activeMission ? missionStatuses[activeMission.id] ?? "available" : "available";
+
+  const handleActiveMissionChange = (missionId: string) => {
+    setActiveMissionId(missionId);
+    setTakeErrorMissionId(null);
+    setTakeError(null);
+    setCompletionRequestedMissionId(null);
+  };
 
   const handleTake = () => {
     if (!activeMission) return;
@@ -27,18 +41,24 @@ export function MissionPackDetail({ pack, authenticated }: { pack: PackDetail; a
       window.location.assign(getMissionLoginDestination(pack.slug));
       return;
     }
-    setMissionStatuses((current) => ({
-      ...current,
-      [activeMission.id]: takeMission(current[activeMission.id] ?? "available"),
-    }));
-  };
+    if (isTaking) return;
 
-  const handleComplete = () => {
-    if (!activeMission) return;
-    setMissionStatuses((current) => ({
-      ...current,
-      [activeMission.id]: completeMission(current[activeMission.id] ?? "available"),
-    }));
+    const missionId = activeMission.id;
+    setTakeErrorMissionId(null);
+    setTakeError(null);
+    startTaking(async () => {
+      const result = await takeMissionAction(missionId);
+      if (!result.ok) {
+        setTakeErrorMissionId(missionId);
+        setTakeError(result.error);
+        return;
+      }
+
+      setMissionStatuses((current) => ({
+        ...current,
+        [missionId]: applyTakeResult(current[missionId] ?? "available", result.status),
+      }));
+    });
   };
 
   return (
@@ -48,15 +68,18 @@ export function MissionPackDetail({ pack, authenticated }: { pack: PackDetail; a
         title={pack.title}
         hero={pack}
         missions={pack.missions}
-        onActiveMissionChange={setActiveMissionId}
+        onActiveMissionChange={handleActiveMissionChange}
       />
       {activeMission ? (
         <MissionActionLayer
           activeMission={activeMission}
           authenticated={authenticated}
+          completionRequested={completionRequestedMissionId === activeMission.id}
           currentStatus={currentStatus}
-          onComplete={handleComplete}
+          isTakePending={isTaking}
+          onCompletionRequested={() => setCompletionRequestedMissionId(activeMission.id)}
           onTake={handleTake}
+          takeError={takeErrorMissionId === activeMission.id ? takeError : null}
         />
       ) : null}
     </>

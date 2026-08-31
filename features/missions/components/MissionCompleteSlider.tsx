@@ -2,21 +2,18 @@
 
 import { useRef, useState } from "react";
 
-import {
-  getCompletionOutcome,
-  MISSION_COMPLETION_THRESHOLD,
-} from "@/features/missions/model/mission-action-state";
+import { getCompletionOutcome } from "@/features/missions/model/mission-action-state";
 import styles from "./MissionActionLayer.module.css";
 
 type MissionCompleteSliderProps = {
-  onComplete: () => void;
+  onCompletionRequested: () => void;
 };
 
 function clampProgress(value: number): number {
   return Math.min(1, Math.max(0, value));
 }
 
-export function MissionCompleteSlider({ onComplete }: MissionCompleteSliderProps) {
+export function MissionCompleteSlider({ onCompletionRequested }: MissionCompleteSliderProps) {
   const trackRef = useRef<HTMLDivElement>(null);
   const pointerIdRef = useRef<number | null>(null);
   const [progress, setProgress] = useState(0);
@@ -48,12 +45,12 @@ export function MissionCompleteSlider({ onComplete }: MissionCompleteSliderProps
     setProgress(progressFromPointer(event.clientX));
   };
 
-  const resetOrComplete = (finalProgress: number) => {
+  const resetOrRequest = (finalProgress: number) => {
     pointerIdRef.current = null;
     setIsDragging(false);
-    if (getCompletionOutcome(finalProgress) === "complete") {
-      setProgress(1);
-      onComplete();
+    if (getCompletionOutcome(finalProgress) === "request") {
+      setProgress(0);
+      onCompletionRequested();
     } else {
       setProgress(0);
     }
@@ -66,7 +63,7 @@ export function MissionCompleteSlider({ onComplete }: MissionCompleteSliderProps
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
-    resetOrComplete(finalProgress);
+    resetOrRequest(finalProgress);
   };
 
   const handlePointerCancel = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -91,9 +88,9 @@ export function MissionCompleteSlider({ onComplete }: MissionCompleteSliderProps
     if (nextProgress === null) return;
     event.preventDefault();
     const next = clampProgress(nextProgress);
-    if (getCompletionOutcome(next) === "complete") {
-      setProgress(1);
-      onComplete();
+    if (getCompletionOutcome(next) === "request") {
+      setProgress(0);
+      onCompletionRequested();
     } else {
       setProgress(next);
     }
@@ -121,9 +118,6 @@ export function MissionCompleteSlider({ onComplete }: MissionCompleteSliderProps
       <span className={styles.sliderThumb} style={{ left: `${progress * 100}%` }} />
       <span className={styles.sliderLabel}>Slide to complete</span>
       <span className={styles.sliderHint}>Use arrow keys or End</span>
-      <span className={styles.sliderThreshold} aria-hidden="true">
-        {Math.round(MISSION_COMPLETION_THRESHOLD * 100)}%
-      </span>
     </div>
   );
 }

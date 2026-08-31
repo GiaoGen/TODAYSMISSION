@@ -8,17 +8,23 @@ import styles from "./MissionActionLayer.module.css";
 type MissionActionLayerProps = {
   activeMission: MissionSummary;
   authenticated: boolean;
+  completionRequested: boolean;
   currentStatus: MissionActionStatus;
-  onComplete: () => void;
+  isTakePending: boolean;
+  onCompletionRequested: () => void;
   onTake: () => void;
+  takeError: string | null;
 };
 
 export function MissionActionLayer({
   activeMission,
   authenticated,
+  completionRequested,
   currentStatus,
-  onComplete,
+  isTakePending,
+  onCompletionRequested,
   onTake,
+  takeError,
 }: MissionActionLayerProps) {
   return (
     <aside
@@ -30,18 +36,26 @@ export function MissionActionLayer({
     >
       <div className={styles.panel}>
         {currentStatus === "available" && (
-          <button className={styles.primary} onClick={onTake} type="button">
-            Take this mission
+          <button className={styles.primary} disabled={isTakePending} onClick={onTake} type="button">
+            {isTakePending ? "Taking…" : "Take this mission"}
           </button>
         )}
 
-        {currentStatus === "taken" && <MissionCompleteSlider onComplete={onComplete} />}
+        {currentStatus === "taken" && <MissionCompleteSlider onCompletionRequested={onCompletionRequested} />}
+
+        {currentStatus === "taken" && completionRequested && (
+          <p aria-live="polite" className={styles.notice}>
+            Audio proof required to complete.
+          </p>
+        )}
 
         {currentStatus === "completed" && (
           <p aria-live="polite" className={styles.completed}>
             <span aria-hidden="true">✓</span> Completed
           </p>
         )}
+
+        {takeError ? <p className={styles.error} role="alert">{takeError}</p> : null}
 
         <button className={styles.nervous} disabled type="button">
           I am nervous

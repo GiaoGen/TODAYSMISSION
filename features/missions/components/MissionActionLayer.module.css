@@ -55,6 +55,21 @@
   font-size: 14px;
 }
 
+.notice,
+.error {
+  margin: 0;
+  text-align: center;
+  font-size: 12px;
+}
+
+.notice {
+  color: var(--ui-muted);
+}
+
+.error {
+  color: var(--ui-text);
+}
+
 .slider {
   position: relative;
   min-height: 52px;
@@ -109,13 +124,6 @@
   right: 18px;
   color: var(--ui-muted);
   font-size: 11px;
-}
-
-.sliderThreshold {
-  right: 8%;
-  color: var(--ui-muted);
-  font-size: 10px;
-  opacity: 0.7;
 }
 
 @media (max-width: 599px) {

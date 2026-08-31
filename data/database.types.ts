@@ -14,6 +14,38 @@ export type Database = {
   }
   public: {
     Tables: {
+      mission_progress: {
+        Row: {
+          completed_at: string | null
+          mission_id: string
+          status: string
+          taken_at: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          mission_id: string
+          status?: string
+          taken_at?: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          mission_id?: string
+          status?: string
+          taken_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mission_progress_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: false
+            referencedRelation: "missions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       missions: {
         Row: {
           artwork_key: string
@@ -247,4 +279,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-
