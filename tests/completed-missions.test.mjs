@@ -71,17 +71,11 @@ test("invalid dates, pre-registration days and days without completions cannot o
   }
 });
 
-test("actual date route accepts async params, prerenders every recorded day and rejects empty dates", async () => {
-  const page = loadModule("app/completed/[date]/page.tsx", {
-    "next/navigation": { notFound() { throw new Error("not-found"); } },
-    "@/features/packs/components/MissionGallery": { MissionGallery: () => null },
-  });
-  assert.deepEqual(plain(page.generateStaticParams().map(item => item.date)), plain(repository.getCompletionDates()));
+test("completed date route does not expose fixture history", async () => {
+  const page = loadModule("app/completed/[date]/page.tsx");
+  assert.equal("generateStaticParams" in page, false);
   const element = await page.default({ params: Promise.resolve({ date: "2026-08-26" }) });
-  assert.equal(element.props.completedDate, "2026-08-26");
-  assert.equal(element.props.missions.length, 8);
-  assert.equal(element.props.hero.id, element.props.missions[0].id);
-  await assert.rejects(() => page.default({ params: Promise.resolve({ date: "2026-08-27" }) }), /not-found/);
+  assert.match(element.props.children, /unavailable/i);
 });
 
 test("actual day gallery renders exactly the day's card count, never loop copies or extra covers", () => {

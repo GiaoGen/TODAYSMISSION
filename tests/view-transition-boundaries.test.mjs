@@ -126,11 +126,9 @@ test("detail keeps its exit boundary above the content", () => {
   assert.ok(attribute(boundaries[0].element, "exit"));
 });
 
-test("calendar day route shares the same gallery and exposes its exit boundary", () => {
+test("completed history route exposes no fixture gallery", () => {
   const boundaries = routeBoundaries("CompletedMissionsPage");
-  assert.equal(boundaries.length, 1);
-  assert.equal(boundaries[0].owner, "MissionGallery");
-  assert.ok(attribute(boundaries[0].element, "exit"));
+  assert.equal(boundaries.length, 0);
 });
 
 test("the persistent layout owns the sole main landmark and the route slot", () => {

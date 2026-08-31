@@ -4,6 +4,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import type { PackSummary } from "@/data/contracts/pack-summary";
+import type { CurrentUser } from "@/data/contracts/current-user";
 import type { MissionCalendarData } from "@/data/contracts/mission-calendar";
 import type { CarouselPlacement } from "@/features/packs/model/arc-carousel-geometry";
 import type { CarouselHandle } from "@/features/packs/model/carousel-handle";
@@ -37,13 +38,14 @@ import { getDayGalleryHref, getDayGalleryId } from "@/features/calendar/model/ca
 export type HomePackCarouselsProps = {
   packs: readonly PackSummary[];
   joinedPacks: readonly PackSummary[];
-  mockLoginName: string;
+  currentUser: CurrentUser | null;
   calendar: MissionCalendarData;
+  onLogout: () => Promise<void>;
 };
 
 type CarouselView = HomeCarouselSelection & { phase: CarouselSwapPhase; changing: readonly CarouselPlacement[] };
 
-export function HomePackCarousels({ packs, joinedPacks, mockLoginName, calendar }: HomePackCarouselsProps) {
+export function HomePackCarousels({ packs, joinedPacks, currentUser, calendar, onLogout }: HomePackCarouselsProps) {
   const router = useRouter();
   const [returnState] = useState(getPackCarouselReturnState);
   const [view, setView] = useState<CarouselView>(() => {
@@ -232,7 +234,7 @@ export function HomePackCarousels({ packs, joinedPacks, mockLoginName, calendar 
       />
       <HomeUserMenu
         busy={busy}
-        loginName={preferences.loggedOut ? "Guest" : mockLoginName}
+        currentUser={currentUser}
         theme={preferences.theme}
         bottomCollection={assignments.bottom}
         onMenuChange={changeMenu}
@@ -241,7 +243,7 @@ export function HomePackCarousels({ packs, joinedPacks, mockLoginName, calendar 
           ...preferences,
           theme: preferences.theme === "light" ? "dark" : "light",
         })}
-        onLogout={() => updatePreferences({ ...preferences, loggedOut: true })}
+        onLogout={() => { void onLogout(); }}
       />
     </>
   );

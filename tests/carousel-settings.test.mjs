@@ -24,7 +24,7 @@ test("both bottom Pack selections survive refresh, with only durable settings pe
     for (const bottom of ["joined", "all"]) {
       const storage = memoryStorage();
       const store = createCarouselSettingsStore(() => storage);
-      assert.equal(store.save({ top, bottom, temporary: "ignored", position: 12, loggedOut: true }), true);
+      assert.equal(store.save({ top, bottom, temporary: "ignored", position: 12 }), true);
       assert.deepEqual(JSON.parse(storage.getItem(CAROUSEL_SETTINGS_KEY)), { version: 2, top, bottom });
       assert.deepEqual(createCarouselSettingsStore(() => storage).read(), { top, bottom });
       const restored = selection.createHomeCarouselState(null, createCarouselSettingsStore(() => storage).read());
@@ -224,12 +224,13 @@ function compileComponent(file, replacements) {
   return exports;
 }
 
-test("nickname has a left Pack switch and right menu trigger; dialog only has theme and logout", () => {
+test("authenticated identity has a left Pack switch and right menu trigger; dialog only has theme and logout", () => {
   const { HomeUserMenu } = compileComponent("features/packs/components/HomeUserMenu.tsx", {
     "@/features/packs/model/home-carousel-state": selection,
   });
   const html = renderToStaticMarkup(createElement(HomeUserMenu, {
-    busy: false, loginName: "mission_user", theme: "light", bottomCollection: "joined",
+    busy: false, currentUser: { id: "user-1", email: "mission_user@example.com", createdAt: "2026-08-31T00:00:00Z" },
+    theme: "light", bottomCollection: "joined",
     onMenuChange() {}, onSwitchPacks() {}, onThemeChange() {}, onLogout() {},
   }));
   const dialog = html.match(/<dialog\b[\s\S]*?<\/dialog>/)[0];
@@ -240,6 +241,21 @@ test("nickname has a left Pack switch and right menu trigger; dialog only has th
   assert.match(html, /class="trigger switchTrigger"/);
   assert.match(html, /stroke-width="1.5"/);
   assert.equal((html.match(/class="chevron"/g) || []).length, 1, "username menu trigger is preserved");
+});
+
+test("guest identity exposes Login and no Logout", () => {
+  const { HomeUserMenu } = compileComponent("features/packs/components/HomeUserMenu.tsx", {
+    "@/features/packs/model/home-carousel-state": selection,
+  });
+  const html = renderToStaticMarkup(createElement(HomeUserMenu, {
+    busy: false, currentUser: null, theme: "light", bottomCollection: "joined",
+    onMenuChange() {}, onSwitchPacks() {}, onThemeChange() {}, onLogout() {},
+  }));
+  const dialog = html.match(/<dialog\b[\s\S]*?<\/dialog>/)[0];
+  assert.match(html, />Guest</);
+  assert.match(dialog, /href="\/login\?next=\/"/);
+  assert.match(dialog, />Login<\/a>/);
+  assert.doesNotMatch(dialog, /Logout/);
 });
 
 test("server entry renders no incorrect default wheels before local settings are readable", () => {

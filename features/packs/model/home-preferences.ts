@@ -1,10 +1,9 @@
 export type HomePreferences = {
   theme: "light" | "dark";
-  loggedOut: boolean;
 };
 
-// Prototype-only session memory; survives route navigation, resets on reload.
-let preferences: HomePreferences = { theme: "light", loggedOut: false };
+// Device-only theme preference; survives route navigation, resets on reload.
+let preferences: HomePreferences = { theme: "light" };
 
 export function getHomePreferences() {
   return preferences;

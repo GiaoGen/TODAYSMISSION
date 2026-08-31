@@ -1,17 +1,19 @@
 "use client";
 
 import { useLayoutEffect, useRef, useState } from "react";
+import Link from "next/link";
 import {
   COLLECTION_LABELS,
   type PackCollection,
 } from "@/features/packs/model/home-carousel-state";
 import type { HomePreferences } from "@/features/packs/model/home-preferences";
+import type { CurrentUser } from "@/data/contracts/current-user";
 
 import styles from "./HomeUserMenu.module.css";
 
 type HomeUserMenuProps = {
   busy: boolean;
-  loginName: string;
+  currentUser: CurrentUser | null;
   theme: HomePreferences["theme"];
   bottomCollection: PackCollection;
   onMenuChange: (open: boolean) => boolean;
@@ -22,7 +24,7 @@ type HomeUserMenuProps = {
 
 export function HomeUserMenu({
   busy,
-  loginName,
+  currentUser,
   theme,
   bottomCollection,
   onMenuChange,
@@ -78,7 +80,7 @@ export function HomeUserMenu({
             <path d="M2 5h11m-3-3 3 3-3 3M14 11H3m3-3-3 3 3 3" />
           </svg>
         </button>
-        <span className={styles.loginName}>{loginName}</span>
+        <span className={styles.loginName}>{currentUser?.email ?? "Guest"}</span>
         <button
           aria-label="打开用户菜单 / Open user menu"
           aria-haspopup="dialog"
@@ -135,17 +137,21 @@ export function HomeUserMenu({
           <span>深色 / 浅色</span>
           <span className={styles.value}>{theme === "dark" ? "深色" : "浅色"}</span>
         </button>
-        <button
-          className={styles.row}
-          disabled={phase === "closing"}
-          onClick={() => {
-            onLogout();
-            requestClose();
-          }}
-          type="button"
-        >
-          Logout
-        </button>
+        {currentUser ? (
+          <button
+            className={styles.row}
+            disabled={phase === "closing"}
+            onClick={() => {
+              onLogout();
+              requestClose();
+            }}
+            type="button"
+          >
+            Logout
+          </button>
+        ) : (
+          <Link className={styles.row} href="/login?next=/" onClick={requestClose}>Login</Link>
+        )}
       </dialog>
     </div>
   );

@@ -149,10 +149,10 @@ for (const phase of ["exiting", "entering"]) {
   });
 }
 
-test("mock logout and theme survive route navigation without mutating the caller", () => {
-  const next = { theme: "dark", loggedOut: true };
+test("theme preference survives route navigation without mutating the caller", () => {
+  const next = { theme: "dark" };
   setHomePreferences(next);
   next.theme = "light";
-  assert.deepEqual(getHomePreferences(), { theme: "dark", loggedOut: true });
-  setHomePreferences({ theme: "light", loggedOut: false });
+  assert.deepEqual(getHomePreferences(), { theme: "dark" });
+  setHomePreferences({ theme: "light" });
 });
