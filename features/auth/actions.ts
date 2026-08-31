@@ -1,6 +1,6 @@
 "use server";
 
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -32,12 +32,12 @@ function getSafeNextFromForm(formData: FormData) {
 function authErrorMessage(error: { message?: string; status?: number }): string {
   const message = error.message ?? "";
   if (error.status === 429 || /rate|too many|retry|limit/i.test(message)) {
-    return "Please wait a moment before requesting another code.";
+    return "Please wait a moment before requesting another email.";
   }
   if (/invalid.*email|email.*invalid/i.test(message)) {
     return "Enter a valid email address.";
   }
-  return "We couldn't send a code right now. Please try again.";
+  return "We couldn't send a sign-in email right now. Please try again.";
 }
 
 function setPendingEmail(cookieStore: Awaited<ReturnType<typeof cookies>>, email: string) {
@@ -64,25 +64,44 @@ function clearPendingEmail(cookieStore: Awaited<ReturnType<typeof cookies>>) {
   });
 }
 
-async function sendEmailOtp(email: string) {
+async function getEmailRedirectTo(next: string): Promise<string> {
+  const headerStore = await headers();
+  const origin = headerStore.get("origin");
+  const host = headerStore.get("x-forwarded-host") ?? headerStore.get("host");
+  const protocol = headerStore.get("x-forwarded-proto") ?? "http";
+  const baseUrl = origin ?? (host ? `${protocol}://${host}` : null);
+
+  if (!baseUrl) {
+    throw new Error("Unable to determine the login callback URL.");
+  }
+
+  const callbackUrl = new URL("/auth/callback", baseUrl);
+  callbackUrl.searchParams.set("next", next);
+  return callbackUrl.toString();
+}
+
+async function sendEmailOtp(email: string, emailRedirectTo?: string) {
   const supabase = await createClient();
   return supabase.auth.signInWithOtp({
     email,
-    options: { shouldCreateUser: true },
+    options: {
+      shouldCreateUser: true,
+      ...(emailRedirectTo ? { emailRedirectTo } : {}),
+    },
   });
 }
 
-export async function sendOtp(_previousState: AuthActionState, formData: FormData): Promise<AuthActionState> {
+export async function sendLoginEmail(_previousState: AuthActionState, formData: FormData): Promise<AuthActionState> {
   const rawEmail = getFormText(formData, "email");
   const email = rawEmail ? normalizeEmail(rawEmail) : "";
   if (!EMAIL_PATTERN.test(email)) return { error: "Enter a valid email address." };
 
-  const { error } = await sendEmailOtp(email);
+  const next = getSafeNextFromForm(formData);
+  const { error } = await sendEmailOtp(email, await getEmailRedirectTo(next));
   if (error) return { error: authErrorMessage(error) };
 
   setPendingEmail(await cookies(), email);
-  const next = getSafeNextFromForm(formData);
-  redirect(`/login?step=otp&next=${encodeURIComponent(next)}`);
+  redirect(`/login?step=sent&next=${encodeURIComponent(next)}`);
 }
 
 export async function resendOtp(_previousState: AuthActionState, formData: FormData): Promise<AuthActionState> {

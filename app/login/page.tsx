@@ -15,13 +15,17 @@ export default async function LoginPage({
   const query = await searchParams;
   const next = getSafeNextPath(query.next);
   const pendingEmail = (await cookies()).get(PENDING_EMAIL_COOKIE)?.value ?? null;
-  const mode = query.step === "otp" && pendingEmail ? "otp" : "email";
+  const mode = pendingEmail && query.step === "otp"
+    ? "otp"
+    : pendingEmail && query.step === "sent"
+      ? "sent"
+      : "email";
 
   return (
     <section className={styles.page}>
       <div className={styles.panel}>
         <Link className={styles.brand} href="/">TODAYSMISSION</Link>
-        <h1 className={styles.title}>{mode === "otp" ? "Check your email" : "Log in"}</h1>
+        <h1 className={styles.title}>{mode === "email" ? "Log in" : "Check your email"}</h1>
         <LoginForm email={pendingEmail} mode={mode} next={next} />
       </div>
     </section>
