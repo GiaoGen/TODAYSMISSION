@@ -2,13 +2,13 @@ import "server-only";
 
 import { isAuthSessionMissingError } from "@supabase/supabase-js";
 
-import type { MissionProgressByMission } from "@/data/contracts/mission-progress";
-import { mapMissionProgressRows } from "@/data/mappers/mission-progress-mapper";
+import type { MissionCompletionByMission } from "@/data/contracts/mission-completion";
+import { mapMissionCompletionRows } from "@/data/mappers/mission-completion-mapper";
 import { createClient } from "@/lib/supabase/server";
 
-export async function getMissionProgressForMissions(
+export async function getMissionCompletionsForMissions(
   missionIds: readonly string[],
-): Promise<MissionProgressByMission> {
+): Promise<MissionCompletionByMission> {
   const uniqueMissionIds = [...new Set(missionIds)];
   if (uniqueMissionIds.length === 0) return {};
 
@@ -20,15 +20,15 @@ export async function getMissionProgressForMissions(
     throw new Error("Failed to read the current Auth user.");
   }
 
-  if (!userData.user) return {};
+  if (!userData.user || userData.user.is_anonymous) return {};
 
   const { data, error } = await supabase
-    .from("mission_progress")
-    .select("mission_id,status,taken_at,completed_at")
+    .from("mission_completions")
+    .select("mission_id,completed_at")
     .eq("user_id", userData.user.id)
     .in("mission_id", uniqueMissionIds);
 
-  if (error) throw new Error("Failed to read mission progress.");
+  if (error) throw new Error("Failed to read Mission completions.");
 
-  return mapMissionProgressRows(data);
+  return mapMissionCompletionRows(data);
 }

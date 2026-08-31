@@ -14,34 +14,28 @@ export type Database = {
   }
   public: {
     Tables: {
-      mission_progress: {
+      mission_completions: {
         Row: {
-          completed_at: string | null
+          completed_at: string
           mission_id: string
-          proof_path: string | null
-          status: string
-          taken_at: string
+          proof_path: string
           user_id: string
         }
         Insert: {
-          completed_at?: string | null
+          completed_at?: string
           mission_id: string
-          proof_path?: string | null
-          status?: string
-          taken_at?: string
+          proof_path: string
           user_id: string
         }
         Update: {
-          completed_at?: string | null
+          completed_at?: string
           mission_id?: string
-          proof_path?: string | null
-          status?: string
-          taken_at?: string
+          proof_path?: string
           user_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "mission_progress_mission_id_fkey"
+            foreignKeyName: "mission_completions_mission_id_fkey"
             columns: ["mission_id"]
             isOneToOne: false
             referencedRelation: "missions"
@@ -98,6 +92,32 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "missions_pack_id_fkey"
+            columns: ["pack_id"]
+            isOneToOne: false
+            referencedRelation: "packs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pack_memberships: {
+        Row: {
+          joined_at: string
+          pack_id: string
+          user_id: string
+        }
+        Insert: {
+          joined_at?: string
+          pack_id: string
+          user_id: string
+        }
+        Update: {
+          joined_at?: string
+          pack_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pack_memberships_pack_id_fkey"
             columns: ["pack_id"]
             isOneToOne: false
             referencedRelation: "packs"

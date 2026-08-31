@@ -2,12 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  applyTakeResult,
   getCompletionOutcome,
-  getInitialMissionStatuses,
-  getMissionLoginDestination,
+  getInitialMissionCompletionStatuses,
   MISSION_COMPLETION_THRESHOLD,
 } from "../features/missions/model/mission-action-state.ts";
+import { getPackLoginDestination } from "../features/packs/model/pack-action-state.ts";
 import {
   getMissionProofFormat,
   getSupportedMissionProofFormat,
@@ -16,41 +15,25 @@ import {
   MISSION_PROOF_MIN_DURATION_MS,
 } from "../features/missions/model/mission-proof.ts";
 
-test("initial Mission statuses map missing, taken and completed progress", () => {
+test("initial Mission completion statuses map missing and completed records", () => {
   assert.deepEqual(
-    getInitialMissionStatuses(["mission-1", "mission-2", "mission-3"], {
-      "mission-1": {
-        missionId: "mission-1",
-        status: "taken",
-        takenAt: "2026-08-31T00:00:00.000Z",
-        completedAt: null,
-      },
+    getInitialMissionCompletionStatuses(["mission-1", "mission-2", "mission-3"], {
       "mission-2": {
-        missionId: "mission-2",
-        status: "completed",
-        takenAt: "2026-08-30T00:00:00.000Z",
         completedAt: "2026-08-31T00:00:00.000Z",
+        missionId: "mission-2",
       },
     }),
-    { "mission-1": "taken", "mission-2": "completed", "mission-3": "available" },
+    { "mission-1": "incomplete", "mission-2": "completed", "mission-3": "incomplete" },
   );
 });
 
-test("duplicate Take stays taken and never downgrades completed", () => {
-  assert.equal(applyTakeResult("available", "taken"), "taken");
-  assert.equal(applyTakeResult("taken", "taken"), "taken");
-  assert.equal(applyTakeResult("taken", "completed"), "completed");
-  assert.equal(applyTakeResult("completed", "taken"), "completed");
-});
-
-test("completion requests audio proof without changing the Mission status", () => {
+test("completion requests audio proof at the threshold", () => {
   assert.equal(getCompletionOutcome(MISSION_COMPLETION_THRESHOLD), "request");
   assert.equal(getCompletionOutcome(MISSION_COMPLETION_THRESHOLD - 0.01), "reset");
-  assert.equal(applyTakeResult("taken", "taken"), "taken");
 });
 
-test("Guest Take uses the current Pack login destination", () => {
-  assert.equal(getMissionLoginDestination("go-alone"), "/login?next=%2Fpack%2Fgo-alone");
+test("Guest Pack Take uses the current Pack login destination", () => {
+  assert.equal(getPackLoginDestination("go-alone"), "/login?next=%2Fpack%2Fgo-alone");
 });
 
 test("Mission proof format negotiation stays within the explicit audio allowlist", () => {

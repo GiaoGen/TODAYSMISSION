@@ -1,4 +1,5 @@
 import { getPacks } from "@/data/repositories/get-packs";
+import { getJoinedPacks } from "@/data/repositories/get-pack-memberships";
 import type { CurrentUser } from "@/data/contracts/current-user";
 import type { MissionCalendarData } from "@/data/contracts/mission-calendar";
 import { getCurrentUser } from "@/data/repositories/get-current-user";
@@ -20,8 +21,7 @@ export default async function Home() {
     return <main><p>No public mission Packs are available right now.</p></main>;
   }
 
-  // Prototype-only subset until Take/Progress can load real user participation.
-  const joinedPacks = packs.slice(0, Math.min(5, packs.length));
+  const joinedPacks = currentUser ? await getJoinedPacks() : [];
 
   // Route-owned DOM above the wheel boundaries would suppress their enter/exit.
   return <HomeCarouselEntry

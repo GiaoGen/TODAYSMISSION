@@ -1,0 +1,37 @@
+.action {
+  display: grid;
+  gap: 8px;
+}
+
+.primary {
+  min-height: 48px;
+  border: 1px solid var(--ui-text);
+  border-radius: 14px;
+  background: var(--ui-text);
+  color: var(--page-background);
+  font: inherit;
+  cursor: pointer;
+}
+
+.primary:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.joined {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--ui-text);
+  font-size: 14px;
+}
+
+.error {
+  margin: 0;
+  color: var(--ui-text);
+  text-align: center;
+  font-size: 12px;
+}

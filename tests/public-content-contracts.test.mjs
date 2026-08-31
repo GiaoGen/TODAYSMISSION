@@ -43,7 +43,8 @@ function loadModule(file, cache = new Map()) {
 }
 
 const mapper = loadModule("data/mappers/pack-mapper.ts");
-const progressMapper = loadModule("data/mappers/mission-progress-mapper.ts");
+const membershipMapper = loadModule("data/mappers/pack-membership-mapper.ts");
+const completionMapper = loadModule("data/mappers/mission-completion-mapper.ts");
 
 const packRow = (overrides = {}) => ({
   id: "pack-1",
@@ -136,31 +137,43 @@ test("does not replace invalid core content with fixture values", () => {
   );
 });
 
-test("maps mission progress without exposing user identity", () => {
-  assert.deepEqual(plain(progressMapper.mapMissionProgressRows([
+test("maps Pack membership without exposing user identity", () => {
+  assert.deepEqual(plain(membershipMapper.mapPackMembershipRows([
     {
-      mission_id: "mission-taken",
-      status: "taken",
-      taken_at: "2026-08-31T00:00:00Z",
-      completed_at: null,
+      pack_id: "pack-1",
+      joined_at: "2026-08-31T00:00:00Z",
     },
+  ])), {
+    "pack-1": {
+      packId: "pack-1",
+      joinedAt: "2026-08-31T00:00:00Z",
+    },
+  });
+});
+
+test("maps Mission completion without exposing user identity or proof paths", () => {
+  assert.deepEqual(plain(completionMapper.mapMissionCompletionRows([
     {
       mission_id: "mission-completed",
-      status: "completed",
-      taken_at: "2026-08-30T00:00:00Z",
       completed_at: "2026-08-31T00:00:00Z",
     },
   ])), {
-    "mission-taken": {
-      missionId: "mission-taken",
-      status: "taken",
-      takenAt: "2026-08-31T00:00:00Z",
-      completedAt: null,
-    },
     "mission-completed": {
       missionId: "mission-completed",
-      status: "completed",
-      takenAt: "2026-08-30T00:00:00Z",
+      completedAt: "2026-08-31T00:00:00Z",
+    },
+  });
+});
+
+test("completion mapping ignores no legacy progress fields", () => {
+  assert.deepEqual(plain(completionMapper.mapMissionCompletionRows([
+    {
+      mission_id: "mission-completed",
+      completed_at: "2026-08-31T00:00:00Z",
+    },
+  ])), {
+    "mission-completed": {
+      missionId: "mission-completed",
       completedAt: "2026-08-31T00:00:00Z",
     },
   });

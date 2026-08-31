@@ -1,54 +1,51 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import type { MissionSummary } from "@/data/contracts/pack-summary";
-import type { MissionActionStatus } from "@/features/missions/model/mission-action-state";
+import type { MissionCompletionStatus } from "@/features/missions/model/mission-action-state";
 import { MissionCompleteSlider } from "./MissionCompleteSlider";
 import { MissionProofRecorder } from "./MissionProofRecorder";
 import styles from "./MissionActionLayer.module.css";
 
 type MissionActionLayerProps = {
   activeMission: MissionSummary;
-  authenticated: boolean;
+  packJoined: boolean;
+  packMembershipAction: ReactNode;
   completionRequested: boolean;
-  currentStatus: MissionActionStatus;
-  isTakePending: boolean;
+  currentStatus: MissionCompletionStatus;
   onCompletionRequested: () => void;
   onCompleted: () => void;
-  onTake: () => void;
-  takeError: string | null;
 };
 
 export function MissionActionLayer({
   activeMission,
-  authenticated,
+  packJoined,
+  packMembershipAction,
   completionRequested,
   currentStatus,
-  isTakePending,
   onCompletionRequested,
   onCompleted,
-  onTake,
-  takeError,
 }: MissionActionLayerProps) {
   return (
     <aside
       aria-label={`Actions for ${activeMission.title}`}
       className={styles.layer}
-      data-authenticated={authenticated}
       data-mission-id={activeMission.id}
       data-status={currentStatus}
     >
       <div className={styles.panel}>
-        {currentStatus === "available" && (
-          <button className={styles.primary} disabled={isTakePending} onClick={onTake} type="button">
-            {isTakePending ? "Taking…" : "Take this mission"}
-          </button>
+        {packMembershipAction}
+
+        {currentStatus === "incomplete" && !packJoined && (
+          <p aria-live="polite" className={styles.notice}>Take this Pack to start</p>
         )}
 
-        {currentStatus === "taken" && !completionRequested && (
+        {currentStatus === "incomplete" && packJoined && !completionRequested && (
           <MissionCompleteSlider onCompletionRequested={onCompletionRequested} />
         )}
 
-        {currentStatus === "taken" && completionRequested && (
+        {currentStatus === "incomplete" && packJoined && completionRequested && (
           <MissionProofRecorder key={activeMission.id} missionId={activeMission.id} onCompleted={onCompleted} />
         )}
 
@@ -57,8 +54,6 @@ export function MissionActionLayer({
             <span aria-hidden="true">✓</span> Completed
           </p>
         )}
-
-        {takeError ? <p className={styles.error} role="alert">{takeError}</p> : null}
 
         <button className={styles.nervous} disabled type="button">
           I am nervous

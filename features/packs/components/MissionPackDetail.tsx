@@ -1,69 +1,43 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 
 import type { PackDetail } from "@/data/contracts/pack-summary";
-import { takeMissionAction } from "@/features/missions/actions";
-import {
-  applyTakeResult,
-  getMissionLoginDestination,
-  type MissionActionStatus,
-} from "@/features/missions/model/mission-action-state";
+import type { MissionCompletionStatus } from "@/features/missions/model/mission-action-state";
 import { MissionActionLayer } from "@/features/missions/components/MissionActionLayer";
 import { MissionGallery } from "./MissionGallery";
+import { PackMembershipAction } from "./PackMembershipAction";
 
 type MissionPackDetailProps = {
   pack: PackDetail;
   authenticated: boolean;
-  initialMissionStatuses: Record<string, MissionActionStatus>;
+  initialPackJoined: boolean;
+  initialMissionCompletionStatuses: Record<string, MissionCompletionStatus>;
 };
 
-export function MissionPackDetail({ pack, authenticated, initialMissionStatuses }: MissionPackDetailProps) {
+export function MissionPackDetail({
+  pack,
+  authenticated,
+  initialPackJoined,
+  initialMissionCompletionStatuses,
+}: MissionPackDetailProps) {
   const [activeMissionId, setActiveMissionId] = useState(pack.missions[0]?.id ?? null);
-  const [missionStatuses, setMissionStatuses] = useState(initialMissionStatuses);
-  const [isTaking, startTaking] = useTransition();
-  const [takeErrorMissionId, setTakeErrorMissionId] = useState<string | null>(null);
-  const [takeError, setTakeError] = useState<string | null>(null);
+  const [packJoined, setPackJoined] = useState(initialPackJoined);
+  const [missionCompletionStatuses, setMissionCompletionStatuses] = useState(initialMissionCompletionStatuses);
   const [completionRequestedMissionId, setCompletionRequestedMissionId] = useState<string | null>(null);
   const activeMission = pack.missions.find((mission) => mission.id === activeMissionId) ?? pack.missions[0];
-  const currentStatus = activeMission ? missionStatuses[activeMission.id] ?? "available" : "available";
+  const currentStatus = activeMission
+    ? missionCompletionStatuses[activeMission.id] ?? "incomplete"
+    : "incomplete";
 
   const handleActiveMissionChange = (missionId: string) => {
     setActiveMissionId(missionId);
-    setTakeErrorMissionId(null);
-    setTakeError(null);
     setCompletionRequestedMissionId(null);
-  };
-
-  const handleTake = () => {
-    if (!activeMission) return;
-    if (!authenticated) {
-      window.location.assign(getMissionLoginDestination(pack.slug));
-      return;
-    }
-    if (isTaking) return;
-
-    const missionId = activeMission.id;
-    setTakeErrorMissionId(null);
-    setTakeError(null);
-    startTaking(async () => {
-      const result = await takeMissionAction(missionId);
-      if (!result.ok) {
-        setTakeErrorMissionId(missionId);
-        setTakeError(result.error);
-        return;
-      }
-
-      setMissionStatuses((current) => ({
-        ...current,
-        [missionId]: applyTakeResult(current[missionId] ?? "available", result.status),
-      }));
-    });
   };
 
   const handleCompleted = () => {
     if (!activeMission) return;
-    setMissionStatuses((current) => ({ ...current, [activeMission.id]: "completed" }));
+    setMissionCompletionStatuses((current) => ({ ...current, [activeMission.id]: "completed" }));
     setCompletionRequestedMissionId(null);
   };
 
@@ -79,14 +53,19 @@ export function MissionPackDetail({ pack, authenticated, initialMissionStatuses 
       {activeMission ? (
         <MissionActionLayer
           activeMission={activeMission}
-          authenticated={authenticated}
+          packJoined={packJoined}
+          packMembershipAction={(
+            <PackMembershipAction
+              authenticated={authenticated}
+              joined={packJoined}
+              onJoined={() => setPackJoined(true)}
+              pack={pack}
+            />
+          )}
           completionRequested={completionRequestedMissionId === activeMission.id}
           currentStatus={currentStatus}
-          isTakePending={isTaking}
           onCompletionRequested={() => setCompletionRequestedMissionId(activeMission.id)}
           onCompleted={handleCompleted}
-          onTake={handleTake}
-          takeError={takeErrorMissionId === activeMission.id ? takeError : null}
         />
       ) : null}
     </>
