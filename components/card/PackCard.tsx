@@ -1,31 +1,31 @@
 import Image from "next/image";
 
-import type { PackSummary } from "@/data/contracts/pack-summary";
-
 import styles from "./PackCard.module.css";
 
 type PackCardProps = {
   eager?: boolean;
-  pack: PackSummary;
+  imageAlt: string;
+  imageSrc: string;
   sizes?: string;
 };
 
 export function PackCard({
   eager = false,
-  pack,
+  imageAlt,
+  imageSrc,
   sizes = "(max-width: 719px) 46vw, 236px",
 }: PackCardProps) {
   return (
     <span className={styles.frame}>
       <Image
-        alt={pack.imageAlt}
+        alt={imageAlt}
         className={styles.image}
         draggable={false}
         fill
         fetchPriority={eager ? "high" : "auto"}
         loading={eager ? "eager" : "lazy"}
         sizes={sizes}
-        src={pack.imageSrc}
+        src={imageSrc}
         unoptimized
       />
     </span>

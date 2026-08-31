@@ -65,6 +65,10 @@ function clamp(value: number, minimum: number, maximum: number) {
   return Math.min(maximum, Math.max(minimum, value));
 }
 
+function isPackSummary(hero: MissionSummary | PackSummary): hero is PackSummary {
+  return "designKey" in hero;
+}
+
 function MissionArtwork({
   primaryCopy,
   mission,
@@ -652,7 +656,7 @@ export function MissionGallery({ id, title, hero, missions, completedDate }: Mis
         ref={rootRef}
         tabIndex={0}
       >
-        {!completedDate && (
+        {!completedDate && isPackSummary(hero) && (
           <ViewTransition default="none" name={getPackTransitionName(id, source)} share="pack-card-morph">
             <div aria-hidden="true" className={styles.hero} style={heroStyle}>
               <PackDeckCover pack={hero} />

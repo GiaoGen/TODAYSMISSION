@@ -51,16 +51,20 @@ const renderingOverrides = {
 };
 
 test("prototype cover artwork is copied and real mock identifiers/counts stay consistent", () => {
-  assert.deepEqual(plain(packs.slice(0, 4).map(pack => [pack.title, pack.deck.background, pack.deck.symbol])), [
-    ["GO ALONE", "#E5392D", "●"], ["TALK FIRST", "#1457C9", "■"],
-    ["GET REJECTED", "#F1C933", "▲"], ["BE SEEN", "#111111", "◆"],
+  assert.deepEqual(plain(packs.slice(0, 4).map(pack => [pack.title, pack.themeKey])), [
+    ["GO ALONE", "go-alone"], ["TALK FIRST", "talk-first"],
+    ["GET REJECTED", "get-rejected"], ["BE SEEN", "be-seen"],
   ]);
   for (const pack of packs) {
-    assert.equal(pack.deck.missionCount, pack.missions.length);
-    assert.ok(pack.imageSrc.startsWith("https://picsum.photos/"));
-    assert.ok(pack.missions.every(mission => !mission.deck));
+    assert.equal(pack.designKey, "field-edition");
+    assert.equal(pack.missionCount, pack.missions.length);
+    assert.equal("imageSrc" in pack, false);
+    assert.ok(pack.missions.every(mission => !("card" in mission) && !("imageSrc" in mission)));
   }
-  for (const pack of joined) assert.deepEqual(pack.deck, packs.find(item => item.id === pack.id).deck);
+  for (const pack of joined) {
+    const source = packs.find(item => item.id === pack.id);
+    assert.deepEqual([pack.designKey, pack.themeKey], [source.designKey, source.themeKey]);
+  }
 });
 
 test("each deck contains three decorative backs and one uniquely named shared cover", () => {
@@ -99,27 +103,26 @@ test("pack gallery keeps its cover hero and renders every Mission as the supplie
   assert.match(track, /Go to a movie alone\./);
 });
 
-test("Mission stream markup copies all five designs and leaves day-gallery photo data intact", () => {
+test("Mission stream markup copies all five designs from the flat Mission contract", () => {
   const { MissionStreamCard } = loadModule("features/packs/components/MissionStreamCard.tsx", renderingOverrides);
   const designs = [
-    ["Go to a movie alone.", "#e5392d", "●"], ["Ask a stranger for a recommendation.", "#1457c9", "■"],
-    ["Ask for something they might say no to.", "#f1c933", "▲"], ["Sit alone in a busy café.", "#111111", "◆"],
-    ["Give someone a simple compliment.", "#f3e8c8", "◐"],
+    ["Go to a movie alone.", "coral", "circle"], ["Ask a stranger for a recommendation.", "blue", "square"],
+    ["Ask for something they might say no to.", "yellow", "triangle"], ["Sit alone in a busy café.", "ink", "diamond"],
+    ["Give someone a simple compliment.", "paper", "ring"],
   ];
-  assert.deepEqual(plain(packs[0].missions.slice(0, 5).map(m => [m.card.title, m.card.background, m.card.symbol])), designs);
+  assert.deepEqual(plain(packs[0].missions.slice(0, 5).map(m => [m.title, m.themeKey, m.artworkKey])), designs);
   for (const pack of packs) for (const [index, mission] of pack.missions.entries()) {
     const html = renderToStaticMarkup(createElement(MissionStreamCard, { mission, number: index + 1 }));
-    assert.ok(html.includes(mission.card.title));
-    assert.ok(html.includes(mission.card.note));
-    assert.ok(html.includes(mission.card.tag));
-    assert.ok(html.includes(mission.card.code));
+    assert.ok(html.includes(mission.title));
+    assert.ok(html.includes(mission.note));
+    assert.ok(html.includes(mission.tag));
+    assert.ok(html.includes(mission.code));
     assert.ok(html.includes(`MISSION ${String(index + 1).padStart(2, "0")}`));
     assert.doesNotMatch(html, /<button|<img/);
-    assert.equal(mission.title, `Mock Mission ${String(index + 1).padStart(2, "0")}`);
-    assert.ok(mission.imageSrc.startsWith("https://picsum.photos/"));
+    assert.equal("imageSrc" in mission, false);
   }
-  const html = renderToStaticMarkup(createElement(MissionStreamCard, { mission: { ...packs[0].missions[0], card: undefined }, number: 1 }));
-  assert.match(html, /Mock Mission 01/);
+  const html = renderToStaticMarkup(createElement(MissionStreamCard, { mission: packs[0].missions[0], number: 1 }));
+  assert.match(html, /Go to a movie alone\./);
   assert.doesNotMatch(html, /undefined|NaN/);
 });
 
