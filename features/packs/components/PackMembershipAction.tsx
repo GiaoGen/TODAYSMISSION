@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 
 import type { PackSummary } from "@/data/contracts/pack-summary";
 import { takePackAction } from "@/features/packs/actions";
@@ -17,6 +17,7 @@ type PackMembershipActionProps = {
 export function PackMembershipAction({ pack, authenticated, joined, onJoined }: PackMembershipActionProps) {
   const [isTaking, startTaking] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const takingRef = useRef(false);
 
   if (joined) {
     return <p aria-live="polite" className={styles.joined}><span aria-hidden="true">✓</span> Joined</p>;
@@ -27,23 +28,28 @@ export function PackMembershipAction({ pack, authenticated, joined, onJoined }: 
       window.location.assign(getPackLoginDestination(pack.slug));
       return;
     }
-    if (isTaking) return;
+    if (takingRef.current) return;
 
+    takingRef.current = true;
     setError(null);
     startTaking(async () => {
-      const result = await takePackAction(pack.id);
-      if (!result.ok) {
-        setError(result.error);
-        return;
+      try {
+        const result = await takePackAction(pack.id);
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        onJoined();
+      } finally {
+        takingRef.current = false;
       }
-      onJoined();
     });
   };
 
   return (
     <div className={styles.action}>
-      <button className={styles.primary} disabled={isTaking} onClick={handleTake} type="button">
-        {isTaking ? "Taking…" : "Take this Pack"}
+      <button aria-busy={isTaking} className={styles.primary} disabled={isTaking} onClick={handleTake} type="button">
+        {isTaking ? "taking…" : "take this"}
       </button>
       {error ? <p className={styles.error} role="alert">{error}</p> : null}
     </div>

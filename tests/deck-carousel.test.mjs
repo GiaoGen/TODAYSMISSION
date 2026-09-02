@@ -11,7 +11,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { getDeckMetrics, getContinuousDeckPose, getRelativeSlot, DECK_DRAG_SENSITIVITY } from "../features/packs/model/arc-carousel-geometry.ts";
 import { getPackTransitionName } from "../features/packs/model/pack-transition.ts";
 import { getGalleryCopyCount, getMissionStreamMetrics } from "../features/packs/model/mission-gallery-layout.ts";
-import { getStreamPose, MissionStreamDepth, STREAM_DEPTH_DURATION } from "../features/packs/model/mission-stream-depth.ts";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const require = createRequire(import.meta.url);
@@ -99,8 +98,27 @@ test("pack gallery keeps its cover hero and renders every Mission as the supplie
   assert.doesNotMatch(track, /class="cover"|missionPeek/);
   assert.ok(pack.missions.every(mission => track.includes(`data-mission-id="${mission.id}"`)));
   assert.doesNotMatch(track, /<img/);
-  assert.match(track, /class="streamDepth"/);
   assert.match(track, /Go to a movie alone\./);
+});
+
+test("Pack membership and gallery display phases are independent", () => {
+  const detail = read("features/packs/components/MissionPackDetail.tsx");
+  const gallery = read("features/packs/components/MissionGallery.tsx");
+  const membership = read("features/packs/components/PackMembershipAction.tsx");
+  const page = read("app/pack/[slug]/page.tsx");
+  assert.match(detail, /const \[packJoined, setPackJoined\]/);
+  assert.match(detail, /const \[gallerySettled, setGallerySettled\]/);
+  assert.match(detail, /expandMissions={packJoined}/);
+  assert.match(detail, /waitingAction={!packJoined \?/);
+  assert.match(detail, /activeMission && gallerySettled/);
+  assert.match(gallery, /requestExpansionRef\.current = startExpansion/);
+  assert.doesNotMatch(gallery.match(/useLayoutEffect\(\(\) => \{\s*const root = rootRef\.current[\s\S]*?\}, \[([^\]]*)\]\);/)?.[1] ?? "", /expandMissions/);
+  assert.match(membership, /\{isTaking \? "taking…" : "take this"\}/);
+  assert.match(membership, /disabled={isTaking}/);
+  assert.match(membership, /if \(!result\.ok\) \{\s*setError\(result\.error\);\s*return;/);
+  assert.match(membership, /window\.location\.assign\(getPackLoginDestination\(pack\.slug\)\)/);
+  assert.match(page, /getCurrentPackMembership/);
+  assert.match(page, /initialPackJoined={Boolean\(membership\)}/);
 });
 
 test("Mission stream markup copies all five designs from the flat Mission contract", () => {
@@ -131,20 +149,13 @@ for (const [width, height, coarsePointer] of [
   [540, 720, true], [820, 1180, true], [1180, 820, true], [1024, 1366, true],
   [1280, 720, false], [1440, 900, false], [1920, 1080, false], [3840, 2160, false],
 ]) {
-  test(`Mission stream ${width}x${height}: readable proportions, depth fits and infinite copies cover the viewport`, () => {
+  test(`Mission stream ${width}x${height}: readable equal-card proportions and infinite copies cover the viewport`, () => {
     const metrics = getMissionStreamMetrics({ width, height, coarsePointer });
     assert.equal(metrics.cardHeight, metrics.cardWidth * 1.42);
     assert.ok(metrics.cardWidth > 185 && metrics.cardWidth < width);
-    for (const distance of [0, 1, 2, 3]) {
-      const pose = getStreamPose(distance);
-      assert.ok(metrics.cardHeight * pose.scale / 2 + pose.y * metrics.unit < height / 2 - 4);
-    }
-    if (!coarsePointer && width >= 900) {
-      assert.ok(4 * metrics.stride + metrics.cardWidth * .78 <= width - 47.9, "five complete cards fit on desktop");
-    }
     if (coarsePointer && height > width && width >= 600) assert.ok(metrics.cardWidth >= 360);
     if (width < 600 && height > width) {
-      const neighborLeft = width / 2 + metrics.stride - metrics.cardWidth * .88 / 2;
+      const neighborLeft = width / 2 + metrics.stride - metrics.cardWidth / 2;
       assert.ok(neighborLeft < width - 8, "both neighboring cards peek into the phone viewport");
     }
     for (const count of [1, 2, 3, 5, 8, 24]) {
@@ -160,48 +171,13 @@ for (const [width, height, coarsePointer] of [
   });
 }
 
-test("stream focus has the prototype poses and settles in 450ms without a jump at retarget", () => {
-  assert.deepEqual([0, 1, 2, 3].map(getStreamPose), [
-    { y: 0, scale: 1, opacity: 1 }, { y: 28, scale: .88, opacity: .68 },
-    { y: 56, scale: .78, opacity: .32 }, { y: 76, scale: .72, opacity: .12 },
-  ]);
-  const motion = new MissionStreamDepth();
-  motion.update(9, 4, 0);
-  motion.update(9, 5, 10);
-  assert.equal(motion.sample(10)[5].scale, .88);
-  assert.ok(motion.sample(210)[5].scale > .88 && motion.sample(210)[5].scale < 1);
-  const before = motion.sample(210);
-  motion.update(9, 6, 210);
-  assert.deepEqual(motion.sample(210), before);
-  assert.equal(motion.isMoving(210 + STREAM_DEPTH_DURATION), false);
-  assert.deepEqual(motion.sample(210 + STREAM_DEPTH_DURATION)[6], getStreamPose(0));
-});
-
-test("rebasing an infinite stream transfers in-flight depth poses to the equivalent cards", () => {
-  for (const shift of [-8, -3, -2, 2, 3, 8]) {
-    const motion = new MissionStreamDepth();
-    motion.update(41, 20, 0);
-    motion.update(41, 21, 10);
-    const before = motion.sample(110);
-    motion.update(41, 21 - shift, 110, shift);
-    const after = motion.sample(110);
-    for (let index = 12; index <= 28; index++) assert.deepEqual(after[index - shift], before[index]);
-    assert.equal(motion.isMoving(460), false);
-    assert.deepEqual(motion.sample(460)[21 - shift], getStreamPose(0));
-  }
-});
-
-test("reduced-motion and resize reset depth immediately; transform ownership stays separated", () => {
-  const motion = new MissionStreamDepth();
-  motion.update(9, 4, 0);
-  motion.update(9, 5, 10, 0, true);
-  assert.equal(motion.isMoving(10), false);
-  assert.deepEqual(motion.sample(10)[5], getStreamPose(0));
+test("Mission cards stay equal while expansion and collapse retain outer-card transforms", () => {
   const css = read("features/packs/components/MissionGallery.module.css");
-  assert.match(css, /\.streamDepth\s*\{[^}]*transform:[^;]*--stream-y/);
-  assert.match(css, /\[data-phase="closing"\] \.streamDepth\s*\{[^}]*transform: translate3d\(0, 0, 0\) scale\(1\)/);
   assert.match(css, /\.missionCard\s*\{[^}]*aspect-ratio: 1 \/ 1\.42/);
-  assert.match(css, /prefers-reduced-motion: reduce[\s\S]*\.streamDepth \{ transition: none/);
+  assert.match(css, /\.root\[data-phase="settled"\] \.missionCard\s*\{[^}]*opacity: 1;[^}]*scale\(1\)/);
+  assert.doesNotMatch(css, /native-distance|--stream-(?:y|scale|opacity)|depth-moving/);
+  assert.equal(existsSync(path.join(root, "features/packs/model/mission-stream-depth.ts")), false);
+  assert.doesNotMatch(read("features/packs/components/MissionGallery.tsx"), /MissionStreamDepth|depthFrame|paintDepth/);
   assert.doesNotMatch(read("features/packs/components/MissionStreamCard.module.css"), /will-change/);
 });
 

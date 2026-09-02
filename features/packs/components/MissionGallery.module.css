@@ -56,6 +56,21 @@
   transform-origin: center;
 }
 
+.waitingAction {
+  position: absolute;
+  z-index: 30;
+  top: min(calc(50% + var(--pack-hero-width, var(--detail-card-width)) * .71 + 16px), calc(100% - 64px));
+  left: 50%;
+  width: min(360px, calc(100% - 32px));
+  transform: translateX(-50%);
+  transition: opacity 120ms ease-out;
+}
+
+.root:not([data-phase="collapsed"]) .waitingAction {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .track {
   position: absolute;
   z-index: 10;
@@ -78,7 +93,7 @@
 }
 
 .scrollViewport { display: contents; }
-.missionMotion { width: 100%; height: 100%; }
+.missionMotion { width: 100%; height: 100%; pointer-events: auto; }
 
 /* Safari alone gets a real scroller. The outer li is an untransformed snap
    target; its inner motion layer owns expansion/collapse independently. */
@@ -135,29 +150,6 @@
 .root[data-native-scroll="true"]:not([data-phase="settled"]) .missionCard[data-native-visible="false"] {
   visibility: hidden;
 }
-.root[data-native-scroll="true"]:is([data-phase="settled"], :where([data-kind="day"])[data-phase="expanding"]) .streamDepth {
-  transform: scale(.88);
-  opacity: .78;
-  transition: transform 180ms ease-out, opacity 180ms ease-out;
-  will-change: auto;
-}
-.root[data-native-scroll="true"]:is([data-phase="settled"], :where([data-kind="day"])[data-phase="expanding"]) .missionCard[data-native-distance="1"] .streamDepth {
-  transform: scale(.94);
-  opacity: .9;
-}
-.root[data-native-scroll="true"]:is([data-phase="settled"], :where([data-kind="day"])[data-phase="expanding"]) .missionCard[data-native-distance="0"] .streamDepth {
-  transform: none;
-  opacity: 1;
-}
-.root[data-native-scroll="true"]:is([data-phase="settled"], :where([data-kind="day"])[data-phase="expanding"]) .missionCard[data-native-distance="2"] .streamDepth {
-  transform: scale(.78);
-  opacity: .65;
-}
-.root[data-native-scroll="true"][data-phase="settled"] .scrollViewport[data-native-scrolling="true"] .missionCard[data-native-distance] .streamDepth {
-  transform: scale(.88);
-  opacity: .78;
-}
-
 .missionCard {
   position: relative;
   flex: 0 0 auto;
@@ -231,36 +223,11 @@
   will-change: transform;
 }
 
-/* Shared artwork/depth for Pack and date galleries; only Pack loops.
-   track = horizontal input; li = expansion/collapse; streamDepth = focus. */
-.streamDepth {
-  width: 100%;
-  height: 100%;
-  transform: translate3d(0, calc(var(--stream-y, 0) * var(--stream-unit, 1px)), 0) scale(var(--stream-scale, 1));
-  opacity: var(--stream-opacity, 1);
-  transform-origin: center;
-  pointer-events: auto;
-}
-.root[data-depth-moving="true"] .streamDepth { will-change: transform, opacity; }
 .root[data-phase="collapsed"] .missionCard,
 .root[data-phase="closing"] .missionCard {
   transform: translate3d(var(--mission-collapsed-x, 0), 0, 0) scale(var(--stream-collapse-scale, .8));
 }
 .root[data-kind="pack"][data-phase="expanding"] .hero { transition-delay: 700ms; }
-.root[data-phase="collapsed"] .streamDepth,
-.root[data-phase="closing"] .streamDepth {
-  transform: translate3d(0, 0, 0) scale(1);
-  opacity: 1;
-}
-.root[data-phase="expanding"] .streamDepth {
-  transition: transform 620ms cubic-bezier(.2, .75, .24, 1), opacity 450ms cubic-bezier(.2, .75, .2, 1);
-  transition-delay: calc(var(--stream-expand-delay) + var(--mission-delay));
-}
-.root[data-phase="closing"] .streamDepth {
-  transition: transform var(--stream-collapse-duration) cubic-bezier(.32, 0, .22, 1), opacity 320ms ease-out;
-  pointer-events: none;
-}
-
 @media (max-width: 599px) {
   .root {
     --detail-card-width: clamp(148px, 46vmin, 220px);
@@ -299,8 +266,6 @@
     transition: opacity 100ms linear;
     transition-delay: 0ms;
   }
-  .root[data-native-scroll="true"][data-phase] .streamDepth { transition: none; }
-  .root[data-phase] .streamDepth { transition: none; }
   .root[data-kind="pack"][data-phase="expanding"] .hero { transition-delay: 0ms; }
   .root[data-phase="expanding"] .hero {
     transform: translate3d(-50%, -50%, 0);

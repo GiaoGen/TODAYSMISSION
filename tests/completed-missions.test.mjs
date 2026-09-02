@@ -9,7 +9,6 @@ import ts from "typescript";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { getGalleryCopyCount, getMissionStreamMetrics } from "../features/packs/model/mission-gallery-layout.ts";
-import { MissionStreamDepth } from "../features/packs/model/mission-stream-depth.ts";
 import * as dayTransitions from "../features/calendar/model/calendar-day-transition.ts";
 import * as returnStates from "../features/packs/model/pack-carousel-return-state.ts";
 import { createHomeCarouselState } from "../features/packs/model/home-carousel-state.ts";
@@ -123,7 +122,6 @@ test("actual day gallery renders exactly the day's card count, never loop copies
     const primaryCards = [...track.matchAll(/<li\b([^>]*)>/g)].filter(match => !match[1].includes('aria-hidden="true"'));
     assert.equal(primaryCards.length, day.missions.length);
     assert.equal((track.match(/<li\b/g) ?? []).length, day.missions.length);
-    assert.equal((track.match(/class="streamDepth"/g) ?? []).length, day.missions.length);
     assert.equal((track.match(/class="mission"/g) ?? []).length, day.missions.length);
     assert.deepEqual([...track.matchAll(/data-mission-id="([^"]+)"/g)].map(match => match[1]), plain(day.missions.map(mission => mission.id)));
     assert.doesNotMatch(html, /<img|class="cover"/);
@@ -346,7 +344,7 @@ test("actual home date handler snapshots both wheels, rejects duplicate navigati
 
 // Execute the real gallery effect with deterministic DOM/RAF/timer stand-ins.
 // This verifies sequencing and cleanup, not browser rendering or visual quality.
-function galleryHarness(count, { reduced = false, saved = null, looping = false } = {}) {
+function galleryHarness(count, { reduced = false, saved = null, looping = false, expansionRequested = true } = {}) {
   const source = ts.createSourceFile("MissionGallery.tsx", read("features/packs/components/MissionGallery.tsx"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const component = source.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === "MissionGallery");
   const effect = findNode(component, node => ts.isCallExpression(node) && node.expression.getText(source) === "useLayoutEffect" && node.arguments[0]?.getText(source).includes("const root = rootRef.current"));
@@ -358,13 +356,18 @@ function galleryHarness(count, { reduced = false, saved = null, looping = false 
   let now = 0;
   let capture = null;
   let returned = saved;
+  let settled = 0;
   let finishCollapse;
   const animationFinished = new Promise(resolve => { finishCollapse = resolve; });
   let finishExpansion;
   const expansionFinished = new Promise(resolve => { finishExpansion = resolve; });
   class Element {
-    constructor(card = false) { this.card = card; }
-    closest() { return this.card ? this : null; }
+    constructor(card = false, action = false) { this.card = card; this.action = action; }
+    closest(selector) {
+      if (this.card && selector.includes("missionCard")) return this;
+      if (this.action && selector === "[data-gallery-action]") return this;
+      return null;
+    }
   }
   const root = Object.assign(new Element(), {
     clientWidth: 1920, dataset: {}, focus() {},
@@ -386,8 +389,9 @@ function galleryHarness(count, { reduced = false, saved = null, looping = false 
     rootRef: { current: root }, trackRef: { current: track }, missionRefs: { current: cards },
     primaryCopyRef: { current: Math.floor(copies / 2) }, measureRef: { current: null },
     missionIdsRef: { current: Array.from({ length: count }, (_, index) => `mission-${index}`) },
-    onActiveMissionChangeRef: { current: null }, activeMissionIdRef: { current: null },
-    MissionStreamDepth, missionCount: count, looping, id: looping ? "mock-pack-01" : dayTransitions.getDayGalleryId("2026-08-28"),
+    onActiveMissionChangeRef: { current: null }, onExpansionSettledRef: { current: () => { settled++; } }, activeMissionIdRef: { current: null },
+    expansionRequestedRef: { current: expansionRequested }, requestExpansionRef: { current: null },
+    missionCount: count, looping, id: looping ? "mock-pack-01" : dayTransitions.getDayGalleryId("2026-08-28"),
     completedDate: looping ? undefined : "2026-08-28",
     performance: { now: () => now }, Element, styles: { missionCard: "missionCard" },
     requestAnimationFrame: fn => { frames.set(++token, fn); return token; }, cancelAnimationFrame: id => frames.delete(id),
@@ -410,15 +414,43 @@ function galleryHarness(count, { reduced = false, saved = null, looping = false 
   return {
     root, track, cards, env, frames, timers, listeners, navigations, cleanup, frame, finishCollapse, finishExpansion,
     returned: () => returned,
+    settled: () => settled,
     async expand() {
+      env.requestExpansionRef.current?.();
       frame(); finishExpansion();
       [...timers.values()].forEach(fn => fn()); timers.clear();
       await new Promise(resolve => setImmediate(resolve));
     },
     event(name, extra = {}) { now += 16; listeners.get(name)?.({ type: name, button: 0, pointerId: 1, clientX: 100, target: root, preventDefault() {}, ...extra }); },
     cardTarget: () => new Element(true),
+    actionTarget: () => new Element(false, true),
   };
 }
+
+test("Chrome Pack waits at the cover, ignores action clicks, then expands in place after membership succeeds", async () => {
+  const gallery = galleryHarness(3, { looping: true, expansionRequested: false });
+  assert.equal(gallery.root.dataset.phase, "collapsed");
+  assert.equal(gallery.frames.size, 0);
+  assert.equal(gallery.timers.size, 0);
+  gallery.event("click", { target: gallery.actionTarget() });
+  assert.equal(gallery.root.dataset.phase, "collapsed");
+  await gallery.expand();
+  assert.equal(gallery.root.dataset.phase, "settled");
+  assert.equal(gallery.settled(), 1);
+  gallery.cleanup();
+});
+
+test("Chrome Pack cover waiting stage can exit without distributing Missions", async () => {
+  const gallery = galleryHarness(3, { looping: true, expansionRequested: false });
+  gallery.event("keydown", { key: "Escape" });
+  assert.equal(gallery.root.dataset.phase, "closing");
+  assert.equal(gallery.timers.size, 0);
+  gallery.frame();
+  gallery.finishCollapse();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(gallery.navigations.length, 1);
+  gallery.cleanup();
+});
 
 for (const count of [1, 2, 3, 8]) for (const reduced of [false, true]) {
   test(`${count} Missions${reduced ? " reduced-motion" : ""}: center, expand, wait for collapse, then restore calendar`, async () => {
@@ -505,10 +537,7 @@ test("the real first date card stays opaque through every phase in both drivers"
   assert.doesNotMatch(css, /\[data-kind="day"\][^{]*\.hero/);
   assert.match(css, /\.root\[data-kind="day"\]\s*\{[^}]*--stream-expand-delay: 520ms;[^}]*--stream-collapse-duration: 360ms;/);
   assert.match(css, /\.root\[data-kind="day"\] \.track\s*\{[^}]*transform: translate3d\(calc\(\(100vw - var\(--mission-card-width\)\) \/ 2\), -50%, 0\);/);
-  // The same native focus selectors cover expansion and settled, so phase
-  // completion cannot introduce a second scale/opacity correction.
-  const sharedFocus = ':is([data-phase="settled"], :where([data-kind="day"])[data-phase="expanding"])';
-  assert.equal(css.split(sharedFocus).length - 1, 4);
+  assert.doesNotMatch(css, /data-native-distance|native-scrolling[^}]*streamDepth/);
 });
 
 test("single card cannot be dragged off center or create NaN snaps; a drag release never closes", async () => {
@@ -547,15 +576,12 @@ test("loop can wrap repeatedly without drift and cleanup during collapse prevent
 });
 
 for (const source of ["top", "bottom"]) for (const count of [1, 2, 3, 8]) {
-  test(`Pack stream ${source}/${count}: depth, live-position collapse and original wheel return stay connected`, async () => {
+  test(`Pack stream ${source}/${count}: equal cards, live-position collapse and original wheel return stay connected`, async () => {
     const saved = {
       source, packId: "mock-pack-01", topCollection: "joined", bottomCollection: "all",
       carousels: { top: { packId: "mock-pack-01", activeIndex: 0, count: 5, position: 0 }, bottom: { packId: "mock-pack-03", activeIndex: 2, count: 12, position: 2 } },
     };
     const gallery = galleryHarness(count, { looping: true, saved });
-    const center = count * gallery.env.primaryCopyRef.current;
-    assert.equal(Number(gallery.cards[center].style["--stream-scale"]), 1);
-    if (count > 1) assert.equal(Number(gallery.cards[center + 1].style["--stream-y"]), 28);
     await gallery.expand();
     gallery.event("pointerdown", { clientX: 300, pointerType: "touch" });
     gallery.event("pointermove", { clientX: 60, pointerType: "touch" });
@@ -569,9 +595,8 @@ for (const source of ["top", "bottom"]) for (const count of [1, 2, 3, 8]) {
     for (const card of gallery.cards) {
       assert.ok(Math.abs(before + card.offsetLeft + 120 + parseFloat(card.style["--mission-collapsed-x"]) - 960) < .000001);
     }
-    const depthStyles = gallery.cards.map(card => card.style["--stream-scale"]);
     gallery.frame();
-    assert.deepEqual(gallery.cards.map(card => card.style["--stream-scale"]), depthStyles, "depth RAF cannot fight the closing CSS");
+    assert.ok(gallery.cards.every(card => card.style["--stream-scale"] === undefined));
     assert.equal(gallery.navigations.length, 0);
     gallery.finishCollapse();
     await new Promise(resolve => setImmediate(resolve));
@@ -596,14 +621,10 @@ for (const count of [2, 3, 8]) {
     const last = first - (count - 1) * 272;
     for (let i = 0; i < 5; i++) gallery.event("wheel", { deltaX: 100000, deltaY: 0 });
     assert.equal(trackPosition(gallery), last);
-    assert.equal(Number(gallery.cards[count - 1].style["--stream-scale"]), 1);
-    assert.equal(Number(gallery.cards[count - 1].style["--stream-y"]), 0);
     gallery.event("keydown", { key: "ArrowRight" });
     assert.equal(trackPosition(gallery), last);
     for (let i = 0; i < 5; i++) gallery.event("wheel", { deltaX: -100000, deltaY: 0 });
     assert.equal(trackPosition(gallery), first);
-    assert.equal(Number(gallery.cards[0].style["--stream-scale"]), 1);
-    assert.equal(Number(gallery.cards[0].style["--stream-y"]), 0);
     gallery.event("keydown", { key: "ArrowLeft" });
     assert.equal(trackPosition(gallery), first);
     gallery.cleanup();

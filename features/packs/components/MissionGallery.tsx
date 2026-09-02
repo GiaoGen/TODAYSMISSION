@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { useLayoutEffect, useRef, useState, ViewTransition } from "react";
 import { useRouter } from "next/navigation";
 
@@ -13,7 +13,6 @@ import type { MissionSummary, PackSummary } from "@/data/contracts/pack-summary"
 import { CALENDAR_DAY_TRANSITION_CLASSES, createDirectDayReturnState, getDayTransitionName } from "@/features/calendar/model/calendar-day-transition";
 import { carouselSettingsStore } from "@/features/packs/model/carousel-settings";
 import { getGalleryCopyCount, getMissionStreamMetrics } from "@/features/packs/model/mission-gallery-layout";
-import { MissionStreamDepth } from "@/features/packs/model/mission-stream-depth";
 import {
   createDirectPackReturnState,
   getPackCarouselReturnState,
@@ -46,6 +45,7 @@ type PackHeroStyle = CSSProperties & {
 };
 
 type StreamStyle = CSSProperties & {
+  "--pack-hero-width": string;
   "--mission-card-width": string;
   "--detail-gap": string;
   "--stream-unit": string;
@@ -59,6 +59,9 @@ type MissionGalleryProps = {
   hero: MissionSummary | PackSummary;
   missions: readonly MissionSummary[];
   completedDate?: string;
+  expandMissions?: boolean;
+  waitingAction?: ReactNode;
+  onExpansionSettled?: () => void;
   onActiveMissionChange?: (missionId: string) => void;
 };
 
@@ -88,11 +91,7 @@ function MissionArtwork({
   const style: MissionCardStyle = {
     "--mission-delay": `${slot * 36}ms`,
   };
-  const artwork = (
-    <div className={styles.streamDepth}>
-      <MissionStreamCard mission={mission} number={slot + 1} />
-    </div>
-  );
+  const artwork = <MissionStreamCard mission={mission} number={slot + 1} />;
 
   return (
     <li
@@ -112,7 +111,17 @@ function MissionArtwork({
   );
 }
 
-export function MissionGallery({ id, title, hero, missions, completedDate, onActiveMissionChange }: MissionGalleryProps) {
+export function MissionGallery({
+  id,
+  title,
+  hero,
+  missions,
+  completedDate,
+  expandMissions = true,
+  waitingAction,
+  onExpansionSettled,
+  onActiveMissionChange,
+}: MissionGalleryProps) {
   const router = useRouter();
   const nativeScrolling = useSafariScroll();
   const source = completedDate ? "top" : "bottom";
@@ -130,6 +139,7 @@ export function MissionGallery({ id, title, hero, missions, completedDate, onAct
   const deckMetrics = getDeckMetrics(viewport);
   const streamMetrics = getMissionStreamMetrics(viewport);
   const streamStyle: StreamStyle = {
+    "--pack-hero-width": `${deckMetrics.cardWidth}px`,
     "--mission-card-width": `${streamMetrics.cardWidth}px`,
     "--detail-gap": `${streamMetrics.gap}px`,
     "--stream-unit": `${streamMetrics.unit}px`,
@@ -149,12 +159,21 @@ export function MissionGallery({ id, title, hero, missions, completedDate, onAct
   const measureRef = useRef<(() => void) | null>(null);
   const missionIdsRef = useRef(missions.map((mission) => mission.id));
   const onActiveMissionChangeRef = useRef(onActiveMissionChange);
+  const onExpansionSettledRef = useRef(onExpansionSettled);
   const activeMissionIdRef = useRef<string | null>(null);
+  const expansionRequestedRef = useRef(expandMissions);
+  const requestExpansionRef = useRef<(() => void) | null>(null);
 
   useLayoutEffect(() => {
     missionIdsRef.current = missions.map((mission) => mission.id);
     onActiveMissionChangeRef.current = onActiveMissionChange;
-  }, [missions, onActiveMissionChange]);
+    onExpansionSettledRef.current = onExpansionSettled;
+  }, [missions, onActiveMissionChange, onExpansionSettled]);
+
+  useLayoutEffect(() => {
+    expansionRequestedRef.current = expandMissions;
+    if (expandMissions) requestExpansionRef.current?.();
+  }, [expandMissions]);
 
   useLayoutEffect(() => {
     primaryCopyRef.current = primaryCopy;
@@ -195,12 +214,20 @@ export function MissionGallery({ id, title, hero, missions, completedDate, onAct
       const native = mountNativeMissionGallery({
         root, viewport: scrollRef.current, cards, count: missionCount,
         copies: () => 2 * primaryCopyRef.current + 1,
-        cardClass: styles.missionCard, navigateHome,
+        cardClass: styles.missionCard, navigateHome, autoExpand: false,
+        onExpansionSettled: () => onExpansionSettledRef.current?.(),
         onActiveMissionChange: notifyActiveMission,
       });
       measureRef.current = native.measure;
       nativeIdleRef.current = native.whenIdle;
-      return () => { measureRef.current = null; nativeIdleRef.current = null; native.destroy(); };
+      requestExpansionRef.current = native.expand;
+      if (expansionRequestedRef.current) native.expand();
+      return () => {
+        measureRef.current = null;
+        nativeIdleRef.current = null;
+        requestExpansionRef.current = null;
+        native.destroy();
+      };
     }
 
     const prefersReducedMotion = window.matchMedia(
@@ -210,11 +237,8 @@ export function MissionGallery({ id, title, hero, missions, completedDate, onAct
     let expandFrame = 0;
     let settleTimer = 0;
     let closeFrame = 0;
-    let depthFrame = 0;
-    let depthRebase = 0;
-    let resetDepth = true;
-    const depth = new MissionStreamDepth();
     let disposed = false;
+    let expansionStarted = false;
     let cycleWidth = 0;
     let stride = 0;
     let origin = 0;
@@ -234,33 +258,11 @@ export function MissionGallery({ id, title, hero, missions, completedDate, onAct
     root.dataset.moving = "false";
     router.prefetch("/");
 
-    const paintDepth = () => {
-      depthFrame = 0;
-      const now = performance.now();
-      const poses = depth.sample(now);
-      for (let index = 0; index < poses.length; index++) {
-        const card = cards[index];
-        if (!card) continue;
-        const pose = poses[index];
-        card.style.setProperty("--stream-y", String(pose.y));
-        card.style.setProperty("--stream-scale", String(pose.scale));
-        card.style.setProperty("--stream-opacity", String(pose.opacity));
-      }
-      const moving = depth.isMoving(now);
-      root.dataset.depthMoving = String(moving);
-      if (moving && !disposed) depthFrame = requestAnimationFrame(paintDepth);
-    };
-
     const renderTrack = () => {
       track.style.transform = `translate3d(${position}px, -50%, 0)`;
       const center = stride ? missionCount * primaryCopyRef.current + Math.round((origin - position) / stride) : 0;
       const activeIndex = missionCount > 0 ? ((center % missionCount) + missionCount) % missionCount : -1;
       notifyActiveMission(activeIndex);
-      depth.update(cards.length, center, performance.now(), depthRebase, resetDepth || prefersReducedMotion);
-      depthRebase = 0;
-      resetDepth = false;
-      cancelAnimationFrame(depthFrame);
-      paintDepth();
     };
 
     const normalizePosition = () => {
@@ -280,8 +282,6 @@ export function MissionGallery({ id, title, hero, missions, completedDate, onAct
         position += cycleWidth;
         wrappedBy += cycleWidth;
       }
-
-      if (stride > 0) depthRebase += Math.round(wrappedBy / stride);
 
       return wrappedBy;
     };
@@ -400,7 +400,6 @@ export function MissionGallery({ id, title, hero, missions, completedDate, onAct
 
     const measure = () => {
       if (root.dataset.phase === "closing") return;
-      resetDepth = true;
       if (interactive) {
         stopAnimation();
         const activePointer = pointerId;
@@ -539,7 +538,7 @@ export function MissionGallery({ id, title, hero, missions, completedDate, onAct
     };
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (interactive && event.key === "Escape") {
+      if ((interactive || !expansionStarted) && event.key === "Escape") {
         event.preventDefault();
         closeGallery();
         return;
@@ -558,14 +557,14 @@ export function MissionGallery({ id, title, hero, missions, completedDate, onAct
     };
 
     const onBlankClick = (event: MouseEvent) => {
-      if (!interactive || performance.now() < suppressBlankClickUntil) {
+      if ((!interactive && expansionStarted) || performance.now() < suppressBlankClickUntil) {
         return;
       }
 
       const target = event.target;
       if (
         target instanceof Element &&
-        target.closest(`.${styles.missionCard}`)
+        (target.closest(`.${styles.missionCard}`) || target.closest("[data-gallery-action]"))
       ) {
         return;
       }
@@ -574,11 +573,9 @@ export function MissionGallery({ id, title, hero, missions, completedDate, onAct
     };
 
     const closeGallery = () => {
+      if (root.dataset.phase === "closing" || (expansionStarted && !interactive)) return;
       interactive = false;
       stopAnimation();
-      cancelAnimationFrame(depthFrame);
-      depthFrame = 0;
-      root.dataset.depthMoving = "false";
       updateCollapsedOffsets();
       root.dataset.dragging = "false";
       root.dataset.phase = "closing";
@@ -612,29 +609,36 @@ export function MissionGallery({ id, title, hero, missions, completedDate, onAct
       root.dataset.phase = "settled";
       interactive = true;
       root.focus({ preventScroll: true });
+      onExpansionSettledRef.current?.();
     };
-    expandFrame = requestAnimationFrame(() => {
-      // Flush the measured starting pose before starting the day's transitions.
-      if (completedDate) root.getAnimations({ subtree: true });
-      root.dataset.phase = "expanding";
-      if (completedDate) {
-        void Promise.allSettled(root.getAnimations({ subtree: true }).map(animation => animation.finished))
-          .then(finishExpansion);
+    const startExpansion = () => {
+      if (disposed || expansionStarted || root.dataset.phase === "closing") return;
+      expansionStarted = true;
+      expandFrame = requestAnimationFrame(() => {
+        // Flush the measured starting pose before starting the day's transitions.
+        if (completedDate) root.getAnimations({ subtree: true });
+        root.dataset.phase = "expanding";
+        if (completedDate) {
+          void Promise.allSettled(root.getAnimations({ subtree: true }).map(animation => animation.finished))
+            .then(finishExpansion);
+        }
+      });
+      if (!completedDate) {
+        settleTimer = window.setTimeout(finishExpansion, prefersReducedMotion ? 320 : EXPANSION_SETTLE_MS);
       }
-    });
-    if (!completedDate) {
-      settleTimer = window.setTimeout(finishExpansion, prefersReducedMotion ? 320 : EXPANSION_SETTLE_MS);
-    }
+    };
+    requestExpansionRef.current = startExpansion;
+    if (expansionRequestedRef.current) startExpansion();
 
     return () => {
       disposed = true;
       measureRef.current = null;
+      requestExpansionRef.current = null;
       observer.disconnect();
       stopAnimation();
       cancelAnimationFrame(expandFrame);
       window.clearTimeout(settleTimer);
       cancelAnimationFrame(closeFrame);
-      cancelAnimationFrame(depthFrame);
       if (pointerId !== null && root.hasPointerCapture(pointerId)) {
         root.releasePointerCapture(pointerId);
       }
@@ -682,6 +686,12 @@ export function MissionGallery({ id, title, hero, missions, completedDate, onAct
             </div>
           </ViewTransition>
         )}
+
+        {!completedDate && waitingAction ? (
+          <div className={styles.waitingAction} data-gallery-action>
+            {waitingAction}
+          </div>
+        ) : null}
 
         <div className={styles.scrollViewport} ref={scrollRef}>
           <ol aria-label="Missions" className={styles.track} ref={trackRef}>

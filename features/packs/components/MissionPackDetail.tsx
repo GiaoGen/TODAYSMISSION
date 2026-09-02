@@ -27,6 +27,7 @@ export function MissionPackDetail({
 }: MissionPackDetailProps) {
   const [activeMissionId, setActiveMissionId] = useState(pack.missions[0]?.id ?? null);
   const [packJoined, setPackJoined] = useState(initialPackJoined);
+  const [gallerySettled, setGallerySettled] = useState(false);
   const [missionCompletionStatuses, setMissionCompletionStatuses] = useState(initialMissionCompletionStatuses);
   const [missionVoiceStatuses, setMissionVoiceStatuses] = useState(initialMissionVoiceStatuses);
   const [completionRequestedMissionId, setCompletionRequestedMissionId] = useState<string | null>(null);
@@ -62,22 +63,24 @@ export function MissionPackDetail({
         title={pack.title}
         hero={pack}
         missions={pack.missions}
+        expandMissions={packJoined}
+        waitingAction={!packJoined ? (
+          <PackMembershipAction
+            authenticated={authenticated}
+            joined={packJoined}
+            onJoined={() => setPackJoined(true)}
+            pack={pack}
+          />
+        ) : null}
+        onExpansionSettled={() => setGallerySettled(true)}
         onActiveMissionChange={handleActiveMissionChange}
       />
-      {activeMission ? (
+      {activeMission && gallerySettled ? (
         <MissionActionLayer
           key={activeMission.id}
           activeMission={activeMission}
           authenticated={authenticated}
           packJoined={packJoined}
-          packMembershipAction={(
-            <PackMembershipAction
-              authenticated={authenticated}
-              joined={packJoined}
-              onJoined={() => setPackJoined(true)}
-              pack={pack}
-            />
-          )}
           completionRequested={completionRequestedMissionId === activeMission.id}
           currentStatus={currentStatus}
           completedMissionCount={completedMissionCount}

@@ -8,35 +8,40 @@ type NativeMissionGalleryOptions = {
   copies: () => number;
   cardClass: string;
   navigateHome: () => void;
+  autoExpand?: boolean;
+  onExpansionSettled?: () => void;
   onActiveMissionChange?: (index: number) => void;
 };
 
 // The existing shared hero and route boundary are retained. Only the horizontal
 // interaction layer differs; expansion/collapse remain short CSS transitions.
-export function mountNativeMissionGallery({ root, viewport, cards, count, copies, cardClass, navigateHome, onActiveMissionChange }: NativeMissionGalleryOptions) {
+export function mountNativeMissionGallery({
+  root,
+  viewport,
+  cards,
+  count,
+  copies,
+  cardClass,
+  navigateHome,
+  autoExpand = true,
+  onExpansionSettled,
+  onActiveMissionChange,
+}: NativeMissionGalleryOptions) {
   let controller: NativeScrollController | undefined;
   let disposed = false;
   let interactive = false;
+  let expansionStarted = false;
+  let closing = false;
   let width = 0;
   let cardWidth = 0;
   let stride = 1;
   let measuredCopies = 0;
-  let focusedSlot = -1;
   let lastPosition = 0;
   let closeFrame = 0;
   let readyTimer = 0;
   const isDay = root.dataset.kind === "day";
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  const paintFocus = (slot: number) => {
-    for (let index = Math.max(0, focusedSlot - 2); index <= focusedSlot + 2; index++) {
-      if (cards[index]) delete cards[index]!.dataset.nativeDistance;
-    }
-    focusedSlot = slot;
-    for (let index = Math.max(0, slot - 2); index <= slot + 2; index++) {
-      if (cards[index]) cards[index]!.dataset.nativeDistance = String(Math.abs(index - slot));
-    }
-  };
   const updateCollapsedOffsets = () => {
     const left = viewport.scrollLeft;
     const edge = (width - cardWidth) / 2;
@@ -69,9 +74,8 @@ export function mountNativeMissionGallery({ root, viewport, cards, count, copies
     else controller = createNativeScrollController(viewport, {
       ...layout, disabled: true, reducedMotion: reduced,
       onProgress: ({ index }) => { onActiveMissionChange?.(index); },
-      onSettled: ({ index, slot, position }) => {
+      onSettled: ({ index, position }) => {
         lastPosition = position;
-        paintFocus(slot);
         onActiveMissionChange?.(index);
       },
     });
@@ -82,7 +86,8 @@ export function mountNativeMissionGallery({ root, viewport, cards, count, copies
     else measureNow();
   };
   const close = () => {
-    if (!interactive || disposed) return;
+    if (disposed || closing || (expansionStarted && !interactive)) return;
+    closing = true;
     interactive = false;
     controller?.freeze();
     updateCollapsedOffsets();
@@ -94,13 +99,15 @@ export function mountNativeMissionGallery({ root, viewport, cards, count, copies
     });
   };
   const onClick = (event: MouseEvent) => {
+    if (event.target instanceof Element && event.target.closest("[data-gallery-action]")) return;
+    if (!expansionStarted) { close(); return; }
     if (!interactive || !controller?.canActivate()) return;
     if (event.target instanceof Element && event.target.closest(`.${cardClass}`)) return;
     close();
   };
   const onKeyDown = (event: KeyboardEvent) => {
-    if (!interactive) return;
-    if (event.key === "Escape") { event.preventDefault(); close(); }
+    if (event.key === "Escape" && (interactive || !expansionStarted)) { event.preventDefault(); close(); }
+    else if (!interactive) return;
     else if (count > 1 && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
       event.preventDefault();
       const base = Math.floor(measuredCopies / 2) * count;
@@ -120,18 +127,26 @@ export function mountNativeMissionGallery({ root, viewport, cards, count, copies
     interactive = true;
     controller?.resume();
     root.focus({ preventScroll: true });
+    onExpansionSettled?.();
   };
-  const expandFrame = requestAnimationFrame(() => {
-    if (isDay) root.getAnimations({ subtree: true });
-    root.dataset.phase = "expanding";
-    if (isDay) {
-      void Promise.allSettled(root.getAnimations({ subtree: true }).map(animation => animation.finished))
-        .then(finishExpansion);
-    }
-  });
-  if (!isDay) readyTimer = window.setTimeout(finishExpansion, reduced ? 320 : 1600);
+  let expandFrame = 0;
+  const expand = () => {
+    if (disposed || closing || expansionStarted) return;
+    expansionStarted = true;
+    expandFrame = requestAnimationFrame(() => {
+      if (isDay) root.getAnimations({ subtree: true });
+      root.dataset.phase = "expanding";
+      if (isDay) {
+        void Promise.allSettled(root.getAnimations({ subtree: true }).map(animation => animation.finished))
+          .then(finishExpansion);
+      }
+    });
+    if (!isDay) readyTimer = window.setTimeout(finishExpansion, reduced ? 320 : 1600);
+  };
+  if (autoExpand) expand();
 
   return {
+    expand,
     measure,
     whenIdle(work: () => void) {
       const apply = () => { work(); measureNow(); };

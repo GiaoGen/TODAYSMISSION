@@ -310,7 +310,7 @@ test("buffer counts cover multiple viewports without unbounded DOM growth", () =
   }
 });
 
-function galleryHarness({ count = 3, looping = true, modern = true } = {}) {
+function galleryHarness({ count = 3, looping = true, modern = true, autoExpand = true } = {}) {
   const env = environment({ modern });
   const viewport = new env.Scroller();
   const rootElement = new env.Element();
@@ -336,10 +336,11 @@ function galleryHarness({ count = 3, looping = true, modern = true } = {}) {
   });
   let returned = 0;
   const { mountNativeMissionGallery } = load("features/packs/model/native-mission-gallery.ts", env.globals);
-  const gallery = mountNativeMissionGallery({ root: rootElement, viewport, cards, count, copies: () => copies, cardClass: "missionCard", navigateHome() { returned++; } });
+  const gallery = mountNativeMissionGallery({ root: rootElement, viewport, cards, count, copies: () => copies, cardClass: "missionCard", navigateHome() { returned++; }, autoExpand });
   return { ...env, rootElement, viewport, cards, gallery, complete, copies, stride, finishExpansion,
     get reads() { return reads; }, get returned() { return returned; },
     async expand() {
+      gallery.expand();
       env.frame(); finishExpansion();
       if (looping) env.advance(1600);
       await new Promise(resolve => setImmediate(resolve));
@@ -354,7 +355,7 @@ for (const looping of [false, true]) for (const count of [1, 2, 8]) {
     await h.expand();
     assert.equal(h.rootElement.dataset.phase, "settled");
     assert.equal(h.viewport.dataset.nativeLocked, "false");
-    assert.equal(h.cards[Math.floor(h.copies / 2) * count].dataset.nativeDistance, "0", "date and Pack cards share the center focus");
+    assert.ok(h.cards.every(card => card.dataset.nativeDistance === undefined));
     const initialReads = h.reads;
     if (count > 1) {
       h.viewport.emit("pointerdown", { clientX: 200 });
@@ -394,6 +395,35 @@ test("native gallery disposal cancels pending collapse navigation", async () => 
   h.gallery.destroy(); h.complete();
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(h.returned, 0);
+});
+
+test("Safari Pack waits at its cover until membership succeeds, and action clicks do not dismiss it", () => {
+  const h = galleryHarness({ autoExpand: false });
+  assert.equal(h.rootElement.dataset.phase, "collapsed");
+  assert.equal(h.frames.size, 0);
+  assert.equal(h.timers.size, 0);
+  const action = new h.Element();
+  action.closest = selector => selector === "[data-gallery-action]" ? action : null;
+  h.rootElement.emit("click", { target: action });
+  assert.equal(h.rootElement.dataset.phase, "collapsed");
+  h.gallery.expand();
+  h.frame();
+  assert.equal(h.rootElement.dataset.phase, "expanding");
+  h.advance(1600);
+  assert.equal(h.rootElement.dataset.phase, "settled");
+  h.gallery.destroy();
+});
+
+test("Safari Pack cover waiting stage exits without starting distribution", async () => {
+  const h = galleryHarness({ autoExpand: false });
+  h.rootElement.emit("keydown", { key: "Escape", preventDefault() {} });
+  assert.equal(h.rootElement.dataset.phase, "closing");
+  assert.equal(h.timers.size, 0);
+  h.frame();
+  h.complete();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.returned, 1);
+  h.gallery.destroy();
 });
 
 test("native day unlocks on actual animation completion and never schedules the Pack timer", async () => {

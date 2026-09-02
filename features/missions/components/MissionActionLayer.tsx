@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 
 import type { MissionSummary } from "@/data/contracts/pack-summary";
 import type { MissionCompletionStatus } from "@/features/missions/model/mission-action-state";
@@ -14,7 +14,6 @@ type MissionActionLayerProps = {
   activeMission: MissionSummary;
   authenticated: boolean;
   packJoined: boolean;
-  packMembershipAction: ReactNode;
   completionRequested: boolean;
   currentStatus: MissionCompletionStatus;
   completedMissionCount: number;
@@ -29,7 +28,6 @@ export function MissionActionLayer({
   activeMission,
   authenticated,
   packJoined,
-  packMembershipAction,
   completionRequested,
   currentStatus,
   completedMissionCount,
@@ -50,7 +48,6 @@ export function MissionActionLayer({
       data-status={currentStatus}
     >
       <div className={styles.panel}>
-        {packMembershipAction}
         {packJoined ? (
           <p aria-live="polite" className={styles.progress}>{completedMissionCount} / {missionCount} completed</p>
         ) : null}
