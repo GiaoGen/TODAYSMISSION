@@ -225,6 +225,9 @@ export function MissionProofRecorder({ missionId, onCompleted }: MissionProofRec
 
       if (generationRef.current !== generation || missionIdRef.current !== submissionMissionId) return;
       if (uploadError) {
+        if (process.env.NODE_ENV !== "production") {
+          console.error("Mission proof upload failed.", uploadError);
+        }
         setState("recorded");
         setError("We couldn't upload the audio proof. Please try again.");
         return;
