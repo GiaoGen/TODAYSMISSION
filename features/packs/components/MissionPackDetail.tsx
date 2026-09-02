@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import type { MissionVoiceStatusByMission } from "@/data/contracts/mission-voice";
 import type { PackDetail } from "@/data/contracts/pack-summary";
 import type { MissionCompletionStatus } from "@/features/missions/model/mission-action-state";
 import { MissionActionLayer } from "@/features/missions/components/MissionActionLayer";
@@ -13,6 +14,7 @@ type MissionPackDetailProps = {
   authenticated: boolean;
   initialPackJoined: boolean;
   initialMissionCompletionStatuses: Record<string, MissionCompletionStatus>;
+  initialMissionVoiceStatuses: MissionVoiceStatusByMission;
 };
 
 export function MissionPackDetail({
@@ -20,10 +22,12 @@ export function MissionPackDetail({
   authenticated,
   initialPackJoined,
   initialMissionCompletionStatuses,
+  initialMissionVoiceStatuses,
 }: MissionPackDetailProps) {
   const [activeMissionId, setActiveMissionId] = useState(pack.missions[0]?.id ?? null);
   const [packJoined, setPackJoined] = useState(initialPackJoined);
   const [missionCompletionStatuses, setMissionCompletionStatuses] = useState(initialMissionCompletionStatuses);
+  const [missionVoiceStatuses, setMissionVoiceStatuses] = useState(initialMissionVoiceStatuses);
   const [completionRequestedMissionId, setCompletionRequestedMissionId] = useState<string | null>(null);
   const activeMission = pack.missions.find((mission) => mission.id === activeMissionId) ?? pack.missions[0];
   const currentStatus = activeMission
@@ -41,6 +45,14 @@ export function MissionPackDetail({
     setCompletionRequestedMissionId(null);
   };
 
+  const handleVoiceSubmitted = () => {
+    if (!activeMission) return;
+    setMissionVoiceStatuses((current) => ({
+      ...current,
+      [activeMission.id]: { missionId: activeMission.id, submitted: true },
+    }));
+  };
+
   return (
     <>
       <MissionGallery
@@ -52,7 +64,9 @@ export function MissionPackDetail({
       />
       {activeMission ? (
         <MissionActionLayer
+          key={activeMission.id}
           activeMission={activeMission}
+          authenticated={authenticated}
           packJoined={packJoined}
           packMembershipAction={(
             <PackMembershipAction
@@ -64,8 +78,10 @@ export function MissionPackDetail({
           )}
           completionRequested={completionRequestedMissionId === activeMission.id}
           currentStatus={currentStatus}
+          voiceSubmitted={missionVoiceStatuses[activeMission.id]?.submitted ?? false}
           onCompletionRequested={() => setCompletionRequestedMissionId(activeMission.id)}
           onCompleted={handleCompleted}
+          onVoiceSubmitted={handleVoiceSubmitted}
         />
       ) : null}
     </>

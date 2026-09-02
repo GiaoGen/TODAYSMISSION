@@ -43,6 +43,41 @@ export type Database = {
           },
         ]
       }
+      mission_voices: {
+        Row: {
+          created_at: string
+          id: string
+          is_published: boolean
+          mission_id: string
+          storage_path: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_published?: boolean
+          mission_id: string
+          storage_path: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_published?: boolean
+          mission_id?: string
+          storage_path?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mission_voices_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: false
+            referencedRelation: "missions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       missions: {
         Row: {
           artwork_key: string
@@ -174,6 +209,19 @@ export type Database = {
         Returns: {
           completed_at: string
           status: string
+        }[]
+      }
+      get_my_mission_voice_statuses: {
+        Args: { p_mission_ids: string[] }
+        Returns: {
+          mission_id: string
+        }[]
+      }
+      submit_mission_voice: {
+        Args: { p_mission_id: string; p_storage_path: string }
+        Returns: {
+          status: string
+          voice_id: string
         }[]
       }
     }

@@ -2,6 +2,8 @@
 
 import { isAuthSessionMissingError } from "@supabase/supabase-js";
 
+import type { MissionVoicePlayback } from "@/data/contracts/mission-voice";
+import { getPublishedMissionVoicesForMission } from "@/data/repositories/get-mission-voices";
 import { createClient } from "@/lib/supabase/server";
 
 export type MissionProofUploadTargetResult =
@@ -12,6 +14,18 @@ export type CompleteMissionWithAudioResult =
   | { ok: true; status: "completed"; completedAt: string }
   | { ok: false; error: string };
 
+export type MissionVoiceUploadTargetResult =
+  | { ok: true; pathBase: string }
+  | { ok: false; error: string };
+
+export type SubmitMissionVoiceResult =
+  | { ok: true; status: "submitted" | "already_shared" }
+  | { ok: false; error: string };
+
+export type MissionVoicePlaybackResult =
+  | { ok: true; voices: readonly MissionVoicePlayback[] }
+  | { ok: false; error: string };
+
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function failedProof(message: string): MissionProofUploadTargetResult {
@@ -19,6 +33,18 @@ function failedProof(message: string): MissionProofUploadTargetResult {
 }
 
 function failedCompletion(message: string): CompleteMissionWithAudioResult {
+  return { ok: false, error: message };
+}
+
+function failedVoiceUpload(message: string): MissionVoiceUploadTargetResult {
+  return { ok: false, error: message };
+}
+
+function failedVoiceSubmit(message: string): SubmitMissionVoiceResult {
+  return { ok: false, error: message };
+}
+
+function failedVoicePlayback(message: string): MissionVoicePlaybackResult {
   return { ok: false, error: message };
 }
 
@@ -107,4 +133,111 @@ export async function completeMissionWithAudioAction(
     status: "completed",
     completedAt: completion.completed_at,
   };
+}
+
+export async function createMissionVoiceUploadTarget(missionId: string): Promise<MissionVoiceUploadTargetResult> {
+  if (!UUID_PATTERN.test(missionId)) return failedVoiceUpload("That mission is unavailable.");
+
+  const supabase = await createClient();
+  const { data: userData, error: authError } = await supabase.auth.getUser();
+
+  if (authError) {
+    if (isAuthSessionMissingError(authError)) return failedVoiceUpload("Please log in to share an experience.");
+    return failedVoiceUpload("We couldn't verify your login. Please try again.");
+  }
+
+  const user = userData.user;
+  if (!user || user.is_anonymous) return failedVoiceUpload("Please log in to share an experience.");
+
+  const { data: mission, error: missionError } = await supabase
+    .from("missions")
+    .select("pack_id")
+    .eq("id", missionId)
+    .eq("is_published", true)
+    .maybeSingle();
+
+  if (missionError) return failedVoiceUpload("We couldn't verify this Mission. Please try again.");
+  if (!mission) return failedVoiceUpload("That mission is unavailable.");
+
+  const { data: pack, error: packError } = await supabase
+    .from("packs")
+    .select("id")
+    .eq("id", mission.pack_id)
+    .eq("is_published", true)
+    .maybeSingle();
+
+  if (packError) return failedVoiceUpload("We couldn't verify this Pack. Please try again.");
+  if (!pack) return failedVoiceUpload("That mission is unavailable.");
+
+  const { data: completion, error: completionError } = await supabase
+    .from("mission_completions")
+    .select("mission_id")
+    .eq("user_id", user.id)
+    .eq("mission_id", missionId)
+    .maybeSingle();
+
+  if (completionError) return failedVoiceUpload("We couldn't verify your Mission completion. Please try again.");
+  if (!completion) return failedVoiceUpload("Complete this Mission before sharing an experience.");
+
+  const { data: voiceStatus, error: voiceStatusError } = await supabase.rpc("get_my_mission_voice_statuses", {
+    p_mission_ids: [missionId],
+  });
+
+  if (voiceStatusError) return failedVoiceUpload("We couldn't verify your previous share. Please try again.");
+  if (voiceStatus.length > 0) return failedVoiceUpload("You have already shared an experience for this Mission.");
+
+  return {
+    ok: true,
+    pathBase: `${user.id}/${missionId}/${crypto.randomUUID()}`,
+  };
+}
+
+export async function submitMissionVoiceAction(
+  missionId: string,
+  storagePath: string,
+): Promise<SubmitMissionVoiceResult> {
+  if (!UUID_PATTERN.test(missionId) || typeof storagePath !== "string" || storagePath.length > 300) {
+    return failedVoiceSubmit("That Mission experience is invalid.");
+  }
+
+  const supabase = await createClient();
+  const { data: userData, error: authError } = await supabase.auth.getUser();
+
+  if (authError) {
+    if (isAuthSessionMissingError(authError)) return failedVoiceSubmit("Please log in to share an experience.");
+    return failedVoiceSubmit("We couldn't verify your login. Please try again.");
+  }
+
+  const user = userData.user;
+  if (!user || user.is_anonymous) return failedVoiceSubmit("Please log in to share an experience.");
+
+  const { data, error } = await supabase.rpc("submit_mission_voice", {
+    p_mission_id: missionId,
+    p_storage_path: storagePath,
+  });
+
+  if (error) {
+    if (process.env.NODE_ENV !== "production") console.error("Mission voice submission failed.", error);
+    return failedVoiceSubmit("We couldn't submit the experience. Please try again.");
+  }
+
+  const result = data[0];
+  if (!result || (result.status !== "submitted" && result.status !== "already_shared")) {
+    return failedVoiceSubmit("We couldn't submit the experience. Please try again.");
+  }
+
+  return { ok: true, status: result.status };
+}
+
+export async function getMissionVoicePlaybackAction(missionId: string): Promise<MissionVoicePlaybackResult> {
+  if (!UUID_PATTERN.test(missionId)) return failedVoicePlayback("That mission is unavailable.");
+
+  try {
+    return {
+      ok: true,
+      voices: await getPublishedMissionVoicesForMission(missionId),
+    };
+  } catch {
+    return failedVoicePlayback("We couldn't load shared experiences. Please try again.");
+  }
 }

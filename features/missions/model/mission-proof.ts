@@ -1,21 +1,10 @@
-export const MISSION_PROOF_FORMATS = [
-  { mimeType: "audio/webm;codecs=opus", extension: "webm" },
-  { mimeType: "audio/webm", extension: "webm" },
-  { mimeType: "audio/mp4", extension: "mp4" },
-] as const;
+export {
+  MISSION_AUDIO_FORMATS as MISSION_PROOF_FORMATS,
+  MISSION_AUDIO_MAX_BYTES as MISSION_PROOF_MAX_BYTES,
+  MISSION_AUDIO_MAX_DURATION_MS as MISSION_PROOF_MAX_DURATION_MS,
+  MISSION_AUDIO_MIN_DURATION_MS as MISSION_PROOF_MIN_DURATION_MS,
+  getMissionAudioFormat as getMissionProofFormat,
+  getSupportedMissionAudioFormat as getSupportedMissionProofFormat,
+} from "./mission-audio.ts";
 
-export const MISSION_PROOF_MAX_BYTES = 10 * 1024 * 1024;
-export const MISSION_PROOF_MAX_DURATION_MS = 120_000;
-export const MISSION_PROOF_MIN_DURATION_MS = 1_000;
-
-export type MissionProofFormat = (typeof MISSION_PROOF_FORMATS)[number];
-
-export function getSupportedMissionProofFormat(
-  isTypeSupported: (mimeType: string) => boolean,
-): MissionProofFormat | null {
-  return MISSION_PROOF_FORMATS.find(({ mimeType }) => isTypeSupported(mimeType)) ?? null;
-}
-
-export function getMissionProofFormat(mimeType: string): MissionProofFormat | null {
-  return MISSION_PROOF_FORMATS.find((format) => format.mimeType === mimeType) ?? null;
-}
+export type { MissionAudioFormat as MissionProofFormat } from "./mission-audio.ts";

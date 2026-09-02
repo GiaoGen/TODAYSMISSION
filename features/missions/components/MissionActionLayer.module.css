@@ -109,6 +109,64 @@
   border-radius: 12px;
 }
 
+.voice {
+  display: grid;
+  gap: 10px;
+}
+
+.voiceRecording {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 4px 0 8px;
+  font-size: 13px;
+}
+
+.voiceAudio {
+  width: 100%;
+  height: 38px;
+}
+
+.voiceActions,
+.voicePanelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.voiceActions .primary {
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 12px;
+}
+
+.voicePanel {
+  display: grid;
+  gap: 10px;
+  padding-top: 2px;
+}
+
+.voicePanelHeader strong {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.voicePanelHeader .secondary {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.voiceLabel,
+.voiceCount {
+  margin: 0;
+  color: var(--ui-muted);
+  font-size: 12px;
+}
+
 .notice {
   color: var(--ui-muted);
 }

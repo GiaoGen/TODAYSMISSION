@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { getCurrentUser } from "@/data/repositories/get-current-user";
 import { getMissionCompletionsForMissions } from "@/data/repositories/get-mission-completions";
+import { getMissionVoiceStatusesForMissions } from "@/data/repositories/get-mission-voices";
 import { getCurrentPackMembership } from "@/data/repositories/get-pack-memberships";
 import { getPackBySlug } from "@/data/repositories/get-packs";
 import { MissionPackDetail } from "@/features/packs/components/MissionPackDetail";
@@ -23,18 +24,20 @@ export default async function PackDetailPage({ params }: PackDetailPageProps) {
   }
 
   const missionIds = pack.missions.map((mission) => mission.id);
-  const [membership, missionCompletions] = currentUser
+  const [membership, missionCompletions, missionVoiceStatuses] = currentUser
     ? await Promise.all([
       getCurrentPackMembership(pack.id),
       getMissionCompletionsForMissions(missionIds),
+      getMissionVoiceStatusesForMissions(missionIds),
     ])
-    : [null, {}];
+    : [null, {}, {}];
   const initialMissionCompletionStatuses = getInitialMissionCompletionStatuses(missionIds, missionCompletions);
 
   return (
     <MissionPackDetail
       authenticated={Boolean(currentUser)}
       initialMissionCompletionStatuses={initialMissionCompletionStatuses}
+      initialMissionVoiceStatuses={missionVoiceStatuses}
       initialPackJoined={Boolean(membership)}
       pack={pack}
     />
