@@ -17,6 +17,8 @@ type MissionActionLayerProps = {
   packMembershipAction: ReactNode;
   completionRequested: boolean;
   currentStatus: MissionCompletionStatus;
+  completedMissionCount: number;
+  missionCount: number;
   voiceSubmitted: boolean;
   onCompletionRequested: () => void;
   onCompleted: () => void;
@@ -30,6 +32,8 @@ export function MissionActionLayer({
   packMembershipAction,
   completionRequested,
   currentStatus,
+  completedMissionCount,
+  missionCount,
   voiceSubmitted,
   onCompletionRequested,
   onCompleted,
@@ -47,6 +51,9 @@ export function MissionActionLayer({
     >
       <div className={styles.panel}>
         {packMembershipAction}
+        {packJoined ? (
+          <p aria-live="polite" className={styles.progress}>{completedMissionCount} / {missionCount} completed</p>
+        ) : null}
 
         {currentStatus === "incomplete" && !packJoined && (
           <p aria-live="polite" className={styles.notice}>Take this Pack to start</p>

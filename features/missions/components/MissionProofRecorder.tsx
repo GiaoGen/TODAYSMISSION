@@ -15,6 +15,7 @@ import {
   type MissionProofFormat,
 } from "@/features/missions/model/mission-proof";
 import { createClient } from "@/lib/supabase/client";
+import { localDateKey } from "@/features/calendar/model/calendar-month";
 import styles from "./MissionActionLayer.module.css";
 
 type MissionProofRecorderProps = {
@@ -233,7 +234,11 @@ export function MissionProofRecorder({ missionId, onCompleted }: MissionProofRec
         return;
       }
 
-      const completion = await completeMissionWithAudioAction(submissionMissionId, proofPath);
+      const completion = await completeMissionWithAudioAction(
+        submissionMissionId,
+        proofPath,
+        localDateKey(new Date()),
+      );
       if (generationRef.current !== generation || missionIdRef.current !== submissionMissionId) return;
       if (!completion.ok) {
         setState("recorded");

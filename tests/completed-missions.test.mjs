@@ -24,7 +24,7 @@ const compile = source => ts.transpileModule(source, { compilerOptions: {
   target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.CommonJS,
 } }).outputText;
 
-// Load actual repository/fixture/SSR code without adding a test runtime or browser.
+// Load actual fixture/SSR code without adding a test runtime or browser.
 function loadModule(file, overrides = {}, cache = new Map(), globals = {}) {
   const absolute = path.resolve(rootPath, file);
   if (cache.has(absolute)) return cache.get(absolute);
@@ -42,16 +42,42 @@ function loadModule(file, overrides = {}, cache = new Map(), globals = {}) {
   return exports;
 }
 
-const repository = loadModule("data/repositories/get-completed-missions.ts");
 const user = loadModule("data/repositories/get-mock-user.ts");
 const { MISSION_COMPLETION_FIXTURES: completions } = loadModule("data/fixtures/mission-completion-fixtures.ts");
 const { PACK_DETAIL_FIXTURES: packs } = loadModule("data/fixtures/pack-fixtures.ts");
 
-test("every marked date maps to exactly its completed Missions across Packs, not cover cards", () => {
-  assert.deepEqual(plain(user.getMockMissionCalendar().completedOn), plain(repository.getCompletionDates()));
+const fixtureCompletionDates = () => [...new Set(completions.map(record => record.completedOn))].sort();
+const fixtureCompletedMissionsByDate = date => {
+  const records = completions.filter(record => record.completedOn === date);
+  const missions = records.flatMap(record => {
+    const pack = packs.find(item => item.id === record.packId);
+    const mission = pack?.missions.find(item => item.id === record.missionId);
+    return mission ? [mission] : [];
+  });
+  const uniqueMissions = [...new Map(missions.map(mission => [mission.id, mission])).values()];
+  return uniqueMissions.length ? { date, missions: uniqueMissions } : null;
+};
+
+const calendarRepositorySource = read("data/repositories/get-mission-calendar.ts");
+const historyRepositorySource = read("data/repositories/get-completed-missions.ts");
+
+test("real completion repositories use local dates and never read proof paths", () => {
+  assert.match(calendarRepositorySource, /server-only/);
+  assert.match(calendarRepositorySource, /completed_local_date/);
+  assert.match(calendarRepositorySource, /new Set\(data\.map/);
+  assert.doesNotMatch(calendarRepositorySource, /proof_path|mission-voices|mission-proofs/);
+  assert.match(historyRepositorySource, /server-only/);
+  assert.match(historyRepositorySource, /completed_local_date/);
+  assert.match(historyRepositorySource, /eq\("completed_local_date", date\)/);
+  assert.match(historyRepositorySource, /order\("completed_at", \{ ascending: true \}\)/);
+  assert.doesNotMatch(historyRepositorySource, /proof_path|mission-voices|mission-proofs/);
+});
+
+test("fixture render data still maps marked dates to Missions across Packs, not cover cards", () => {
+  assert.deepEqual(plain(user.getMockMissionCalendar().completedOn), plain(fixtureCompletionDates()));
   const counts = new Set();
-  for (const date of repository.getCompletionDates()) {
-    const day = repository.getCompletedMissionsByDate(date);
+  for (const date of fixtureCompletionDates()) {
+    const day = fixtureCompletedMissionsByDate(date);
     const records = completions.filter(record => record.completedOn === date);
     assert.equal(day.date, date);
     assert.deepEqual(plain(day.missions.map(mission => mission.id)), plain(records.map(record => record.missionId)));
@@ -61,21 +87,24 @@ test("every marked date maps to exactly its completed Missions across Packs, not
     counts.add(day.missions.length);
   }
   assert.deepEqual([...counts].sort((a, b) => a - b), [1, 2, 3, 5, 8]);
-  assert.equal(repository.getCompletedMissionsByDate("2026-08-28").missions.length, 1);
-  assert.equal(repository.getCompletedMissionsByDate("2026-08-26").missions.length, 8);
+  assert.equal(fixtureCompletedMissionsByDate("2026-08-28").missions.length, 1);
+  assert.equal(fixtureCompletedMissionsByDate("2026-08-26").missions.length, 8);
 });
 
-test("invalid dates, pre-registration days and days without completions cannot open a gallery", () => {
+test("fixture dates, pre-registration days and days without completions cannot open a gallery", () => {
   for (const date of ["", "2026-02-30", "2026-8-28", "2026-05-11", "2026-08-27", "../2026-08-28", "2099-01-01"]) {
-    assert.equal(repository.getCompletedMissionsByDate(date), null);
+    assert.equal(fixtureCompletedMissionsByDate(date), null);
   }
 });
 
-test("completed date route does not expose fixture history", async () => {
-  const page = loadModule("app/completed/[date]/page.tsx");
-  assert.equal("generateStaticParams" in page, false);
-  const element = await page.default({ params: Promise.resolve({ date: "2026-08-26" }) });
-  assert.match(element.props.children, /unavailable/i);
+test("completed date route reads private history at runtime", () => {
+  const page = read("app/completed/[date]/page.tsx");
+  assert.doesNotMatch(page, /generateStaticParams/);
+  assert.match(page, /getCompletedMissionsByDate/);
+  assert.match(page, /getCurrentUser/);
+  assert.match(page, /redirect\(`\/login\?next=/);
+  assert.match(page, /notFound\(\)/);
+  assert.match(page, /MissionGallery/);
 });
 
 test("actual day gallery renders exactly the day's card count, never loop copies or extra covers", () => {
@@ -84,8 +113,8 @@ test("actual day gallery renders exactly the day's card count, never loop copies
     "next/navigation": { useRouter: () => ({}) },
     "@/components/card/PackCard": { PackCard: ({ pack }) => createElement("span", { "data-mission-id": pack.id }) },
   });
-  for (const date of repository.getCompletionDates()) {
-    const day = repository.getCompletedMissionsByDate(date);
+  for (const date of fixtureCompletionDates()) {
+    const day = fixtureCompletedMissionsByDate(date);
     const html = renderToStaticMarkup(createElement(MissionGallery, {
       id: dayTransitions.getDayGalleryId(date), title: date, hero: day.missions[0], missions: day.missions, completedDate: date,
     }));
@@ -117,7 +146,7 @@ for (const nativeScrolling of [false, true]) {
         "@/features/packs/model/use-deck-viewport": { useDeckViewport: () => viewport },
         "@/features/packs/model/use-safari-scroll": { useSafariScroll: () => nativeScrolling },
       });
-      const day = repository.getCompletedMissionsByDate("2026-08-26");
+      const day = fixtureCompletedMissionsByDate("2026-08-26");
       const html = renderToStaticMarkup(createElement(MissionGallery, {
         id: dayTransitions.getDayGalleryId(day.date), title: day.date, hero: day.missions[0], missions: day.missions, completedDate: day.date,
       }));
@@ -139,7 +168,7 @@ test("day opening keeps its date anchor while only closing selects the shrink-to
     "next/navigation": { useRouter: () => ({}) },
   };
   const date = "2026-08-28";
-  const day = repository.getCompletedMissionsByDate(date);
+  const day = fixtureCompletedMissionsByDate(date);
   const { CalendarMonth } = loadModule("features/calendar/components/CalendarMonth.tsx", overrides);
   renderToStaticMarkup(createElement(CalendarMonth, {
     month: months.monthNumber("2026-08"), range: months.getCalendarRange("2026-05-12", "2026-08-31"),

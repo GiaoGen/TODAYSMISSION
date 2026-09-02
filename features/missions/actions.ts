@@ -1,9 +1,11 @@
 "use server";
 
 import { isAuthSessionMissingError } from "@supabase/supabase-js";
+import { revalidatePath } from "next/cache";
 
 import type { MissionVoicePlayback } from "@/data/contracts/mission-voice";
 import { getPublishedMissionVoicesForMission } from "@/data/repositories/get-mission-voices";
+import { parseDateKey } from "@/features/calendar/model/calendar-month";
 import { createClient } from "@/lib/supabase/server";
 
 export type MissionProofUploadTargetResult =
@@ -11,7 +13,7 @@ export type MissionProofUploadTargetResult =
   | { ok: false; error: string };
 
 export type CompleteMissionWithAudioResult =
-  | { ok: true; status: "completed"; completedAt: string }
+  | { ok: true; status: "completed"; completedAt: string; completedLocalDate: string }
   | { ok: false; error: string };
 
 export type MissionVoiceUploadTargetResult =
@@ -101,8 +103,10 @@ export async function createMissionProofUploadTarget(missionId: string): Promise
 export async function completeMissionWithAudioAction(
   missionId: string,
   proofPath: string,
+  completedLocalDate: string,
 ): Promise<CompleteMissionWithAudioResult> {
-  if (!UUID_PATTERN.test(missionId) || typeof proofPath !== "string" || proofPath.length > 300) {
+  if (!UUID_PATTERN.test(missionId) || typeof proofPath !== "string" || proofPath.length > 300
+    || typeof completedLocalDate !== "string" || !parseDateKey(completedLocalDate)) {
     return failedCompletion("That mission proof is invalid.");
   }
 
@@ -119,19 +123,24 @@ export async function completeMissionWithAudioAction(
   const { data, error } = await supabase.rpc("complete_mission_with_audio", {
     p_mission_id: missionId,
     p_proof_path: proofPath,
+    p_completed_local_date: completedLocalDate,
   });
 
   if (error) return failedCompletion("We couldn't verify the audio proof. Please try again.");
 
   const completion = data[0];
-  if (!completion || completion.status !== "completed" || !completion.completed_at) {
+  if (!completion || completion.status !== "completed" || !completion.completed_at || !completion.completed_local_date) {
     return failedCompletion("We couldn't complete this mission. Please try again.");
   }
+
+  revalidatePath("/");
+  revalidatePath(`/completed/${completion.completed_local_date}`);
 
   return {
     ok: true,
     status: "completed",
     completedAt: completion.completed_at,
+    completedLocalDate: completion.completed_local_date,
   };
 }
 

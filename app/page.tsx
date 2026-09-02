@@ -1,18 +1,9 @@
 import { getPacks } from "@/data/repositories/get-packs";
 import { getJoinedPacks } from "@/data/repositories/get-pack-memberships";
-import type { CurrentUser } from "@/data/contracts/current-user";
-import type { MissionCalendarData } from "@/data/contracts/mission-calendar";
 import { getCurrentUser } from "@/data/repositories/get-current-user";
-import { localDateKey } from "@/features/calendar/model/calendar-month";
+import { getMissionCalendar } from "@/data/repositories/get-mission-calendar";
 import { logout } from "@/features/auth/actions";
 import { HomeCarouselEntry } from "@/features/packs/components/HomeCarouselEntry";
-
-function getHomeCalendar(currentUser: CurrentUser | null): MissionCalendarData {
-  return {
-    registeredOn: currentUser?.createdAt.slice(0, 10) ?? localDateKey(new Date()),
-    completedOn: [],
-  };
-}
 
 export default async function Home() {
   const [packs, currentUser] = await Promise.all([getPacks(), getCurrentUser()]);
@@ -21,11 +12,13 @@ export default async function Home() {
     return <main><p>No public mission Packs are available right now.</p></main>;
   }
 
-  const joinedPacks = currentUser ? await getJoinedPacks() : [];
+  const calendarPromise = getMissionCalendar(currentUser);
+  const joinedPacksPromise = currentUser ? getJoinedPacks() : Promise.resolve([]);
+  const [joinedPacks, calendar] = await Promise.all([joinedPacksPromise, calendarPromise]);
 
   // Route-owned DOM above the wheel boundaries would suppress their enter/exit.
   return <HomeCarouselEntry
-    calendar={getHomeCalendar(currentUser)}
+    calendar={calendar}
     currentUser={currentUser}
     joinedPacks={joinedPacks}
     onLogout={logout}

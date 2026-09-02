@@ -56,10 +56,15 @@
 }
 
 .notice,
-.error {
+.error,
+.progress {
   margin: 0;
   text-align: center;
   font-size: 12px;
+}
+
+.progress {
+  color: var(--ui-muted);
 }
 
 .proof {

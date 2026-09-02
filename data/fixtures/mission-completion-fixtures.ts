@@ -1,5 +1,10 @@
-import type { MissionCompletion } from "../contracts/mission-calendar";
 import { PACK_DETAIL_FIXTURES } from "./pack-fixtures";
+
+type MissionCompletionFixture = {
+  completedOn: string;
+  packId: string;
+  missionId: string;
+};
 
 const COMPLETION_DATES = [
   "2026-05-12", "2026-05-17", "2026-05-28",
@@ -13,7 +18,7 @@ const DAILY_COUNTS = [1, 2, 3, 5, 8] as const;
 
 // Frontend-only history. Each row points to an existing Mission, across Packs;
 // single and small collections are intentional fixtures, not fabricated covers.
-export const MISSION_COMPLETION_FIXTURES: readonly MissionCompletion[] =
+export const MISSION_COMPLETION_FIXTURES: readonly MissionCompletionFixture[] =
   COMPLETION_DATES.flatMap((completedOn, dayIndex) =>
     Array.from({ length: DAILY_COUNTS[dayIndex % DAILY_COUNTS.length] }, (_, index) => {
       const pack = PACK_DETAIL_FIXTURES[(dayIndex + index * 3) % PACK_DETAIL_FIXTURES.length];

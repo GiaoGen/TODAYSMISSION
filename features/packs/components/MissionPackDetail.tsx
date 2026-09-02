@@ -5,6 +5,7 @@ import { useState } from "react";
 import type { MissionVoiceStatusByMission } from "@/data/contracts/mission-voice";
 import type { PackDetail } from "@/data/contracts/pack-summary";
 import type { MissionCompletionStatus } from "@/features/missions/model/mission-action-state";
+import { getCompletedMissionCount } from "@/features/packs/model/pack-progress";
 import { MissionActionLayer } from "@/features/missions/components/MissionActionLayer";
 import { MissionGallery } from "./MissionGallery";
 import { PackMembershipAction } from "./PackMembershipAction";
@@ -33,6 +34,7 @@ export function MissionPackDetail({
   const currentStatus = activeMission
     ? missionCompletionStatuses[activeMission.id] ?? "incomplete"
     : "incomplete";
+  const completedMissionCount = getCompletedMissionCount(missionCompletionStatuses);
 
   const handleActiveMissionChange = (missionId: string) => {
     setActiveMissionId(missionId);
@@ -78,6 +80,8 @@ export function MissionPackDetail({
           )}
           completionRequested={completionRequestedMissionId === activeMission.id}
           currentStatus={currentStatus}
+          completedMissionCount={completedMissionCount}
+          missionCount={pack.missions.length}
           voiceSubmitted={missionVoiceStatuses[activeMission.id]?.submitted ?? false}
           onCompletionRequested={() => setCompletionRequestedMissionId(activeMission.id)}
           onCompleted={handleCompleted}

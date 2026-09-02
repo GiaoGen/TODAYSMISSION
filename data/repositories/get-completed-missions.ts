@@ -1,21 +1,55 @@
-import type { CompletedMissionDay } from "../contracts/mission-calendar";
-import { MISSION_COMPLETION_FIXTURES } from "../fixtures/mission-completion-fixtures";
-import { PACK_DETAIL_FIXTURES } from "../fixtures/pack-fixtures";
-import { MOCK_REGISTERED_ON } from "../fixtures/user-fixtures";
-import { parseDateKey } from "../../features/calendar/model/calendar-month";
+import "server-only";
 
-export function getCompletionDates(): readonly string[] {
-  return [...new Set(MISSION_COMPLETION_FIXTURES.map((record) => record.completedOn))].sort();
-}
+import type { CurrentUser } from "@/data/contracts/current-user";
+import type { CompletedMissionDay } from "@/data/contracts/mission-calendar";
+import type { Tables } from "@/data/database.types";
+import { mapMissionSummary } from "@/data/mappers/pack-mapper";
+import { getCurrentUser } from "@/data/repositories/get-current-user";
+import { parseDateKey } from "@/features/calendar/model/calendar-month";
+import { createClient } from "@/lib/supabase/server";
 
-export function getCompletedMissionsByDate(date: string): CompletedMissionDay | null {
-  if (!parseDateKey(date) || date < MOCK_REGISTERED_ON) return null;
-  const records = MISSION_COMPLETION_FIXTURES.filter((record) => record.completedOn === date);
-  const missions = records.flatMap((record) => {
-    const pack = PACK_DETAIL_FIXTURES.find((item) => item.id === record.packId);
-    const mission = pack?.missions.find((item) => item.id === record.missionId);
-    return mission ? [mission] : [];
-  });
-  const unique = [...new Map(missions.map((mission) => [mission.id, mission])).values()];
-  return unique.length ? { date, missions: unique } : null;
+type CompletedMissionRow = Pick<
+  Tables<"mission_completions">,
+  "mission_id" | "completed_at" | "completed_local_date"
+> & {
+  missions: Pick<
+    Tables<"missions">,
+    "id" | "slug" | "title" | "note" | "tag" | "code" | "theme_key" | "artwork_key" | "sort_order"
+  > | null;
+};
+
+const COMPLETED_DAY_SELECT = `
+  mission_id,
+  completed_at,
+  completed_local_date,
+  missions!mission_completions_mission_id_fkey(
+    id,slug,title,note,tag,code,theme_key,artwork_key,sort_order
+  )
+`;
+
+export async function getCompletedMissionsByDate(
+  date: string,
+  currentUser?: CurrentUser | null,
+): Promise<CompletedMissionDay | null> {
+  if (!parseDateKey(date)) return null;
+
+  const user = currentUser === undefined ? await getCurrentUser() : currentUser;
+  if (!user) return null;
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("mission_completions")
+    .select(COMPLETED_DAY_SELECT)
+    .eq("user_id", user.id)
+    .eq("completed_local_date", date)
+    .order("completed_at", { ascending: true });
+
+  if (error) throw new Error("Failed to read completed Missions.");
+
+  const missions = (data as unknown as CompletedMissionRow[]).flatMap((row) => (
+    row.missions ? [mapMissionSummary(row.missions)] : []
+  ));
+  const uniqueMissions = [...new Map(missions.map((mission) => [mission.id, mission])).values()];
+
+  return uniqueMissions.length ? { date, missions: uniqueMissions } : null;
 }

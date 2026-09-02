@@ -5,12 +5,6 @@ export type MissionCalendarData = {
   completedOn: readonly string[];
 };
 
-export type MissionCompletion = {
-  completedOn: string;
-  packId: string;
-  missionId: string;
-};
-
 export type CompletedMissionDay = {
   date: string;
   missions: readonly MissionSummary[];

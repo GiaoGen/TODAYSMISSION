@@ -17,18 +17,21 @@ export type Database = {
       mission_completions: {
         Row: {
           completed_at: string
+          completed_local_date: string
           mission_id: string
           proof_path: string
           user_id: string
         }
         Insert: {
           completed_at?: string
+          completed_local_date: string
           mission_id: string
           proof_path: string
           user_id: string
         }
         Update: {
           completed_at?: string
+          completed_local_date?: string
           mission_id?: string
           proof_path?: string
           user_id?: string
@@ -205,9 +208,14 @@ export type Database = {
     }
     Functions: {
       complete_mission_with_audio: {
-        Args: { p_mission_id: string; p_proof_path: string }
+        Args: {
+          p_completed_local_date: string
+          p_mission_id: string
+          p_proof_path: string
+        }
         Returns: {
           completed_at: string
+          completed_local_date: string
           status: string
         }[]
       }
