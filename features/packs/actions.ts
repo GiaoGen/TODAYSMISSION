@@ -47,7 +47,6 @@ export async function takePackAction(packId: string): Promise<TakePackActionResu
     return failedTake("We couldn't take this Pack right now. Please try again.");
   }
 
-  revalidatePath("/");
   revalidatePath(`/pack/${pack.slug}`);
   return { ok: true };
 }

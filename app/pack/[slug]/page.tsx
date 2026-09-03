@@ -34,6 +34,7 @@ export default async function PackDetailPage({ params }: PackDetailPageProps) {
   return (
     <MissionPackDetail
       authenticated={Boolean(currentUser)}
+      currentUserId={currentUser?.id ?? null}
       initialMissionCompletionStatuses={initialMissionCompletionStatuses}
       initialPackJoined={Boolean(membership)}
       pack={pack}

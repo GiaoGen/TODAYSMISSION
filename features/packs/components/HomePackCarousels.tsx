@@ -34,6 +34,7 @@ import { ArcCarousel } from "./ArcCarousel";
 import { HomeUserMenu } from "./HomeUserMenu";
 import { CalendarCarousel } from "@/features/calendar/components/CalendarCarousel";
 import { getDayGalleryHref, getDayGalleryId } from "@/features/calendar/model/calendar-day-transition";
+import { clearSessionSnapshot } from "@/features/navigation/model/session-snapshot";
 
 export type HomePackCarouselsProps = {
   packs: readonly PackSummary[];
@@ -243,7 +244,7 @@ export function HomePackCarousels({ packs, joinedPacks, currentUser, calendar, o
           ...preferences,
           theme: preferences.theme === "light" ? "dark" : "light",
         })}
-        onLogout={() => { void onLogout(); }}
+        onLogout={() => { clearSessionSnapshot(); void onLogout(); }}
       />
     </>
   );

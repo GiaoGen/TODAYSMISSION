@@ -51,7 +51,7 @@ test("completion local date migration backfills UTC best effort and keeps proof 
 test("completion action sends local date and revalidates only affected routes", () => {
   assert.match(actions, /completedLocalDate: string/);
   assert.match(actions, /p_completed_local_date: completedLocalDate/);
-  assert.match(actions, /revalidatePath\("\/"\)/);
+  assert.doesNotMatch(actions, /revalidatePath\("\/"\)/);
   assert.match(actions, /revalidatePath\(`\/completed\/\$\{completion\.completed_local_date\}`\)/);
   assert.match(proofRecorder, /completeMissionWithAudioAction\([\s\S]*localDateKey\(new Date\(\)\)/);
 });

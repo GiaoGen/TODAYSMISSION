@@ -133,7 +133,6 @@ export async function completeMissionWithAudioAction(
     return failedCompletion("We couldn't complete this mission. Please try again.");
   }
 
-  revalidatePath("/");
   revalidatePath(`/completed/${completion.completed_local_date}`);
 
   return {

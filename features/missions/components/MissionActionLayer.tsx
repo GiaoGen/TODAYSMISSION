@@ -16,7 +16,7 @@ type MissionActionLayerProps = {
   selectingNext: boolean;
   onCompletionRequested: () => void;
   onCompletionProgressChange: (progress: number) => void;
-  onCompleted: () => void;
+  onCompleted: (completedLocalDate: string) => void;
   onProofInteractionLockChange: (locked: boolean) => void;
   onSelectNext: () => void;
 };

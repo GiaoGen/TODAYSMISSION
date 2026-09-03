@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useSyncExternalStore } from "react";
 
 import type { PackDetail } from "@/data/contracts/pack-summary";
 import type { MissionCompletionStatus } from "@/features/missions/model/mission-action-state";
@@ -10,10 +11,18 @@ import { MissionCompletionConfetti } from "@/features/missions/components/Missio
 import { MissionGallery } from "./MissionGallery";
 import type { MissionCompletionMotionHandle } from "./MissionGallery";
 import { PackMembershipAction } from "./PackMembershipAction";
+import {
+  addJoinedPack,
+  addMissionCompletion,
+  getServerSessionSnapshot,
+  getSessionSnapshot,
+  subscribeSessionSnapshot,
+} from "@/features/navigation/model/session-snapshot";
 
 type MissionPackDetailProps = {
   pack: PackDetail;
   authenticated: boolean;
+  currentUserId: string | null;
   initialPackJoined: boolean;
   initialMissionCompletionStatuses: Record<string, MissionCompletionStatus>;
 };
@@ -21,13 +30,27 @@ type MissionPackDetailProps = {
 export function MissionPackDetail({
   pack,
   authenticated,
+  currentUserId,
   initialPackJoined,
   initialMissionCompletionStatuses,
 }: MissionPackDetailProps) {
+  const sessionSnapshot = useSyncExternalStore(
+    subscribeSessionSnapshot,
+    getSessionSnapshot,
+    getServerSessionSnapshot,
+  );
+  const sameUser = currentUserId !== null && sessionSnapshot.userId === currentUserId;
+  const sessionCompletedMissionIds = sameUser ? new Set(sessionSnapshot.completedMissionIds) : new Set<string>();
+  const initialStatuses: Record<string, MissionCompletionStatus> = Object.fromEntries(pack.missions.map((mission) => [
+    mission.id,
+    (initialMissionCompletionStatuses[mission.id] === "completed" || sessionCompletedMissionIds.has(mission.id)
+      ? "completed"
+      : "incomplete") as MissionCompletionStatus,
+  ]));
   const [activeMissionId, setActiveMissionId] = useState(pack.missions[0]?.id ?? null);
-  const [packJoined, setPackJoined] = useState(initialPackJoined);
+  const [packJoined, setPackJoined] = useState(initialPackJoined || (sameUser && sessionSnapshot.joinedPackIds.includes(pack.id)));
   const [gallerySettled, setGallerySettled] = useState(false);
-  const [missionCompletionStatuses, setMissionCompletionStatuses] = useState(initialMissionCompletionStatuses);
+  const [missionCompletionStatuses, setMissionCompletionStatuses] = useState(initialStatuses);
   const [completionRequestedMissionIds, setCompletionRequestedMissionIds] = useState<ReadonlySet<string>>(() => new Set());
   const [completionEventId, setCompletionEventId] = useState<string | null>(null);
   const [selectingNext, setSelectingNext] = useState(false);
@@ -46,10 +69,13 @@ export function MissionPackDetail({
     setActiveMissionId(missionId);
   };
 
-  const handleCompleted = (missionId: string) => {
+  const handleCompleted = (missionId: string, completedLocalDate: string) => {
     setMissionCompletionStatuses((current) => current[missionId] === "completed"
       ? current
       : { ...current, [missionId]: "completed" });
+    if (currentUserId) {
+      addMissionCompletion({ userId: currentUserId, missionId, packId: pack.id, completedLocalDate });
+    }
     setCompletionRequestedMissionIds((current) => {
       if (!current.has(missionId)) return current;
       const next = new Set(current);
@@ -88,7 +114,7 @@ export function MissionPackDetail({
         setCompletionEventId(`${activeMission.id}:${completionEventSequenceRef.current}`);
       }}
       onCompletionProgressChange={(progress) => completionMotionRef.current?.setProgress(activeMission.id, progress)}
-      onCompleted={() => handleCompleted(activeMission.id)}
+      onCompleted={(completedLocalDate) => handleCompleted(activeMission.id, completedLocalDate)}
       onProofInteractionLockChange={setGalleryInteractionLocked}
       onSelectNext={() => void handleSelectNext()}
     />
@@ -111,7 +137,10 @@ export function MissionPackDetail({
           <PackMembershipAction
             authenticated={authenticated}
             joined={packJoined}
-            onJoined={() => setPackJoined(true)}
+            onJoined={() => {
+              setPackJoined(true);
+              if (currentUserId) addJoinedPack(pack.id, currentUserId);
+            }}
             pack={pack}
           />
         ) : null}

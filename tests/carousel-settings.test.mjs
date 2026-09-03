@@ -261,6 +261,13 @@ test("guest identity exposes Login and no Logout", () => {
 test("server entry renders no incorrect default wheels before local settings are readable", () => {
   const { HomeCarouselEntry } = compileComponent("features/packs/components/HomeCarouselEntry.tsx", {
     "./HomePackCarousels": { HomePackCarousels() { throw new Error("must not render on server"); } },
+    "@/features/navigation/components/NavigationPrefetch": { NavigationPrefetch() { return null; } },
+    "@/features/navigation/model/session-snapshot": {
+      getServerSessionSnapshot: () => ({ userId: null, joinedPackIds: [], completedMissionIds: [], completedDates: [], completionCountsByPack: {} }),
+      getSessionSnapshot: () => ({ userId: null, joinedPackIds: [], completedMissionIds: [], completedDates: [], completionCountsByPack: {} }),
+      initializeSessionSnapshot() {},
+      subscribeSessionSnapshot: () => () => {},
+    },
   });
   assert.equal(renderToStaticMarkup(createElement(HomeCarouselEntry, {})), "");
 });

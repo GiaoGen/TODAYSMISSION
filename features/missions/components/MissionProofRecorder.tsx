@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import {
   completeMissionWithAudioAction,
@@ -16,11 +17,12 @@ import {
 } from "@/features/missions/model/mission-proof";
 import { localDateKey } from "@/features/calendar/model/calendar-month";
 import { createClient } from "@/lib/supabase/client";
+import { prefetchNavigationRoute, getCompletedDayRoute } from "@/features/navigation/model/navigation-prefetch";
 import styles from "./MissionActionLayer.module.css";
 
 type MissionProofRecorderProps = {
   missionId: string;
-  onCompleted: () => void;
+  onCompleted: (completedLocalDate: string) => void;
   onInteractionLockChange: (locked: boolean) => void;
 };
 
@@ -44,6 +46,7 @@ function stopStream(stream: MediaStream | null) {
 }
 
 export function MissionProofRecorder({ missionId, onCompleted, onInteractionLockChange }: MissionProofRecorderProps) {
+  const router = useRouter();
   const [state, setState] = useState<RecorderState>("idle");
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -389,7 +392,9 @@ export function MissionProofRecorder({ missionId, onCompleted, onInteractionLock
         return;
       }
       clearPreview();
-      onCompleted();
+      const completedRoute = getCompletedDayRoute(completion.completedLocalDate);
+      if (completedRoute) prefetchNavigationRoute(router, completedRoute);
+      onCompleted(completion.completedLocalDate);
     } catch {
       if (generationRef.current !== generation || missionIdRef.current !== submissionMissionId) return;
       setState("recorded");

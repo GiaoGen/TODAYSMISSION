@@ -9,7 +9,7 @@ import type { CarouselSnapshot } from "@/features/packs/model/home-carousel-stat
 import { advanceCarouselSpring } from "@/features/packs/model/carousel-spring";
 import { PACK_CLOSE_TRANSITION_TYPE, PACK_OPEN_TRANSITION_TYPE } from "@/features/packs/model/pack-transition";
 import { calendarSnapshot, clampMonth, getCalendarRange, getMonthSnapTarget, localDateKey, monthKey, monthLabel, resistMonthPosition, restoreCalendarPosition, visibleMonths } from "../model/calendar-month";
-import { getDayGalleryHref } from "../model/calendar-day-transition";
+import { getCompletedDayRoute, prefetchNavigationRoute } from "@/features/navigation/model/navigation-prefetch";
 import { calendarPose, getCalendarGeometry, type CalendarGeometry } from "../model/calendar-geometry";
 import { CalendarMonth } from "./CalendarMonth";
 import styles from "./CalendarCarousel.module.css";
@@ -55,7 +55,8 @@ export function CalendarCarousel({ data, placement, snapshot, interactionDisable
     // Prefetch only the visible month's recorded dates, not the whole history.
     const prefix = monthKey(center);
     for (const date of completedOn) {
-      if (date.startsWith(prefix)) router.prefetch(getDayGalleryHref(date));
+      const route = getCompletedDayRoute(date);
+      if (route && date.startsWith(prefix)) prefetchNavigationRoute(router, route);
     }
   }, [center, completedOn, router]);
 

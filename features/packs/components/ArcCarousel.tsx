@@ -23,6 +23,7 @@ import {
   getPackTransitionName, PACK_CLOSE_TRANSITION_TYPE, PACK_OPEN_TRANSITION_TYPE,
 } from "@/features/packs/model/pack-transition";
 import { PackDeck } from "./PackDeck";
+import { prefetchNavigationRoute } from "@/features/navigation/model/navigation-prefetch";
 
 import styles from "./ArcCarousel.module.css";
 
@@ -234,7 +235,9 @@ export function TransformArcCarousel({
 
   useEffect(() => {
     const pack = packs[activeIndex];
-    if (pack && activeIndex < count) router.prefetch(`/pack/${encodeURIComponent(pack.slug)}`);
+    if (pack && activeIndex < count) {
+      prefetchNavigationRoute(router, `/pack/${encodeURIComponent(pack.slug)}`);
+    }
   }, [activeIndex, count, packs, router]);
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {

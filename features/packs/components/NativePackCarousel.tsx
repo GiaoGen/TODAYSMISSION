@@ -13,6 +13,7 @@ import { createNativeScrollController, type NativeScrollController } from "../mo
 import { useDeckViewport } from "../model/use-deck-viewport";
 import { getPackTransitionName, PACK_CLOSE_TRANSITION_TYPE, PACK_OPEN_TRANSITION_TYPE } from "../model/pack-transition";
 import styles from "./ArcCarousel.module.css";
+import { prefetchNavigationRoute } from "@/features/navigation/model/navigation-prefetch";
 
 export function NativePackCarousel({ packs, placement = "bottom", collection = placement === "top" ? "joined" : "all", initialCarouselState, interactionDisabled = false, swappingIn = false, onOpenPack, ref }: ArcCarouselProps) {
   const router = useRouter();
@@ -113,7 +114,9 @@ export function NativePackCarousel({ packs, placement = "bottom", collection = p
   }), [count, packs]);
 
   useEffect(() => {
-    if (packs[activeIndex] && count > 0) router.prefetch(`/pack/${encodeURIComponent(packs[activeIndex].slug)}`);
+    if (packs[activeIndex] && count > 0) {
+      prefetchNavigationRoute(router, `/pack/${encodeURIComponent(packs[activeIndex].slug)}`);
+    }
   }, [activeIndex, count, packs, router]);
 
   const changeCount = (delta: number) => {

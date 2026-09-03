@@ -20,6 +20,7 @@ const componentFiles = {
   CompletedMissionsPage: "app/completed/[date]/page.tsx",
 };
 const nonTransitionSiblings = new Set(["MissionCompletionConfetti"]);
+nonTransitionSiblings.add("NavigationPrefetch");
 
 function readComponent(name) {
   const file = componentFiles[name];
