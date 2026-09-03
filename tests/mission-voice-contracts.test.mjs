@@ -91,10 +91,11 @@ test("Mission Voice Recorder uploads only to its own bucket without upsert", () 
   assert.doesNotMatch(recorder, /proof_path|mission-proofs/);
 });
 
-test("I am nervous is enabled only for authenticated joined incomplete Missions", () => {
+test("the normal incomplete action area no longer keeps Mission Voice listening controls", () => {
   assert.match(actionLayer, /currentStatus === "incomplete"/);
-  assert.match(actionLayer, /disabled={!authenticated \|\| !packJoined}/);
-  assert.match(actionLayer, /MissionVoiceListener/);
+  assert.doesNotMatch(actionLayer, /I am nervous|MissionVoiceListener|nervousOpen/);
+  assert.match(actionLayer, /MissionCompleteSlider/);
+  assert.match(actionLayer, /try another/);
   assert.match(actionLayer, /currentStatus === "completed"/);
 });
 
@@ -110,10 +111,12 @@ test("published voice repository verifies access, limits results, and returns si
   assert.doesNotMatch(listener, /autoPlay|autoplay/);
 });
 
-test("Mission switching resets nervous playback and unsubmitted recorder state", () => {
+test("Mission switching remounts the current action state and recorders still clean up", () => {
+  const packDetail = read("features/packs/components/MissionPackDetail.tsx");
   assert.match(actionLayer, /setVoiceRecorderOpen\(false\)/);
-  assert.match(actionLayer, /setNervousOpen\(false\)/);
-  assert.match(read("features/packs/components/MissionPackDetail.tsx"), /key={activeMission\.id}/);
+  assert.match(packDetail, /key={activeMission\.id}/);
+  assert.match(packDetail, /setCompletionRequestedMissionId\(null\)/);
+  assert.match(actionLayer, /selectingNext \|\| completionRequested/);
   assert.match(listener, /audio\?\.pause\(\)/);
   assert.match(recorder, /track\.stop\(\)/);
   assert.match(recorder, /URL\.revokeObjectURL/);

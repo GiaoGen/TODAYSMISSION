@@ -2,7 +2,13 @@ import type { MissionCompletionByMission } from "@/data/contracts/mission-comple
 
 export type MissionCompletionStatus = "incomplete" | "completed";
 
-export const MISSION_COMPLETION_THRESHOLD = 0.85;
+export const MISSION_COMPLETION_THRESHOLD = 0.94;
+export const MISSION_SLIDER_THUMB_SIZE = 56;
+export const MISSION_SLIDER_INSET = 6;
+
+export function getMissionSliderTravel(trackWidth: number): number {
+  return Math.max(0, trackWidth - MISSION_SLIDER_INSET * 2 - MISSION_SLIDER_THUMB_SIZE);
+}
 
 export function getInitialMissionCompletionStatuses(
   missionIds: readonly string[],

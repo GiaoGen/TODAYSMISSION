@@ -335,9 +335,21 @@ function galleryHarness({ count = 3, looping = true, modern = true, autoExpand =
     return card;
   });
   let returned = 0;
+  const activeMissionChanges = [];
   const { mountNativeMissionGallery } = load("features/packs/model/native-mission-gallery.ts", env.globals);
-  const gallery = mountNativeMissionGallery({ root: rootElement, viewport, cards, count, copies: () => copies, cardClass: "missionCard", navigateHome() { returned++; }, autoExpand });
+  const gallery = mountNativeMissionGallery({
+    root: rootElement,
+    viewport,
+    cards,
+    count,
+    copies: () => copies,
+    cardClass: "missionCard",
+    navigateHome() { returned++; },
+    autoExpand,
+    onActiveMissionChange(index) { activeMissionChanges.push(index); },
+  });
   return { ...env, rootElement, viewport, cards, gallery, complete, copies, stride, finishExpansion,
+    activeMissionChanges,
     get reads() { return reads; }, get returned() { return returned; },
     async expand() {
       gallery.expand();
@@ -347,6 +359,22 @@ function galleryHarness({ count = 3, looping = true, modern = true, autoExpand =
     },
   };
 }
+
+test("Safari Try another uses native snapping once and selects the next Mission", async () => {
+  const h = galleryHarness({ count: 3, looping: true });
+  await h.expand();
+  const selection = h.gallery.selectNext();
+  assert.equal(await h.gallery.selectNext(), false, "native motion rejects repeat selection");
+  h.viewport.completeSmooth();
+  assert.equal(await selection, true);
+  assert.equal(h.activeMissionChanges.at(-1), 1);
+  h.gallery.destroy();
+
+  const single = galleryHarness({ count: 1, looping: true });
+  await single.expand();
+  assert.equal(await single.gallery.selectNext(), false);
+  single.gallery.destroy();
+});
 
 for (const looping of [false, true]) for (const count of [1, 2, 8]) {
   test(`${looping ? "Pack" : "day"}/${count}: native gallery expands, scrolls without layout reads, and collapses from the live position`, async () => {

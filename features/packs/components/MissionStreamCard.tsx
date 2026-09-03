@@ -8,13 +8,22 @@ import styles from "./MissionStreamCard.module.css";
 
 type CardStyle = CSSProperties & { "--card-bg": string; "--card-fg": string };
 
-const MISSION_THEME_REGISTRY = {
+export type MissionThemeAppearance = {
+  background: string;
+  foreground: string;
+};
+
+export const MISSION_THEME_REGISTRY = {
   coral: { background: "#e5392d", foreground: "#111111" },
   blue: { background: "#1457c9", foreground: "#f3e8c8" },
   yellow: { background: "#f1c933", foreground: "#111111" },
   ink: { background: "#111111", foreground: "#f3e8c8" },
   paper: { background: "#f3e8c8", foreground: "#111111" },
-} satisfies Record<MissionThemeKey, { background: string; foreground: string }>;
+} satisfies Record<MissionThemeKey, MissionThemeAppearance>;
+
+export function getMissionThemeAppearance(themeKey: MissionThemeKey): MissionThemeAppearance {
+  return MISSION_THEME_REGISTRY[themeKey];
+}
 
 const MISSION_ARTWORK_REGISTRY = {
   circle: "●",
@@ -29,7 +38,7 @@ export const MissionStreamCard = memo(function MissionStreamCard({ mission, numb
   mission: MissionSummary;
   number: number;
 }) {
-  const theme = MISSION_THEME_REGISTRY[mission.themeKey];
+  const theme = getMissionThemeAppearance(mission.themeKey);
   const label = String(number).padStart(2, "0");
   const style: CardStyle = { "--card-bg": theme.background, "--card-fg": theme.foreground };
   return (
@@ -47,6 +56,28 @@ export const MissionStreamCard = memo(function MissionStreamCard({ mission, numb
           <div className={styles.tag}>{mission.tag}</div>
           <div className={styles.code}>FIELD<br />{mission.code}</div>
         </div>
+      </div>
+    </article>
+  );
+});
+
+export const MissionCompletionCard = memo(function MissionCompletionCard({ mission, number }: {
+  mission: MissionSummary;
+  number: number;
+}) {
+  const theme = getMissionThemeAppearance(mission.themeKey);
+  const label = String(number).padStart(2, "0");
+  const style: CardStyle = { "--card-bg": theme.background, "--card-fg": theme.foreground };
+
+  return (
+    <article aria-label={`${mission.title} completed`} className={`${styles.mission} ${styles.completionMission}`} style={style}>
+      <div aria-hidden="true" className={styles.completionInner}>
+        <span className={styles.completionNumber}>MISSION {label}</span>
+        <span className={styles.completionArtwork}>{MISSION_ARTWORK_REGISTRY[mission.artworkKey]}</span>
+        <span className={styles.completionWord}>DONE</span>
+        <svg className={styles.completionCheck} fill="none" viewBox="0 0 24 24">
+          <path d="M20 6 9 17l-5-5" />
+        </svg>
       </div>
     </article>
   );

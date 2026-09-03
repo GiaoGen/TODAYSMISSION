@@ -39,8 +39,14 @@ export function mountNativeMissionGallery({
   let lastPosition = 0;
   let closeFrame = 0;
   let readyTimer = 0;
+  let nextSelectionResolve: ((selected: boolean) => void) | null = null;
   const isDay = root.dataset.kind === "day";
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const finishNextSelection = (selected: boolean) => {
+    const resolve = nextSelectionResolve;
+    nextSelectionResolve = null;
+    resolve?.(selected);
+  };
 
   const updateCollapsedOffsets = () => {
     const left = viewport.scrollLeft;
@@ -77,6 +83,7 @@ export function mountNativeMissionGallery({
       onSettled: ({ index, position }) => {
         lastPosition = position;
         onActiveMissionChange?.(index);
+        finishNextSelection(true);
       },
     });
     if (!interactive) updateCollapsedOffsets();
@@ -89,6 +96,7 @@ export function mountNativeMissionGallery({
     if (disposed || closing || (expansionStarted && !interactive)) return;
     closing = true;
     interactive = false;
+    finishNextSelection(false);
     controller?.freeze();
     updateCollapsedOffsets();
     root.dataset.phase = "closing";
@@ -106,6 +114,7 @@ export function mountNativeMissionGallery({
     close();
   };
   const onKeyDown = (event: KeyboardEvent) => {
+    if (event.target instanceof Element && event.target.closest("[data-gallery-action]")) return;
     if (event.key === "Escape" && (interactive || !expansionStarted)) { event.preventDefault(); close(); }
     else if (!interactive) return;
     else if (count > 1 && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
@@ -114,6 +123,23 @@ export function mountNativeMissionGallery({
       controller?.selectSlot(base + Math.round(controller.position()) + (event.key === "ArrowRight" ? 1 : -1));
     }
   };
+  const selectNext = (): Promise<boolean> => new Promise((resolve) => {
+    if (
+      disposed ||
+      closing ||
+      !interactive ||
+      count <= 1 ||
+      nextSelectionResolve ||
+      !controller?.canActivate()
+    ) {
+      resolve(false);
+      return;
+    }
+
+    nextSelectionResolve = resolve;
+    const base = Math.floor(measuredCopies / 2) * count;
+    controller.selectSlot(base + Math.round(controller.position()) + 1);
+  });
 
   root.dataset.phase = "collapsed";
   measure();
@@ -148,6 +174,7 @@ export function mountNativeMissionGallery({
   return {
     expand,
     measure,
+    selectNext,
     whenIdle(work: () => void) {
       const apply = () => { work(); measureNow(); };
       if (controller) controller.whenIdle(apply);
@@ -155,6 +182,7 @@ export function mountNativeMissionGallery({
     },
     destroy() {
       disposed = true;
+      finishNextSelection(false);
       observer.disconnect();
       controller?.destroy();
       cancelAnimationFrame(expandFrame);

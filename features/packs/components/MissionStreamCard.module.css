@@ -62,6 +62,66 @@
 .tag { font-size: calc(10 * var(--stream-unit, 1px)); line-height: 1.35; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; opacity: .7; }
 .code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(9 * var(--stream-unit, 1px)); line-height: 1.45; letter-spacing: .12em; text-transform: uppercase; opacity: .48; text-align: right; }
 
+.completionMission::before {
+  width: calc(240 * var(--stream-unit, 1px));
+  height: calc(240 * var(--stream-unit, 1px));
+  right: calc(-72 * var(--stream-unit, 1px));
+  top: calc(-82 * var(--stream-unit, 1px));
+  opacity: .13;
+}
+
+.completionMission::after {
+  width: calc(280 * var(--stream-unit, 1px));
+  height: calc(42 * var(--stream-unit, 1px));
+  left: calc(-42 * var(--stream-unit, 1px));
+  bottom: calc(72 * var(--stream-unit, 1px));
+  opacity: .12;
+}
+
+.completionInner {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: calc(28 * var(--stream-unit, 1px));
+}
+
+.completionNumber {
+  position: absolute;
+  top: calc(28 * var(--stream-unit, 1px));
+  left: calc(27 * var(--stream-unit, 1px));
+  font-size: calc(11 * var(--stream-unit, 1px));
+  font-weight: 800;
+  letter-spacing: .14em;
+  opacity: .72;
+}
+
+.completionArtwork {
+  font-size: calc(132 * var(--stream-unit, 1px));
+  font-weight: 900;
+  line-height: 1;
+  opacity: .18;
+}
+
+.completionWord {
+  position: absolute;
+  font-size: calc(52 * var(--stream-unit, 1px));
+  font-weight: 900;
+  letter-spacing: -.045em;
+}
+
+.completionCheck {
+  position: absolute;
+  right: calc(27 * var(--stream-unit, 1px));
+  bottom: calc(26 * var(--stream-unit, 1px));
+  width: calc(34 * var(--stream-unit, 1px));
+  height: calc(34 * var(--stream-unit, 1px));
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 @media (max-width: 700px) {
   .mission { border-radius: calc(23 * var(--stream-mobile-unit, 1px)); }
   .inner { padding: calc(24 * var(--stream-mobile-unit, 1px)) calc(23 * var(--stream-mobile-unit, 1px)) calc(23 * var(--stream-mobile-unit, 1px)); }

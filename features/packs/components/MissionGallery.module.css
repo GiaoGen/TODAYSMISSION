@@ -66,6 +66,32 @@
   transition: opacity 120ms ease-out;
 }
 
+.packProgress {
+  position: absolute;
+  z-index: 30;
+  top: max(20px, env(safe-area-inset-top));
+  right: max(24px, env(safe-area-inset-right));
+  margin: 0;
+  color: #111;
+  font-size: clamp(14px, 1.2vw, 18px);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: .04em;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease-out var(--stream-expand-delay);
+}
+
+.root[data-phase="expanding"] .packProgress,
+.root[data-phase="settled"] .packProgress {
+  opacity: 1;
+}
+
+.root[data-phase="closing"] .packProgress {
+  opacity: 0;
+  transition-delay: 0ms;
+}
+
 .root:not([data-phase="collapsed"]) .waitingAction {
   opacity: 0;
   pointer-events: none;
@@ -93,7 +119,40 @@
 }
 
 .scrollViewport { display: contents; }
-.missionMotion { width: 100%; height: 100%; pointer-events: auto; }
+.missionMotion {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  pointer-events: auto;
+}
+
+.cardFaces {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: calc(26 * var(--stream-unit, 1px));
+  box-shadow:
+    0 calc(26 * var(--stream-unit, 1px)) calc(58 * var(--stream-unit, 1px)) rgb(35 29 17 / 13%),
+    0 calc(4 * var(--stream-unit, 1px)) calc(10 * var(--stream-unit, 1px)) rgb(35 29 17 / 5%);
+  overflow: hidden;
+}
+
+.cardFaces > article {
+  box-shadow: none;
+}
+
+.completionFace {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  transform: translate3d(0, var(--completion-card-y, -100%), 0);
+  pointer-events: none;
+  will-change: transform;
+}
+
+.missionCard[data-completion-state="completed"] .completionFace {
+  transform: translate3d(0, 0, 0);
+}
 
 /* Safari alone gets a real scroller. The outer li is an untransformed snap
    target; its inner motion layer owns expansion/collapse independently. */
@@ -234,6 +293,7 @@
     --mission-card-width: clamp(210px, min(70vw, 46dvh), 320px);
     --detail-gap: clamp(18px, 5.5vw, 24px);
   }
+  .cardFaces { border-radius: calc(23 * var(--stream-mobile-unit, 1px)); }
 }
 
 @media (min-width: 600px) and (max-width: 899px) and (orientation: portrait),
@@ -262,6 +322,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .completionFace { will-change: auto; }
+  .packProgress { transition-duration: 0ms; transition-delay: 0ms; }
   .root[data-native-scroll="true"][data-phase] .missionMotion {
     transition: opacity 100ms linear;
     transition-delay: 0ms;

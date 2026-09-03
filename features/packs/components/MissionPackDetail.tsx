@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import type { MissionVoiceStatusByMission } from "@/data/contracts/mission-voice";
 import type { PackDetail } from "@/data/contracts/pack-summary";
@@ -8,6 +8,7 @@ import type { MissionCompletionStatus } from "@/features/missions/model/mission-
 import { getCompletedMissionCount } from "@/features/packs/model/pack-progress";
 import { MissionActionLayer } from "@/features/missions/components/MissionActionLayer";
 import { MissionGallery } from "./MissionGallery";
+import type { MissionCompletionMotionHandle } from "./MissionGallery";
 import { PackMembershipAction } from "./PackMembershipAction";
 
 type MissionPackDetailProps = {
@@ -31,6 +32,10 @@ export function MissionPackDetail({
   const [missionCompletionStatuses, setMissionCompletionStatuses] = useState(initialMissionCompletionStatuses);
   const [missionVoiceStatuses, setMissionVoiceStatuses] = useState(initialMissionVoiceStatuses);
   const [completionRequestedMissionId, setCompletionRequestedMissionId] = useState<string | null>(null);
+  const [selectingNext, setSelectingNext] = useState(false);
+  const selectNextMissionRef = useRef<(() => Promise<boolean>) | null>(null);
+  const completionMotionRef = useRef<MissionCompletionMotionHandle | null>(null);
+  const selectingNextRef = useRef(false);
   const activeMission = pack.missions.find((mission) => mission.id === activeMissionId) ?? pack.missions[0];
   const currentStatus = activeMission
     ? missionCompletionStatuses[activeMission.id] ?? "incomplete"
@@ -56,13 +61,48 @@ export function MissionPackDetail({
     }));
   };
 
+  const handleSelectNext = async () => {
+    const selectNext = selectNextMissionRef.current;
+    if (!selectNext || selectingNextRef.current) return;
+
+    selectingNextRef.current = true;
+    setSelectingNext(true);
+    try {
+      await selectNext();
+    } finally {
+      selectingNextRef.current = false;
+      setSelectingNext(false);
+    }
+  };
+
+  const missionAction = activeMission && gallerySettled ? (
+    <MissionActionLayer
+      key={activeMission.id}
+      activeMission={activeMission}
+      completionRequested={completionRequestedMissionId === activeMission.id}
+      currentStatus={currentStatus}
+      canSelectNext={pack.missions.length > 1}
+      selectingNext={selectingNext}
+      voiceSubmitted={missionVoiceStatuses[activeMission.id]?.submitted ?? false}
+      onCompletionRequested={() => setCompletionRequestedMissionId(activeMission.id)}
+      onCompletionProgressChange={(progress) => completionMotionRef.current?.setProgress(activeMission.id, progress)}
+      onCompleted={handleCompleted}
+      onSelectNext={() => void handleSelectNext()}
+      onVoiceSubmitted={handleVoiceSubmitted}
+    />
+  ) : null;
+
   return (
     <>
       <MissionGallery
         id={pack.id}
         title={pack.title}
         hero={pack}
+        completedMissionCount={packJoined ? completedMissionCount : undefined}
+        completionMotionRef={completionMotionRef}
         missions={pack.missions}
+        missionCompletionStatuses={missionCompletionStatuses}
+        missionAction={missionAction}
         expandMissions={packJoined}
         waitingAction={!packJoined ? (
           <PackMembershipAction
@@ -74,23 +114,10 @@ export function MissionPackDetail({
         ) : null}
         onExpansionSettled={() => setGallerySettled(true)}
         onActiveMissionChange={handleActiveMissionChange}
+        onSelectNextReady={(selectNext) => {
+          selectNextMissionRef.current = selectNext;
+        }}
       />
-      {activeMission && gallerySettled ? (
-        <MissionActionLayer
-          key={activeMission.id}
-          activeMission={activeMission}
-          authenticated={authenticated}
-          packJoined={packJoined}
-          completionRequested={completionRequestedMissionId === activeMission.id}
-          currentStatus={currentStatus}
-          completedMissionCount={completedMissionCount}
-          missionCount={pack.missions.length}
-          voiceSubmitted={missionVoiceStatuses[activeMission.id]?.submitted ?? false}
-          onCompletionRequested={() => setCompletionRequestedMissionId(activeMission.id)}
-          onCompleted={handleCompleted}
-          onVoiceSubmitted={handleVoiceSubmitted}
-        />
-      ) : null}
     </>
   );
 }

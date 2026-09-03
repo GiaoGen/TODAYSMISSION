@@ -126,7 +126,8 @@ test("actual day gallery renders exactly the day's card count, never loop copies
     assert.deepEqual([...track.matchAll(/data-mission-id="([^"]+)"/g)].map(match => match[1]), plain(day.missions.map(mission => mission.id)));
     assert.doesNotMatch(html, /<img|class="cover"/);
     assert.doesNotMatch(html, /class="hero"/, "the real first card carries the transition, without a duplicate overlay");
-    assert.equal((html.match(/<article\b/g) ?? []).length, day.missions.length);
+    assert.equal((html.match(/<article\b/g) ?? []).length, day.missions.length * 2);
+    assert.equal((html.match(/aria-label="[^"]+ completed"/g) ?? []).length, day.missions.length);
   }
 });
 
@@ -357,6 +358,8 @@ function galleryHarness(count, { reduced = false, saved = null, looping = false,
   let capture = null;
   let returned = saved;
   let settled = 0;
+  let selectNext = null;
+  const activeMissionChanges = [];
   let finishCollapse;
   const animationFinished = new Promise(resolve => { finishCollapse = resolve; });
   let finishExpansion;
@@ -389,7 +392,8 @@ function galleryHarness(count, { reduced = false, saved = null, looping = false,
     rootRef: { current: root }, trackRef: { current: track }, missionRefs: { current: cards },
     primaryCopyRef: { current: Math.floor(copies / 2) }, measureRef: { current: null },
     missionIdsRef: { current: Array.from({ length: count }, (_, index) => `mission-${index}`) },
-    onActiveMissionChangeRef: { current: null }, onExpansionSettledRef: { current: () => { settled++; } }, activeMissionIdRef: { current: null },
+    onActiveMissionChangeRef: { current: missionId => activeMissionChanges.push(missionId) }, onExpansionSettledRef: { current: () => { settled++; } }, activeMissionIdRef: { current: null },
+    onSelectNextReadyRef: { current: selector => { selectNext = selector; } },
     expansionRequestedRef: { current: expansionRequested }, requestExpansionRef: { current: null },
     missionCount: count, looping, id: looping ? "mock-pack-01" : dayTransitions.getDayGalleryId("2026-08-28"),
     completedDate: looping ? undefined : "2026-08-28",
@@ -412,9 +416,10 @@ function galleryHarness(count, { reduced = false, saved = null, looping = false,
     pending.forEach(fn => fn(now));
   };
   return {
-    root, track, cards, env, frames, timers, listeners, navigations, cleanup, frame, finishCollapse, finishExpansion,
+    root, track, cards, env, frames, timers, listeners, navigations, cleanup, frame, finishCollapse, finishExpansion, activeMissionChanges,
     returned: () => returned,
     settled: () => settled,
+    selectNext: () => selectNext?.() ?? Promise.resolve(false),
     async expand() {
       env.requestExpansionRef.current?.();
       frame(); finishExpansion();
@@ -449,6 +454,18 @@ test("Chrome Pack cover waiting stage can exit without distributing Missions", a
   gallery.finishCollapse();
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(gallery.navigations.length, 1);
+  gallery.cleanup();
+});
+
+test("Chrome Try another uses the live snap driver once and selects the next Mission", async () => {
+  const gallery = galleryHarness(3, { looping: true });
+  await gallery.expand();
+  const selection = gallery.selectNext();
+  assert.equal(gallery.root.dataset.moving, "true");
+  assert.equal(await gallery.selectNext(), false, "a moving Gallery rejects repeat selection");
+  for (let frame = 0; frame < 240 && gallery.root.dataset.moving === "true"; frame++) gallery.frame();
+  assert.equal(await selection, true);
+  assert.equal(gallery.activeMissionChanges.at(-1), "mission-1");
   gallery.cleanup();
 });
 

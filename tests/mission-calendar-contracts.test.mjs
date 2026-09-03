@@ -14,6 +14,10 @@ const calendarRepository = read("data/repositories/get-mission-calendar.ts");
 const historyRepository = read("data/repositories/get-completed-missions.ts");
 const actions = read("features/missions/actions.ts");
 const proofRecorder = read("features/missions/components/MissionProofRecorder.tsx");
+const actionLayer = read("features/missions/components/MissionActionLayer.tsx");
+const slider = read("features/missions/components/MissionCompleteSlider.tsx");
+const gallery = read("features/packs/components/MissionGallery.tsx");
+const galleryCss = read("features/packs/components/MissionGallery.module.css");
 const home = read("app/page.tsx");
 const completedPage = read("app/completed/[date]/page.tsx");
 const packDetail = read("features/packs/components/MissionPackDetail.tsx");
@@ -85,8 +89,30 @@ test("Pack progress is derived from completion state and updates without persist
   const after = { ...before, two: "completed" };
   assert.equal(getCompletedMissionCount(after), getCompletedMissionCount(before) + 1);
   assert.match(packDetail, /getCompletedMissionCount\(missionCompletionStatuses\)/);
-  assert.match(packDetail, /completedMissionCount=\{completedMissionCount\}/);
+  assert.match(packDetail, /completedMissionCount=\{packJoined \? completedMissionCount : undefined\}/);
+  assert.match(read("features/packs/components/MissionGallery.tsx"), /className=\{styles\.packProgress\}/);
   assert.doesNotMatch(packDetail, /pack_progress|progress_table|fetch\(/i);
+});
+
+test("slider progress directly drives the matching completion face and resets on cancellation", () => {
+  assert.match(slider, /onProgressChangeRef\.current\(next\)/);
+  assert.match(slider, /animateTo\(finish \? 1 : 0, finish\)/);
+  assert.match(gallery, /data-completion-mission-id=\{mission\.id\}/);
+  assert.match(gallery, /setProperty\("--completion-card-y"/);
+  assert.match(galleryCss, /var\(--completion-card-y, -100%\)/);
+  assert.match(gallery, /missionCompletionStatuses\?\.\[mission\.id\] === "completed"/);
+});
+
+test("completion proof keeps real recording, preview and upload in the shared capsule", () => {
+  assert.match(proofRecorder, /navigator\.mediaDevices\.getUserMedia/);
+  assert.match(proofRecorder, /new MediaRecorder/);
+  assert.match(proofRecorder, /createAnalyser\(\)/);
+  assert.match(proofRecorder, /className=\{styles\.proofWaveform\}/);
+  assert.match(proofRecorder, /Upload recording/);
+  assert.match(proofRecorder, /Play recording/);
+  assert.match(proofRecorder, /\.from\("mission-proofs"\)/);
+  assert.match(proofRecorder, /completeMissionWithAudioAction/);
+  assert.match(actionLayer, /CompletionProofTransition/);
 });
 
 test("homepage passes real calendar data while preserving the existing carousel entry", () => {

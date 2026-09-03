@@ -4,7 +4,10 @@ import test from "node:test";
 import {
   getCompletionOutcome,
   getInitialMissionCompletionStatuses,
+  getMissionSliderTravel,
   MISSION_COMPLETION_THRESHOLD,
+  MISSION_SLIDER_INSET,
+  MISSION_SLIDER_THUMB_SIZE,
 } from "../features/missions/model/mission-action-state.ts";
 import { getPackLoginDestination } from "../features/packs/model/pack-action-state.ts";
 import {
@@ -30,6 +33,18 @@ test("initial Mission completion statuses map missing and completed records", ()
 test("completion requests audio proof at the threshold", () => {
   assert.equal(getCompletionOutcome(MISSION_COMPLETION_THRESHOLD), "request");
   assert.equal(getCompletionOutcome(MISSION_COMPLETION_THRESHOLD - 0.01), "reset");
+});
+
+test("completion slider travel keeps the circular thumb fully inside the track", () => {
+  assert.equal(MISSION_SLIDER_THUMB_SIZE, 56);
+  assert.equal(MISSION_SLIDER_INSET, 6);
+  assert.equal(getMissionSliderTravel(240), 172);
+  assert.equal(getMissionSliderTravel(MISSION_SLIDER_THUMB_SIZE), 0);
+  assert.equal(0 * getMissionSliderTravel(240), 0);
+  assert.equal(
+    MISSION_SLIDER_INSET + getMissionSliderTravel(240) + MISSION_SLIDER_THUMB_SIZE + MISSION_SLIDER_INSET,
+    240,
+  );
 });
 
 test("Guest Pack Take uses the current Pack login destination", () => {

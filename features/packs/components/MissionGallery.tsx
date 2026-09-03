@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, ReactNode, RefObject } from "react";
 import { useLayoutEffect, useRef, useState, ViewTransition } from "react";
 import { useRouter } from "next/navigation";
 
@@ -10,6 +10,7 @@ import { useSafariScroll } from "@/features/packs/model/use-safari-scroll";
 import { getNativeCopyCount, isSafariUserAgent } from "@/features/packs/model/safari-scroll";
 import { mountNativeMissionGallery } from "@/features/packs/model/native-mission-gallery";
 import type { MissionSummary, PackSummary } from "@/data/contracts/pack-summary";
+import type { MissionCompletionStatus } from "@/features/missions/model/mission-action-state";
 import { CALENDAR_DAY_TRANSITION_CLASSES, createDirectDayReturnState, getDayTransitionName } from "@/features/calendar/model/calendar-day-transition";
 import { carouselSettingsStore } from "@/features/packs/model/carousel-settings";
 import { getGalleryCopyCount, getMissionStreamMetrics } from "@/features/packs/model/mission-gallery-layout";
@@ -24,7 +25,7 @@ import {
 } from "@/features/packs/model/pack-transition";
 
 import { PackDeckCover } from "./PackDeck";
-import { MissionStreamCard } from "./MissionStreamCard";
+import { MissionCompletionCard, MissionStreamCard } from "./MissionStreamCard";
 import styles from "./MissionGallery.module.css";
 
 const EXPANSION_SETTLE_MS = 1600;
@@ -60,9 +61,18 @@ type MissionGalleryProps = {
   missions: readonly MissionSummary[];
   completedDate?: string;
   expandMissions?: boolean;
+  completedMissionCount?: number;
+  completionMotionRef?: RefObject<MissionCompletionMotionHandle | null>;
+  missionCompletionStatuses?: Readonly<Record<string, MissionCompletionStatus>>;
+  missionAction?: ReactNode;
   waitingAction?: ReactNode;
   onExpansionSettled?: () => void;
   onActiveMissionChange?: (missionId: string) => void;
+  onSelectNextReady?: (selectNext: (() => Promise<boolean>) | null) => void;
+};
+
+export type MissionCompletionMotionHandle = {
+  setProgress: (missionId: string, progress: number) => void;
 };
 
 function clamp(value: number, minimum: number, maximum: number) {
@@ -74,6 +84,7 @@ function isPackSummary(hero: MissionSummary | PackSummary): hero is PackSummary 
 }
 
 function MissionArtwork({
+  completed,
   primaryCopy,
   mission,
   refIndex,
@@ -81,6 +92,7 @@ function MissionArtwork({
   slot,
   dayTransitionName,
 }: {
+  completed: boolean;
   primaryCopy: boolean;
   mission: MissionSummary;
   refIndex: number;
@@ -91,12 +103,21 @@ function MissionArtwork({
   const style: MissionCardStyle = {
     "--mission-delay": `${slot * 36}ms`,
   };
-  const artwork = <MissionStreamCard mission={mission} number={slot + 1} />;
+  const artwork = (
+    <div className={styles.cardFaces}>
+      <MissionStreamCard mission={mission} number={slot + 1} />
+      <div aria-hidden={!completed} className={styles.completionFace}>
+        <MissionCompletionCard mission={mission} number={slot + 1} />
+      </div>
+    </div>
+  );
 
   return (
     <li
       aria-hidden={primaryCopy ? undefined : true}
       className={styles.missionCard}
+      data-completion-state={completed ? "completed" : "incomplete"}
+      data-completion-mission-id={mission.id}
       ref={(element) => setRef(refIndex, element)}
       style={style}
     >
@@ -118,9 +139,14 @@ export function MissionGallery({
   missions,
   completedDate,
   expandMissions = true,
+  completedMissionCount,
+  completionMotionRef,
+  missionCompletionStatuses,
+  missionAction,
   waitingAction,
   onExpansionSettled,
   onActiveMissionChange,
+  onSelectNextReady,
 }: MissionGalleryProps) {
   const router = useRouter();
   const nativeScrolling = useSafariScroll();
@@ -160,6 +186,7 @@ export function MissionGallery({
   const missionIdsRef = useRef(missions.map((mission) => mission.id));
   const onActiveMissionChangeRef = useRef(onActiveMissionChange);
   const onExpansionSettledRef = useRef(onExpansionSettled);
+  const onSelectNextReadyRef = useRef(onSelectNextReady);
   const activeMissionIdRef = useRef<string | null>(null);
   const expansionRequestedRef = useRef(expandMissions);
   const requestExpansionRef = useRef<(() => void) | null>(null);
@@ -168,7 +195,8 @@ export function MissionGallery({
     missionIdsRef.current = missions.map((mission) => mission.id);
     onActiveMissionChangeRef.current = onActiveMissionChange;
     onExpansionSettledRef.current = onExpansionSettled;
-  }, [missions, onActiveMissionChange, onExpansionSettled]);
+    onSelectNextReadyRef.current = onSelectNextReady;
+  }, [missions, onActiveMissionChange, onExpansionSettled, onSelectNextReady]);
 
   useLayoutEffect(() => {
     expansionRequestedRef.current = expandMissions;
@@ -179,6 +207,26 @@ export function MissionGallery({
     primaryCopyRef.current = primaryCopy;
     measureRef.current?.();
   }, [primaryCopy, streamMetrics.cardWidth, streamMetrics.gap]);
+
+  useLayoutEffect(() => {
+    if (!completionMotionRef) return;
+
+    const handle: MissionCompletionMotionHandle = {
+      setProgress: (missionId, value) => {
+        const progress = clamp(value, 0, 1);
+        for (const card of missionRefs.current) {
+          if (!card || card.dataset.completionMissionId !== missionId) continue;
+          card.dataset.completionActive = progress > 0 ? "true" : "false";
+          card.style.setProperty("--completion-card-y", `${(progress - 1) * 100}%`);
+        }
+      },
+    };
+    completionMotionRef.current = handle;
+
+    return () => {
+      if (completionMotionRef.current === handle) completionMotionRef.current = null;
+    };
+  }, [completionMotionRef]);
 
   useLayoutEffect(() => {
     const root = rootRef.current;
@@ -221,11 +269,13 @@ export function MissionGallery({
       measureRef.current = native.measure;
       nativeIdleRef.current = native.whenIdle;
       requestExpansionRef.current = native.expand;
+      onSelectNextReadyRef.current?.(native.selectNext);
       if (expansionRequestedRef.current) native.expand();
       return () => {
         measureRef.current = null;
         nativeIdleRef.current = null;
         requestExpansionRef.current = null;
+        onSelectNextReadyRef.current?.(null);
         native.destroy();
       };
     }
@@ -250,6 +300,7 @@ export function MissionGallery({
     let pointerVelocity = 0;
     let pointerTravel = 0;
     let pointerCaptured = false;
+    let nextSelectionResolve: ((selected: boolean) => void) | null = null;
     let suppressBlankClickUntil = 0;
     let interactive = false;
 
@@ -286,10 +337,16 @@ export function MissionGallery({
       return wrappedBy;
     };
 
+    const finishNextSelection = (selected: boolean) => {
+      nextSelectionResolve?.(selected);
+      nextSelectionResolve = null;
+    };
+
     const stopAnimation = () => {
       cancelAnimationFrame(animationFrame);
       animationFrame = 0;
       root.dataset.moving = "false";
+      finishNextSelection(false);
     };
 
     const boundPosition = (value: number) => looping ? value
@@ -303,14 +360,20 @@ export function MissionGallery({
     const nearestSnap = (value: number) => stride > 0
       ? boundPosition(origin + Math.round((value - origin) / stride) * stride) : origin;
 
-    const settleAt = (requestedTarget: number, initialVelocity = 0) => {
+    const settleAt = (
+      requestedTarget: number,
+      initialVelocity = 0,
+      onSettled?: (selected: boolean) => void,
+    ) => {
       stopAnimation();
+      nextSelectionResolve = onSettled ?? null;
       const boundedTarget = boundPosition(requestedTarget);
 
       if (prefersReducedMotion) {
         position = boundedTarget;
         normalizePosition();
         renderTrack();
+        finishNextSelection(true);
         return;
       }
 
@@ -338,6 +401,7 @@ export function MissionGallery({
           renderTrack();
           animationFrame = 0;
           root.dataset.moving = "false";
+          finishNextSelection(true);
           return;
         }
 
@@ -448,6 +512,7 @@ export function MissionGallery({
     };
 
     const onPointerDown = (event: PointerEvent) => {
+      if (event.target instanceof Element && event.target.closest("[data-gallery-action]")) return;
       if (!interactive || event.button !== 0 || pointerId !== null) {
         return;
       }
@@ -515,6 +580,7 @@ export function MissionGallery({
     };
 
     const onWheel = (event: WheelEvent) => {
+      if (event.target instanceof Element && event.target.closest("[data-gallery-action]")) return;
       if (!interactive || missionCount === 1) {
         return;
       }
@@ -538,6 +604,7 @@ export function MissionGallery({
     };
 
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.target instanceof Element && event.target.closest("[data-gallery-action]")) return;
       if ((interactive || !expansionStarted) && event.key === "Escape") {
         event.preventDefault();
         closeGallery();
@@ -590,6 +657,14 @@ export function MissionGallery({
       });
     };
 
+    const selectNext = (): Promise<boolean> => new Promise((resolve) => {
+      if (!interactive || missionCount <= 1 || pointerId !== null || root.dataset.moving === "true") {
+        resolve(false);
+        return;
+      }
+      settleAt(nearestSnap(position) - stride, 0, resolve);
+    });
+
     measureRef.current = measure;
     measure();
     const observer = new ResizeObserver(measure);
@@ -628,12 +703,14 @@ export function MissionGallery({
       }
     };
     requestExpansionRef.current = startExpansion;
+    onSelectNextReadyRef.current?.(selectNext);
     if (expansionRequestedRef.current) startExpansion();
 
     return () => {
       disposed = true;
       measureRef.current = null;
       requestExpansionRef.current = null;
+      onSelectNextReadyRef.current?.(null);
       observer.disconnect();
       stopAnimation();
       cancelAnimationFrame(expandFrame);
@@ -693,6 +770,15 @@ export function MissionGallery({
           </div>
         ) : null}
 
+        {!completedDate && completedMissionCount !== undefined ? (
+          <p
+            aria-label={`${completedMissionCount} of ${missionCount} missions completed`}
+            className={styles.packProgress}
+          >
+            {completedMissionCount}/{missionCount}
+          </p>
+        ) : null}
+
         <div className={styles.scrollViewport} ref={scrollRef}>
           <ol aria-label="Missions" className={styles.track} ref={trackRef}>
           {Array.from({ length: copies }, (_, copyIndex) =>
@@ -701,6 +787,7 @@ export function MissionGallery({
 
               return (
                 <MissionArtwork
+                  completed={completedDate !== undefined || missionCompletionStatuses?.[mission.id] === "completed"}
                   primaryCopy={copyIndex === primaryCopy}
                   key={`${copyIndex}-${mission.id}`}
                   mission={mission}
@@ -716,6 +803,7 @@ export function MissionGallery({
           )}
           </ol>
         </div>
+        {missionAction ? <div data-gallery-action>{missionAction}</div> : null}
       </section>
     </ViewTransition>
   );
