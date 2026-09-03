@@ -19,6 +19,7 @@ const componentFiles = {
   MissionActionLayer: "features/missions/components/MissionActionLayer.tsx",
   CompletedMissionsPage: "app/completed/[date]/page.tsx",
 };
+const nonTransitionSiblings = new Set(["MissionCompletionConfetti"]);
 
 function readComponent(name) {
   const file = componentFiles[name];
@@ -74,6 +75,7 @@ function routeBoundaries(componentName, route = []) {
     const element = ts.isJsxElement(node) ? node.openingElement : node;
     const name = element.tagName.getText();
     if (name === "ViewTransition") return [{ owner: componentName, path, element }];
+    if (nonTransitionSiblings.has(name)) return [];
     // A non-animated sibling (the menu) is fine. A host enclosing a wheel isn't.
     if (/^[a-z]/.test(name) && !containsTransition(node)) return [];
     assert.doesNotMatch(name, /^[a-z]/,

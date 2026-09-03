@@ -61,6 +61,7 @@ type MissionGalleryProps = {
   missions: readonly MissionSummary[];
   completedDate?: string;
   expandMissions?: boolean;
+  interactionLocked?: boolean;
   completedMissionCount?: number;
   completionMotionRef?: RefObject<MissionCompletionMotionHandle | null>;
   missionCompletionStatuses?: Readonly<Record<string, MissionCompletionStatus>>;
@@ -139,6 +140,7 @@ export function MissionGallery({
   missions,
   completedDate,
   expandMissions = true,
+  interactionLocked = false,
   completedMissionCount,
   completionMotionRef,
   missionCompletionStatuses,
@@ -513,7 +515,7 @@ export function MissionGallery({
 
     const onPointerDown = (event: PointerEvent) => {
       if (event.target instanceof Element && event.target.closest("[data-gallery-action]")) return;
-      if (!interactive || event.button !== 0 || pointerId !== null) {
+      if (root.dataset.interactionLocked === "true" || !interactive || event.button !== 0 || pointerId !== null) {
         return;
       }
 
@@ -581,7 +583,7 @@ export function MissionGallery({
 
     const onWheel = (event: WheelEvent) => {
       if (event.target instanceof Element && event.target.closest("[data-gallery-action]")) return;
-      if (!interactive || missionCount === 1) {
+      if (root.dataset.interactionLocked === "true" || !interactive || missionCount === 1) {
         return;
       }
 
@@ -611,6 +613,7 @@ export function MissionGallery({
         return;
       }
       if (
+        root.dataset.interactionLocked === "true" ||
         !interactive ||
         missionCount === 1 ||
         (event.key !== "ArrowLeft" && event.key !== "ArrowRight")
@@ -658,7 +661,7 @@ export function MissionGallery({
     };
 
     const selectNext = (): Promise<boolean> => new Promise((resolve) => {
-      if (!interactive || missionCount <= 1 || pointerId !== null || root.dataset.moving === "true") {
+      if (root.dataset.interactionLocked === "true" || !interactive || missionCount <= 1 || pointerId !== null || root.dataset.moving === "true") {
         resolve(false);
         return;
       }
@@ -750,6 +753,7 @@ export function MissionGallery({
         data-moving="false"
         data-phase="collapsed"
         data-kind={completedDate ? "day" : "pack"}
+        data-interaction-locked={interactionLocked}
         data-native-scroll={nativeScrolling}
         data-single={missionCount === 1}
         style={streamStyle}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import {
   completeMissionWithAudioAction,
@@ -21,9 +21,10 @@ import styles from "./MissionActionLayer.module.css";
 type MissionProofRecorderProps = {
   missionId: string;
   onCompleted: () => void;
+  onInteractionLockChange: (locked: boolean) => void;
 };
 
-type RecorderState = "idle" | "recording" | "recorded" | "submitting";
+type RecorderState = "idle" | "requesting" | "recording" | "recorded" | "submitting";
 
 const WAVEFORM_BAR_COUNT = 34;
 
@@ -38,7 +39,11 @@ function recordingError(error: unknown): string {
   return "We couldn't start recording. Please try again.";
 }
 
-export function MissionProofRecorder({ missionId, onCompleted }: MissionProofRecorderProps) {
+function stopStream(stream: MediaStream | null) {
+  stream?.getTracks().forEach((track) => track.stop());
+}
+
+export function MissionProofRecorder({ missionId, onCompleted, onInteractionLockChange }: MissionProofRecorderProps) {
   const [state, setState] = useState<RecorderState>("idle");
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -58,6 +63,8 @@ export function MissionProofRecorder({ missionId, onCompleted }: MissionProofRec
   const stopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const generationRef = useRef(0);
   const missionIdRef = useRef(missionId);
+  const startLockRef = useRef(false);
+  const submitLockRef = useRef(false);
 
   const clearStopTimer = useCallback(() => {
     if (stopTimerRef.current !== null) {
@@ -66,8 +73,8 @@ export function MissionProofRecorder({ missionId, onCompleted }: MissionProofRec
     }
   }, []);
 
-  const stopTracks = useCallback(() => {
-    streamRef.current?.getTracks().forEach((track) => track.stop());
+  const stopCurrentStream = useCallback(() => {
+    stopStream(streamRef.current);
     streamRef.current = null;
   }, []);
 
@@ -75,7 +82,7 @@ export function MissionProofRecorder({ missionId, onCompleted }: MissionProofRec
     const canvas = waveformRef.current;
     if (!canvas) return;
     const bounds = canvas.getBoundingClientRect();
-    const ratio = window.devicePixelRatio || 1;
+    const ratio = Math.min(2, window.devicePixelRatio || 1);
     const width = Math.max(1, Math.round(bounds.width * ratio));
     const height = Math.max(1, Math.round(bounds.height * ratio));
     if (canvas.width !== width || canvas.height !== height) {
@@ -149,6 +156,7 @@ export function MissionProofRecorder({ missionId, onCompleted }: MissionProofRec
     if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
     audioUrlRef.current = null;
     blobRef.current = null;
+    selectedFormatRef.current = null;
   }, []);
 
   const clearPreview = useCallback(() => {
@@ -159,20 +167,20 @@ export function MissionProofRecorder({ missionId, onCompleted }: MissionProofRec
 
   useEffect(() => {
     missionIdRef.current = missionId;
-    generationRef.current += 1;
-
     return () => {
       generationRef.current += 1;
+      startLockRef.current = false;
+      submitLockRef.current = false;
       clearStopTimer();
       const recorder = recorderRef.current;
-      if (recorder && recorder.state !== "inactive") recorder.stop();
       recorderRef.current = null;
+      if (recorder && recorder.state !== "inactive") recorder.stop();
       stopVisualiser();
-      stopTracks();
+      stopCurrentStream();
       startedAtRef.current = null;
       revokePreview();
     };
-  }, [clearStopTimer, missionId, revokePreview, stopTracks, stopVisualiser]);
+  }, [clearStopTimer, missionId, revokePreview, stopCurrentStream, stopVisualiser]);
 
   useEffect(() => {
     if (state !== "recorded") return;
@@ -182,51 +190,82 @@ export function MissionProofRecorder({ missionId, onCompleted }: MissionProofRec
     return () => observer.disconnect();
   }, [drawWaveform, state]);
 
-  const startRecording = async () => {
-    if (state !== "idle") return;
+  useLayoutEffect(() => {
+    const locked = state !== "idle";
+    onInteractionLockChange(locked);
+  }, [onInteractionLockChange, state]);
+
+  useLayoutEffect(() => () => onInteractionLockChange(false), [onInteractionLockChange]);
+
+  const beginRecording = async () => {
+    if (startLockRef.current || (state !== "idle" && state !== "recorded")) return;
+    startLockRef.current = true;
+    const generation = generationRef.current + 1;
+    generationRef.current = generation;
+    const recordingMissionId = missionId;
+
+    clearStopTimer();
+    const previousRecorder = recorderRef.current;
+    recorderRef.current = null;
+    if (previousRecorder && previousRecorder.state !== "inactive") previousRecorder.stop();
+    stopVisualiser();
+    stopCurrentStream();
+    startedAtRef.current = null;
+    clearPreview();
+    waveformSamplesRef.current = Array(WAVEFORM_BAR_COUNT).fill(0.16);
     setError(null);
+    setState("requesting");
+
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
-      setError("Audio recording is not supported in this browser.");
+      if (generationRef.current === generation) {
+        startLockRef.current = false;
+        setState("idle");
+        setError("Audio recording is not supported in this browser.");
+      }
       return;
     }
     const format = getSupportedMissionProofFormat((mimeType) => MediaRecorder.isTypeSupported(mimeType));
     if (!format) {
-      setError("Audio recording is not supported in this browser.");
+      if (generationRef.current === generation) {
+        startLockRef.current = false;
+        setState("idle");
+        setError("Audio recording is not supported in this browser.");
+      }
       return;
     }
 
-    const generation = generationRef.current;
-    const recordingMissionId = missionId;
+    let stream: MediaStream | null = null;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       if (generationRef.current !== generation || missionIdRef.current !== recordingMissionId) {
-        stream.getTracks().forEach((track) => track.stop());
+        stopStream(stream);
         return;
       }
-
+      streamRef.current = stream;
       const recorder = new MediaRecorder(stream, { mimeType: format.mimeType });
       const chunks: Blob[] = [];
-      waveformSamplesRef.current = Array(WAVEFORM_BAR_COUNT).fill(0.16);
+      let recorderFailed = false;
       selectedFormatRef.current = format;
-      streamRef.current = stream;
       recorderRef.current = recorder;
       startedAtRef.current = performance.now();
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) chunks.push(event.data);
       };
       recorder.onstop = () => {
+        stopStream(stream);
+        if (recorderFailed || generationRef.current !== generation || missionIdRef.current !== recordingMissionId) return;
         clearStopTimer();
         stopVisualiser();
-        stopTracks();
-        recorderRef.current = null;
+        if (streamRef.current === stream) streamRef.current = null;
+        if (recorderRef.current === recorder) recorderRef.current = null;
         const elapsed = performance.now() - (startedAtRef.current ?? performance.now());
         startedAtRef.current = null;
-        if (generationRef.current !== generation || missionIdRef.current !== recordingMissionId) return;
 
         const mimeType = recorder.mimeType || format.mimeType;
         const actualFormat = getMissionProofFormat(mimeType);
         const blob = new Blob(chunks, { type: mimeType });
         if (!actualFormat || blob.size === 0 || blob.size > MISSION_PROOF_MAX_BYTES || elapsed < MISSION_PROOF_MIN_DURATION_MS) {
+          selectedFormatRef.current = null;
           setState("idle");
           setError(blob.size > MISSION_PROOF_MAX_BYTES
             ? "That recording is too large. Please keep it shorter."
@@ -236,19 +275,21 @@ export function MissionProofRecorder({ missionId, onCompleted }: MissionProofRec
 
         selectedFormatRef.current = actualFormat;
         blobRef.current = blob;
-        if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
         const nextAudioUrl = URL.createObjectURL(blob);
         audioUrlRef.current = nextAudioUrl;
         setAudioUrl(nextAudioUrl);
         setState("recorded");
       };
       recorder.onerror = () => {
+        recorderFailed = true;
+        stopStream(stream);
+        if (generationRef.current !== generation || missionIdRef.current !== recordingMissionId) return;
         clearStopTimer();
         stopVisualiser();
-        stopTracks();
-        recorderRef.current = null;
+        if (streamRef.current === stream) streamRef.current = null;
+        if (recorderRef.current === recorder) recorderRef.current = null;
         startedAtRef.current = null;
-        if (generationRef.current !== generation) return;
+        selectedFormatRef.current = null;
         setState("idle");
         setError("We couldn't record that proof. Please try again.");
       };
@@ -260,12 +301,18 @@ export function MissionProofRecorder({ missionId, onCompleted }: MissionProofRec
         if (recorderRef.current === recorder && recorder.state !== "inactive") recorder.stop();
       }, MISSION_PROOF_MAX_DURATION_MS);
     } catch (caughtError) {
-      stopVisualiser();
-      stopTracks();
-      recorderRef.current = null;
-      startedAtRef.current = null;
-      setState("idle");
-      setError(recordingError(caughtError));
+      stopStream(stream);
+      if (generationRef.current === generation && missionIdRef.current === recordingMissionId) {
+        stopVisualiser();
+        if (streamRef.current === stream) streamRef.current = null;
+        recorderRef.current = null;
+        startedAtRef.current = null;
+        selectedFormatRef.current = null;
+        setState("idle");
+        setError(recordingError(caughtError));
+      }
+    } finally {
+      if (generationRef.current === generation) startLockRef.current = false;
     }
   };
 
@@ -280,6 +327,7 @@ export function MissionProofRecorder({ missionId, onCompleted }: MissionProofRec
     if (state !== "recorded") return;
     const audio = audioRef.current;
     if (!audio) return;
+    const generation = generationRef.current;
     setError(null);
     if (!audio.paused) {
       audio.pause();
@@ -288,8 +336,13 @@ export function MissionProofRecorder({ missionId, onCompleted }: MissionProofRec
     }
     try {
       await audio.play();
+      if (generationRef.current !== generation || audioRef.current !== audio) {
+        audio.pause();
+        return;
+      }
       setPlaying(true);
     } catch {
+      if (generationRef.current !== generation) return;
       setPlaying(false);
       setError("We couldn't play that recording. Please try again.");
     }
@@ -298,7 +351,8 @@ export function MissionProofRecorder({ missionId, onCompleted }: MissionProofRec
   const submit = async () => {
     const blob = blobRef.current;
     const format = selectedFormatRef.current;
-    if (state !== "recorded" || !blob || !format) return;
+    if (submitLockRef.current || state !== "recorded" || !blob || !format) return;
+    submitLockRef.current = true;
     const generation = generationRef.current;
     const submissionMissionId = missionId;
     audioRef.current?.pause();
@@ -340,13 +394,15 @@ export function MissionProofRecorder({ missionId, onCompleted }: MissionProofRec
       if (generationRef.current !== generation || missionIdRef.current !== submissionMissionId) return;
       setState("recorded");
       setError("We couldn't complete this mission. Please try again.");
+    } finally {
+      if (generationRef.current === generation) submitLockRef.current = false;
     }
   };
 
   return (
     <div aria-live="polite" className={styles.proof} onPointerDown={(event) => event.stopPropagation()}>
       {state === "idle" ? (
-        <button className={`${styles.proofCapsule} ${styles.proofRecord}`} onClick={startRecording} type="button">
+        <button className={`${styles.proofCapsule} ${styles.proofRecord}`} onClick={() => void beginRecording()} type="button">
           <span aria-hidden="true" className={styles.recordDot} />
           <span>Record</span>
         </button>
@@ -360,7 +416,9 @@ export function MissionProofRecorder({ missionId, onCompleted }: MissionProofRec
             </button>
           ) : <span aria-hidden="true" className={styles.proofIconSpacer} />}
 
-          {state === "submitting" ? (
+          {state === "requesting" ? (
+            <span className={styles.proofStatus}>Starting…</span>
+          ) : state === "submitting" ? (
             <span className={styles.proofStatus}>Uploading…</span>
           ) : (
             <canvas aria-hidden="true" className={styles.proofWaveform} ref={waveformRef} />
@@ -382,6 +440,13 @@ export function MissionProofRecorder({ missionId, onCompleted }: MissionProofRec
         </div>
       )}
 
+      <div className={styles.proofAuxiliary}>
+        {state === "recorded" ? (
+          <button className={styles.auxiliaryAction} onClick={() => void beginRecording()} type="button">
+            Record again
+          </button>
+        ) : null}
+      </div>
       {audioUrl ? (
         <audio
           className={styles.proofAudioHidden}

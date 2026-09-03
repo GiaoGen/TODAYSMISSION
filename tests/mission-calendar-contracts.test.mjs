@@ -16,8 +16,11 @@ const actions = read("features/missions/actions.ts");
 const proofRecorder = read("features/missions/components/MissionProofRecorder.tsx");
 const actionLayer = read("features/missions/components/MissionActionLayer.tsx");
 const slider = read("features/missions/components/MissionCompleteSlider.tsx");
+const proofStyles = read("features/missions/components/MissionActionLayer.module.css");
+const confetti = read("features/missions/components/MissionCompletionConfetti.tsx");
 const gallery = read("features/packs/components/MissionGallery.tsx");
 const galleryCss = read("features/packs/components/MissionGallery.module.css");
+const nativeGallery = read("features/packs/model/native-mission-gallery.ts");
 const home = read("app/page.tsx");
 const completedPage = read("app/completed/[date]/page.tsx");
 const packDetail = read("features/packs/components/MissionPackDetail.tsx");
@@ -90,6 +93,7 @@ test("Pack progress is derived from completion state and updates without persist
   assert.equal(getCompletedMissionCount(after), getCompletedMissionCount(before) + 1);
   assert.match(packDetail, /getCompletedMissionCount\(missionCompletionStatuses\)/);
   assert.match(packDetail, /completedMissionCount=\{packJoined \? completedMissionCount : undefined\}/);
+  assert.match(packDetail, /gallerySettled && currentStatus !== "completed"/);
   assert.match(read("features/packs/components/MissionGallery.tsx"), /className=\{styles\.packProgress\}/);
   assert.doesNotMatch(packDetail, /pack_progress|progress_table|fetch\(/i);
 });
@@ -112,7 +116,46 @@ test("completion proof keeps real recording, preview and upload in the shared ca
   assert.match(proofRecorder, /Play recording/);
   assert.match(proofRecorder, /\.from\("mission-proofs"\)/);
   assert.match(proofRecorder, /completeMissionWithAudioAction/);
-  assert.match(actionLayer, /CompletionProofTransition/);
+  assert.match(actionLayer, /completionRequested \? \([\s\S]*MissionProofRecorder/);
+  assert.doesNotMatch(actionLayer, /CompletionProofTransition|setTimeout\(/);
+  assert.match(proofRecorder, /"requesting"/);
+  assert.match(proofRecorder, /startLockRef\.current/);
+  assert.match(proofRecorder, /submitLockRef\.current/);
+  assert.match(proofRecorder, /state !== "idle" && state !== "recorded"/);
+  assert.match(proofRecorder, /Record again/);
+  assert.match(proofRecorder, /generationRef\.current = generation/);
+  assert.doesNotMatch(proofRecorder, /setState\("idle"\);\s*startRecording/);
+});
+
+test("completion action placement reserves a stable auxiliary row and derives its 112px shift from the thumb", () => {
+  assert.match(actionLayer, /MISSION_SLIDER_THUMB_SIZE/);
+  assert.match(proofStyles, /var\(--tm-thumb-size\) \* 2/);
+  assert.match(proofStyles, /var\(--tm-capsule-height\) \+ var\(--tm-auxiliary-gap\) \+ var\(--tm-auxiliary-height\)/);
+  assert.match(proofStyles, /env\(safe-area-inset-bottom\)/);
+  assert.match(proofStyles, /proofAuxiliary/);
+  assert.match(proofStyles, /auxiliaryAction/);
+});
+
+test("proof media states lock both Gallery drivers while the pending Record state remains switchable", () => {
+  assert.match(proofRecorder, /const locked = state !== "idle"/);
+  assert.match(packDetail, /interactionLocked=\{galleryInteractionLocked\}/);
+  assert.match(gallery, /data-interaction-locked=\{interactionLocked\}/);
+  assert.match(gallery, /root\.dataset\.interactionLocked === "true"/);
+  assert.match(nativeGallery, /root\.dataset\.interactionLocked === "true"/);
+  assert.match(galleryCss, /data-interaction-locked="true"/);
+});
+
+test("completion confetti is a non-interactive viewport Portal driven by one completion event", () => {
+  assert.match(confetti, /createPortal/);
+  assert.match(confetti, /eventId/);
+  assert.match(confetti, /runRef\.current\?\.eventId !== eventId/);
+  assert.match(confetti, /CONFETTI_DURATION_MS = 2_000/);
+  assert.match(confetti, /REDUCED_CONFETTI_DURATION_MS = 250/);
+  assert.match(confetti, /width < 700 \? 80 : 120/);
+  assert.match(confetti, /Math\.min\(2, window\.devicePixelRatio/);
+  assert.match(proofStyles, /\.confettiCanvas[\s\S]*pointer-events: none/);
+  assert.match(packDetail, /setCompletionEventId\(`/);
+  assert.doesNotMatch(packDetail, /useEffect\([\s\S]{0,240}setCompletionEventId/);
 });
 
 test("homepage passes real calendar data while preserving the existing carousel entry", () => {

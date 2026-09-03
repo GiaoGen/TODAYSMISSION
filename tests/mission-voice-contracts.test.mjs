@@ -92,11 +92,11 @@ test("Mission Voice Recorder uploads only to its own bucket without upsert", () 
 });
 
 test("the normal incomplete action area no longer keeps Mission Voice listening controls", () => {
-  assert.match(actionLayer, /currentStatus === "incomplete"/);
   assert.doesNotMatch(actionLayer, /I am nervous|MissionVoiceListener|nervousOpen/);
+  assert.doesNotMatch(actionLayer, /MissionVoiceRecorder|voiceRecorderOpen|Share what it was like|Submitted for review|> Completed/);
   assert.match(actionLayer, /MissionCompleteSlider/);
   assert.match(actionLayer, /try another/);
-  assert.match(actionLayer, /currentStatus === "completed"/);
+  assert.match(actionLayer, /completionRequested \?/);
 });
 
 test("published voice repository verifies access, limits results, and returns signed URLs only", () => {
@@ -113,10 +113,9 @@ test("published voice repository verifies access, limits results, and returns si
 
 test("Mission switching remounts the current action state and recorders still clean up", () => {
   const packDetail = read("features/packs/components/MissionPackDetail.tsx");
-  assert.match(actionLayer, /setVoiceRecorderOpen\(false\)/);
   assert.match(packDetail, /key={activeMission\.id}/);
-  assert.match(packDetail, /setCompletionRequestedMissionId\(null\)/);
-  assert.match(actionLayer, /selectingNext \|\| completionRequested/);
+  assert.match(packDetail, /completionRequestedMissionIds\.has\(activeMission\.id\)/);
+  assert.doesNotMatch(packDetail, /setCompletionRequestedMissionId\(null\)/);
   assert.match(listener, /audio\?\.pause\(\)/);
   assert.match(recorder, /track\.stop\(\)/);
   assert.match(recorder, /URL\.revokeObjectURL/);

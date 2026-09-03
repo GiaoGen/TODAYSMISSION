@@ -116,7 +116,7 @@ export function mountNativeMissionGallery({
   const onKeyDown = (event: KeyboardEvent) => {
     if (event.target instanceof Element && event.target.closest("[data-gallery-action]")) return;
     if (event.key === "Escape" && (interactive || !expansionStarted)) { event.preventDefault(); close(); }
-    else if (!interactive) return;
+    else if (!interactive || root.dataset.interactionLocked === "true") return;
     else if (count > 1 && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
       event.preventDefault();
       const base = Math.floor(measuredCopies / 2) * count;
@@ -127,6 +127,7 @@ export function mountNativeMissionGallery({
     if (
       disposed ||
       closing ||
+      root.dataset.interactionLocked === "true" ||
       !interactive ||
       count <= 1 ||
       nextSelectionResolve ||

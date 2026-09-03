@@ -1,12 +1,23 @@
 .layer {
   --tm-muted: light-dark(#686863, #b9b9b1);
+  --tm-capsule-height: 68px;
+  --tm-thumb-size: calc(var(--tm-capsule-height) - 12px);
+  --tm-auxiliary-gap: 10px;
+  --tm-auxiliary-height: 44px;
+  --tm-error-reserve: 0px;
+  --tm-control-reserve: calc(
+    var(--tm-capsule-height) + var(--tm-auxiliary-gap) + var(--tm-auxiliary-height) + var(--tm-error-reserve)
+  );
   position: absolute;
   z-index: 30;
   right: 0;
   left: 0;
-  top: min(
-    calc(50% + var(--mission-card-width) * .71 + clamp(12px, 2dvh, 20px)),
-    calc(100% - 112px)
+  top: max(
+    calc(env(safe-area-inset-top) + 8px),
+    min(
+      calc(50% + var(--mission-card-width) * .71 + clamp(12px, 2dvh, 20px) + var(--tm-thumb-size) * 2),
+      calc(100% - env(safe-area-inset-bottom) - 16px - var(--tm-control-reserve))
+    )
   );
   display: flex;
   justify-content: center;
@@ -14,6 +25,8 @@
   pointer-events: none;
   color-scheme: light dark;
 }
+
+.layer:has(.error) { --tm-error-reserve: 32px; }
 
 .panel {
   display: grid;
@@ -37,21 +50,6 @@
   color: var(--page-background);
 }
 
-.completed {
-  display: flex;
-  height: 68px;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  margin: 0;
-  border-radius: 999px;
-  background: var(--tm-accent);
-  color: var(--tm-on-accent);
-  font-size: 15px;
-  font-weight: 600;
-  animation: capsuleIn 180ms ease-out both;
-}
-
 .notice,
 .error {
   margin: 0;
@@ -62,32 +60,19 @@
 .proof {
   display: grid;
   width: 100%;
-  gap: 8px;
+  gap: 0;
 }
 
-.completionFeedback,
 .proofCapsule {
   box-sizing: border-box;
   width: 100%;
-  height: 68px;
+  height: var(--tm-capsule-height);
   border-radius: 999px;
-}
-
-.completionFeedback {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  background: var(--tm-accent);
-  color: var(--tm-on-accent);
-  font-size: 15px;
-  font-weight: 600;
-  animation: completionFeedbackIn 220ms ease-out both;
 }
 
 .proofCapsule {
   display: grid;
-  grid-template-columns: 56px minmax(0, 1fr) 56px;
+  grid-template-columns: var(--tm-thumb-size) minmax(0, 1fr) var(--tm-thumb-size);
   align-items: center;
   padding: 6px;
   border: 0;
@@ -158,6 +143,18 @@
 }
 
 .proofAudioHidden { display: none; }
+
+.proofAuxiliary {
+  display: grid;
+  min-height: calc(var(--tm-auxiliary-gap) + var(--tm-auxiliary-height));
+  place-items: end center;
+}
+
+.proof > .error {
+  min-height: 32px;
+  padding: 4px 8px 0;
+  line-height: 1.35;
+}
 
 .secondary {
   min-height: 40px;
@@ -240,9 +237,9 @@
 }
 
 .slider {
-  --tm-height: 68px;
+  --tm-height: var(--tm-capsule-height);
   --tm-inset: 6px;
-  --tm-knob: calc(var(--tm-height) - var(--tm-inset) * 2);
+  --tm-knob: var(--tm-thumb-size);
   --tm-track: light-dark(#deddd9, #353533);
   --tm-muted: light-dark(#686863, #b9b9b1);
   position: relative;
@@ -378,14 +375,14 @@
 .slider[data-dragging="true"] .sliderInput { cursor: grabbing; }
 .slider[data-done="true"] .sliderInput { cursor: default; }
 
-.tryAnother {
+.auxiliaryAction {
   display: flex;
-  min-height: 44px;
+  min-height: var(--tm-auxiliary-height);
   align-items: center;
   justify-content: center;
   justify-self: center;
   gap: 7px;
-  margin: 10px auto 0;
+  margin: var(--tm-auxiliary-gap) auto 0;
   padding: 0 14px;
   border: 0;
   border-radius: 12px;
@@ -397,8 +394,8 @@
   transition: color 160ms;
 }
 
-.tryAnother:not(:disabled):hover { color: var(--tm-accent); }
-.tryAnother svg {
+.auxiliaryAction:not(:disabled):hover { color: var(--tm-accent); }
+.auxiliaryAction svg {
   width: 15px;
   height: 15px;
   stroke: currentColor;
@@ -406,11 +403,15 @@
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.tryAnother:disabled { cursor: default; opacity: .42; }
+.auxiliaryAction:disabled { cursor: default; opacity: .42; }
 
-@keyframes completionFeedbackIn {
-  from { opacity: 0; transform: scale(.98); }
-  to { opacity: 1; transform: none; }
+.confettiCanvas {
+  position: fixed;
+  z-index: 90;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  pointer-events: none;
 }
 
 @keyframes capsuleIn {
@@ -442,9 +443,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .slider *,
-  .tryAnother { transition: none !important; }
-  .completionFeedback,
-  .completed,
+  .auxiliaryAction { transition: none !important; }
   .proofCapsule,
   .proofWaveform { animation: none; }
 }
