@@ -187,6 +187,7 @@
 .takeMission:hover { filter: brightness(.96); }
 .takeMission:active { transform: scale(.992); }
 .takeMission:focus-visible { outline: 2px solid var(--ui-text); outline-offset: 2px; }
+.takeMission:disabled { cursor: wait; opacity: .65; }
 
 .proofCapsule {
   box-sizing: border-box;

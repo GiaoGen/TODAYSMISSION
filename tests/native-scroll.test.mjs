@@ -407,6 +407,15 @@ test("Safari commitment lock cancels native motion without scroll reversion and 
   h.gallery.destroy();
 });
 
+test("Safari commitment lock still lets a blank gallery click return home", async () => {
+  const h = galleryHarness({ count: 4 });
+  await h.expand();
+  h.setInteractionLocked(true);
+  h.rootElement.emit("click");
+  assert.equal(h.rootElement.dataset.phase, "closing");
+  h.gallery.destroy();
+});
+
 for (const looping of [false, true]) for (const count of [1, 2, 8]) {
   test(`${looping ? "Pack" : "day"}/${count}: native gallery expands, scrolls without layout reads, and collapses from the live position`, async () => {
     const h = galleryHarness({ count, looping });

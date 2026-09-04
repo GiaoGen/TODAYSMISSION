@@ -60,6 +60,7 @@ type MissionGalleryProps = {
   hero: MissionSummary | PackSummary;
   missions: readonly MissionSummary[];
   completedDate?: string;
+  initialMissionId?: string;
   expandMissions?: boolean;
   interactionLocked?: boolean;
   completedMissionCount?: number;
@@ -140,6 +141,7 @@ export function MissionGallery({
   hero,
   missions,
   completedDate,
+  initialMissionId,
   expandMissions = true,
   interactionLocked = false,
   completedMissionCount,
@@ -161,6 +163,9 @@ export function MissionGallery({
   const missionRefs = useRef<Array<HTMLLIElement | null>>([]);
   const missionCount = missions.length;
   const looping = completedDate === undefined;
+  const initialMissionIndex = initialMissionId
+    ? Math.max(0, missions.findIndex((mission) => mission.id === initialMissionId))
+    : 0;
   const liveViewport = useDeckViewport();
   const [stableViewport, setStableViewport] = useState(liveViewport);
   const viewport = nativeScrolling ? stableViewport : liveViewport;
@@ -186,6 +191,7 @@ export function MissionGallery({
     : looping ? getGalleryCopyCount(missionCount, viewportWidth, streamMetrics.stride) : 1;
   const primaryCopy = Math.floor(copies / 2);
   const primaryCopyRef = useRef(primaryCopy);
+  const initialMissionIndexRef = useRef(initialMissionIndex);
   const measureRef = useRef<(() => void) | null>(null);
   const missionIdsRef = useRef(missions.map((mission) => mission.id));
   const onActiveMissionChangeRef = useRef(onActiveMissionChange);
@@ -266,6 +272,7 @@ export function MissionGallery({
       const native = mountNativeMissionGallery({
         root, viewport: scrollRef.current, cards, count: missionCount,
         copies: () => 2 * primaryCopyRef.current + 1,
+        initialPosition: initialMissionIndexRef.current,
         cardClass: styles.missionCard, navigateHome, autoExpand: false,
         onExpansionSettled: () => onExpansionSettledRef.current?.(),
         onActiveMissionChange: notifyActiveMission,
@@ -309,7 +316,7 @@ export function MissionGallery({
     let nextSelectionResolve: ((selected: boolean) => void) | null = null;
     let suppressBlankClickUntil = 0;
     let interactive = false;
-    let interactionLocked = false;
+    let interactionLocked = root.dataset.interactionLocked === "true";
 
     root.dataset.phase = "collapsed";
     root.dataset.dragging = "false";
@@ -530,7 +537,7 @@ export function MissionGallery({
       const previousOrigin = origin;
       const slotOffset = previousStride
         ? (position - previousOrigin) / previousStride
-        : 0;
+        : -initialMissionIndexRef.current;
 
       stride = middleSecond.offsetLeft - middleFirst.offsetLeft;
       cycleWidth = looping && rightFirst ? rightFirst.offsetLeft - middleFirst.offsetLeft : 0;

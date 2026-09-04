@@ -140,11 +140,13 @@ test("does not replace invalid core content with fixture values", () => {
 test("maps Pack membership without exposing user identity", () => {
   assert.deepEqual(plain(membershipMapper.mapPackMembershipRows([
     {
+      active_mission_id: null,
       pack_id: "pack-1",
       joined_at: "2026-08-31T00:00:00Z",
     },
   ])), {
     "pack-1": {
+      activeMissionId: null,
       packId: "pack-1",
       joinedAt: "2026-08-31T00:00:00Z",
     },

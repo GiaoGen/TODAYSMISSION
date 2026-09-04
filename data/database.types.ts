@@ -145,16 +145,19 @@ export type Database = {
       }
       pack_memberships: {
         Row: {
+          active_mission_id: string | null
           joined_at: string
           pack_id: string
           user_id: string
         }
         Insert: {
+          active_mission_id?: string | null
           joined_at?: string
           pack_id: string
           user_id: string
         }
         Update: {
+          active_mission_id?: string | null
           joined_at?: string
           pack_id?: string
           user_id?: string
@@ -213,6 +216,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      take_mission: {
+        Args: {
+          p_mission_id: string
+          p_pack_id: string
+        }
+        Returns: {
+          active_mission_id: string
+          status: string
+        }[]
+      }
       complete_mission_with_audio: {
         Args: {
           p_completed_local_date: string

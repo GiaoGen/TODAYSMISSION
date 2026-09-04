@@ -1,4 +1,5 @@
 export type PackMembership = {
+  activeMissionId: string | null;
   packId: string;
   joinedAt: string;
 };

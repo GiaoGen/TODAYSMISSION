@@ -9,6 +9,7 @@ type NativeMissionGalleryOptions = {
   cardClass: string;
   navigateHome: () => void;
   autoExpand?: boolean;
+  initialPosition?: number;
   onExpansionSettled?: () => void;
   onActiveMissionChange?: (index: number) => void;
   onInteractionLockReady?: (setLocked: ((locked: boolean) => void) | null) => void;
@@ -24,6 +25,7 @@ export function mountNativeMissionGallery({
   cardClass,
   navigateHome,
   autoExpand = true,
+  initialPosition = 0,
   onExpansionSettled,
   onActiveMissionChange,
   onInteractionLockReady,
@@ -77,16 +79,20 @@ export function mountNativeMissionGallery({
     measuredCopies = nextCopies;
     viewport.style.setProperty("--native-edge", `${Math.max(0, (width - cardWidth) / 2)}px`);
     const layout = { count, copies: nextCopies, stride };
-    if (controller) controller.restore(layout, lastPosition);
-    else controller = createNativeScrollController(viewport, {
-      ...layout, disabled: true, reducedMotion: reduced,
-      onProgress: ({ index }) => { onActiveMissionChange?.(index); },
-      onSettled: ({ index, position }) => {
-        lastPosition = position;
-        onActiveMissionChange?.(index);
-        finishNextSelection(true);
-      },
-    });
+    if (controller) {
+      controller.restore(layout, lastPosition);
+    } else {
+      lastPosition = initialPosition;
+      controller = createNativeScrollController(viewport, {
+        ...layout, disabled: true, position: lastPosition, reducedMotion: reduced,
+        onProgress: ({ index }) => { onActiveMissionChange?.(index); },
+        onSettled: ({ index, position }) => {
+          lastPosition = position;
+          onActiveMissionChange?.(index);
+          finishNextSelection(true);
+        },
+      });
+    }
     if (!interactive) updateCollapsedOffsets();
   };
   const measure = () => {
@@ -114,8 +120,9 @@ export function mountNativeMissionGallery({
   const onClick = (event: MouseEvent) => {
     if (event.target instanceof Element && event.target.closest("[data-gallery-action]")) return;
     if (!expansionStarted) { close(); return; }
-    if (!interactive || !controller?.canActivate()) return;
     if (event.target instanceof Element && event.target.closest(`.${cardClass}`)) return;
+    if (!interactive) return;
+    if (root.dataset.interactionLocked !== "true" && !controller?.canActivate()) return;
     close();
   };
   const onKeyDown = (event: KeyboardEvent) => {
@@ -158,7 +165,8 @@ export function mountNativeMissionGallery({
     if (disposed) return;
     root.dataset.phase = "settled";
     interactive = true;
-    controller?.resume();
+    if (root.dataset.interactionLocked === "true") controller?.setInteractionLocked(true);
+    else controller?.resume();
     root.focus({ preventScroll: true });
     onExpansionSettled?.();
   };

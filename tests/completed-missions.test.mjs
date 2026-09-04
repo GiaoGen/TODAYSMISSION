@@ -396,7 +396,7 @@ function galleryHarness(count, {
     nativeScrolling: false,
     isSafariUserAgent: () => false,
     rootRef: { current: root }, trackRef: { current: track }, missionRefs: { current: cards },
-    primaryCopyRef: { current: Math.floor(copies / 2) }, measureRef: { current: null },
+    primaryCopyRef: { current: Math.floor(copies / 2) }, initialMissionIndexRef: { current: 0 }, measureRef: { current: null },
     missionIdsRef: { current: Array.from({ length: count }, (_, index) => `mission-${index}`) },
     onActiveMissionChangeRef: { current: missionId => activeMissionChanges.push(missionId) }, onExpansionSettledRef: { current: () => { settled++; } }, activeMissionIdRef: { current: null },
     onSelectNextReadyRef: { current: selector => { selectNext = selector; } },
@@ -512,6 +512,15 @@ test("Chrome commitment lock cancels active momentum and ignores all Mission nav
 
   gallery.event("keydown", { key: "Escape" });
   assert.equal(gallery.root.dataset.phase, "closing", "Escape still closes while Mission navigation is locked");
+  gallery.cleanup();
+});
+
+test("Chrome commitment lock still lets a blank gallery click return home", async () => {
+  const gallery = galleryHarness(3, { looping: true });
+  await gallery.expand();
+  gallery.setInteractionLocked(true);
+  gallery.event("click");
+  assert.equal(gallery.root.dataset.phase, "closing");
   gallery.cleanup();
 });
 

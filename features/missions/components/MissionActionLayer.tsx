@@ -12,6 +12,8 @@ import styles from "./MissionActionLayer.module.css";
 type MissionActionLayerProps = {
   activeMission: MissionSummary;
   committed: boolean;
+  committing: boolean;
+  commitError: string | null;
   completionRequested: boolean;
   canSelectNext: boolean;
   selectingNext: boolean;
@@ -32,6 +34,8 @@ type ActionLayerStyle = CSSProperties & {
 export function MissionActionLayer({
   activeMission,
   committed,
+  committing,
+  commitError,
   completionRequested,
   canSelectNext,
   selectingNext,
@@ -75,11 +79,13 @@ export function MissionActionLayer({
           <>
             <button
               aria-label="Take this mission"
+              aria-busy={committing || undefined}
               className={styles.takeMission}
+              disabled={committing}
               onClick={onCommit}
               type="button"
             >
-              <span>take this mission</span>
+              <span>{committing ? "taking…" : "take this mission"}</span>
             </button>
             <button
               aria-label="Switch mission"
@@ -97,6 +103,7 @@ export function MissionActionLayer({
               </svg>
               <span>try another</span>
             </button>
+            {commitError ? <p className={styles.error} role="alert">{commitError}</p> : null}
           </>
         )}
       </div>

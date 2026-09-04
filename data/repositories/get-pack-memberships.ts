@@ -21,7 +21,7 @@ export async function getCurrentPackMembership(packId: string): Promise<PackMemb
 
   const { data, error } = await supabase
     .from("pack_memberships")
-    .select("pack_id,joined_at")
+    .select("active_mission_id,pack_id,joined_at")
     .eq("user_id", userData.user.id)
     .eq("pack_id", packId)
     .maybeSingle();
