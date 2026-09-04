@@ -87,6 +87,41 @@ export type Database = {
           },
         ]
       }
+      mission_text_experiences: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          is_published: boolean
+          mission_id: string
+          user_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          is_published?: boolean
+          mission_id: string
+          user_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          is_published?: boolean
+          mission_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mission_text_experiences_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: false
+            referencedRelation: "missions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       missions: {
         Row: {
           artwork_key: string

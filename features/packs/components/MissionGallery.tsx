@@ -11,6 +11,7 @@ import { getNativeCopyCount, isSafariUserAgent } from "@/features/packs/model/sa
 import { mountNativeMissionGallery } from "@/features/packs/model/native-mission-gallery";
 import type { MissionSummary, PackSummary } from "@/data/contracts/pack-summary";
 import type { MissionCompletionStatus } from "@/features/missions/model/mission-action-state";
+import type { MissionExperience } from "@/data/contracts/mission-experience";
 import { CALENDAR_DAY_TRANSITION_CLASSES, createDirectDayReturnState, getDayTransitionName } from "@/features/calendar/model/calendar-day-transition";
 import { carouselSettingsStore } from "@/features/packs/model/carousel-settings";
 import { getGalleryCopyCount, getMissionStreamMetrics } from "@/features/packs/model/mission-gallery-layout";
@@ -26,6 +27,7 @@ import {
 
 import { PackDeckCover } from "./PackDeck";
 import { MissionCompletionCard, MissionStreamCard } from "./MissionStreamCard";
+import { MissionExperienceReveal } from "@/features/missions/components/MissionExperienceReveal";
 import styles from "./MissionGallery.module.css";
 
 const EXPANSION_SETTLE_MS = 1600;
@@ -68,6 +70,12 @@ type MissionGalleryProps = {
   missionCompletionStatuses?: Readonly<Record<string, MissionCompletionStatus>>;
   missionAction?: ReactNode;
   waitingAction?: ReactNode;
+  experienceMissionId?: string;
+  experienceRevealEnabled?: boolean;
+  loadMissionExperiences?: (missionId: string) => Promise<
+    | { ok: true; experiences: readonly MissionExperience[] }
+    | { ok: false; error: string }
+  >;
   onExpansionSettled?: () => void;
   onActiveMissionChange?: (missionId: string) => void;
   onSelectNextReady?: (selectNext: (() => Promise<boolean>) | null) => void;
@@ -149,6 +157,9 @@ export function MissionGallery({
   missionCompletionStatuses,
   missionAction,
   waitingAction,
+  experienceMissionId,
+  experienceRevealEnabled = false,
+  loadMissionExperiences,
   onExpansionSettled,
   onActiveMissionChange,
   onSelectNextReady,
@@ -574,6 +585,7 @@ export function MissionGallery({
       if (event.pointerId !== pointerId) {
         return;
       }
+      if (root.dataset.experienceGesture === "pending" || root.dataset.experienceGesture === "vertical") return;
       if (interactionLocked) return;
 
       const now = performance.now();
@@ -673,7 +685,8 @@ export function MissionGallery({
     };
 
     const onBlankClick = (event: MouseEvent) => {
-      if ((!interactive && expansionStarted) || performance.now() < suppressBlankClickUntil) {
+      const revealSuppressUntil = Number(root.dataset.experienceSuppressClickUntil ?? 0);
+      if ((!interactive && expansionStarted) || performance.now() < suppressBlankClickUntil || performance.now() < revealSuppressUntil) {
         return;
       }
 
@@ -829,6 +842,16 @@ export function MissionGallery({
           >
             {completedMissionCount}/{missionCount}
           </p>
+        ) : null}
+
+        {!completedDate && experienceMissionId && experienceRevealEnabled && loadMissionExperiences ? (
+          <MissionExperienceReveal
+            activeMissionId={experienceMissionId}
+            enabled
+            key={experienceMissionId}
+            loadExperiences={loadMissionExperiences}
+            rootRef={rootRef}
+          />
         ) : null}
 
         <div className={styles.scrollViewport} ref={scrollRef}>

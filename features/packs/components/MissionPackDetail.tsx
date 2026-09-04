@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import type { PackDetail } from "@/data/contracts/pack-summary";
+import type { MissionExperience } from "@/data/contracts/mission-experience";
 import type { MissionCompletionStatus } from "@/features/missions/model/mission-action-state";
 import { getCompletedMissionCount } from "@/features/packs/model/pack-progress";
 import { MissionActionLayer } from "@/features/missions/components/MissionActionLayer";
@@ -26,6 +27,10 @@ type MissionPackDetailProps = {
   initialActiveMissionId: string | null;
   initialPackJoined: boolean;
   initialMissionCompletionStatuses: Record<string, MissionCompletionStatus>;
+  loadMissionExperiences?: (missionId: string) => Promise<
+    | { ok: true; experiences: readonly MissionExperience[] }
+    | { ok: false; error: string }
+  >;
 };
 
 export function MissionPackDetail({
@@ -35,6 +40,7 @@ export function MissionPackDetail({
   initialActiveMissionId,
   initialPackJoined,
   initialMissionCompletionStatuses,
+  loadMissionExperiences,
 }: MissionPackDetailProps) {
   const sessionSnapshot = useSyncExternalStore(
     subscribeSessionSnapshot,
@@ -210,6 +216,16 @@ export function MissionPackDetail({
         missionCompletionStatuses={missionCompletionStatuses}
         missionAction={missionAction}
         interactionLocked={galleryInteractionLocked}
+        experienceMissionId={activeMission?.id}
+        experienceRevealEnabled={Boolean(
+          authenticated
+          && packJoined
+          && gallerySettled
+          && activeMission
+          && currentStatus !== "completed"
+          && !completionRequestedMissionIds.has(activeMission.id)
+        )}
+        loadMissionExperiences={loadMissionExperiences}
         expandMissions={packJoined}
         waitingAction={!packJoined ? (
           <PackMembershipAction

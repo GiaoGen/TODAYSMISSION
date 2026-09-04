@@ -126,6 +126,23 @@
   pointer-events: auto;
 }
 
+.root[data-phase="settled"] .missionCard[data-experience-reveal] .missionMotion {
+  z-index: 2;
+  transform: translate3d(0, var(--experience-card-y, 0), 0);
+}
+
+.root[data-phase="settled"] .missionCard[data-experience-snapping="true"] .missionMotion {
+  transition: transform 260ms cubic-bezier(.2, .72, .24, 1);
+}
+
+.missionCard[data-experience-reveal="dragging"] .cardFaces,
+.missionCard[data-experience-reveal="opening"] .cardFaces,
+.missionCard[data-experience-reveal="open"] .cardFaces {
+  box-shadow:
+    0 calc(32 * var(--stream-unit, 1px)) calc(68 * var(--stream-unit, 1px)) rgb(35 29 17 / 17%),
+    0 calc(6 * var(--stream-unit, 1px)) calc(14 * var(--stream-unit, 1px)) rgb(35 29 17 / 8%);
+}
+
 .cardFaces {
   position: relative;
   width: 100%;
@@ -194,6 +211,7 @@
 .root[data-native-scroll="true"] .missionMotion {
   opacity: 0;
   transform: translate3d(var(--mission-collapsed-x, 0), 0, 0) scale(var(--stream-collapse-scale, 1));
+  touch-action: pan-x pinch-zoom;
 }
 .root[data-native-scroll="true"][data-phase="expanding"] .missionMotion {
   opacity: 1;
@@ -204,6 +222,9 @@
 .root[data-native-scroll="true"][data-phase="settled"] .missionMotion {
   opacity: 1;
   transform: none;
+}
+.root[data-native-scroll="true"][data-phase="settled"] .missionCard[data-experience-reveal] .missionMotion {
+  transform: translate3d(0, var(--experience-card-y, 0), 0);
 }
 .root[data-native-scroll="true"][data-phase="closing"] .missionMotion {
   opacity: 0;
@@ -327,6 +348,9 @@
 
 @media (prefers-reduced-motion: reduce) {
   .completionFace { will-change: auto; }
+  .root[data-phase="settled"] .missionCard[data-experience-snapping="true"] .missionMotion {
+    transition-duration: 90ms;
+  }
   .packProgress { transition-duration: 0ms; transition-delay: 0ms; }
   .root[data-native-scroll="true"][data-phase] .missionMotion {
     transition: opacity 100ms linear;

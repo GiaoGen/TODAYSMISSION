@@ -118,6 +118,7 @@ export function mountNativeMissionGallery({
     });
   };
   const onClick = (event: MouseEvent) => {
+    if (performance.now() < Number(root.dataset.experienceSuppressClickUntil ?? 0)) return;
     if (event.target instanceof Element && event.target.closest("[data-gallery-action]")) return;
     if (!expansionStarted) { close(); return; }
     if (event.target instanceof Element && event.target.closest(`.${cardClass}`)) return;

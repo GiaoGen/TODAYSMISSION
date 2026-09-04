@@ -4,6 +4,8 @@ import { isAuthSessionMissingError } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 
 import type { MissionVoicePlayback } from "@/data/contracts/mission-voice";
+import type { MissionExperience } from "@/data/contracts/mission-experience";
+import { getPublishedMissionExperiences } from "@/data/repositories/get-mission-experiences";
 import { getPublishedMissionVoicesForMission } from "@/data/repositories/get-mission-voices";
 import { parseDateKey } from "@/features/calendar/model/calendar-month";
 import { normalizeMissionTextProof } from "@/features/missions/model/mission-text-proof";
@@ -27,6 +29,10 @@ export type SubmitMissionVoiceResult =
 
 export type MissionVoicePlaybackResult =
   | { ok: true; voices: readonly MissionVoicePlayback[] }
+  | { ok: false; error: string };
+
+export type MissionExperienceResult =
+  | { ok: true; experiences: readonly MissionExperience[] }
   | { ok: false; error: string };
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -292,5 +298,18 @@ export async function getMissionVoicePlaybackAction(missionId: string): Promise<
     };
   } catch {
     return failedVoicePlayback("We couldn't load shared experiences. Please try again.");
+  }
+}
+
+export async function getMissionExperiencesAction(missionId: string): Promise<MissionExperienceResult> {
+  if (!UUID_PATTERN.test(missionId)) return { ok: false, error: "That mission is unavailable." };
+
+  try {
+    return {
+      ok: true,
+      experiences: await getPublishedMissionExperiences(missionId),
+    };
+  } catch {
+    return { ok: false, error: "We couldn't load shared experiences. Please try again." };
   }
 }

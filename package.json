@@ -10,7 +10,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test tests/arc-carousel-geometry.test.mjs tests/pack-carousel-navigation.test.mjs tests/view-transition-boundaries.test.mjs tests/home-menu-state.test.mjs tests/calendar-carousel.test.mjs tests/calendar-input.test.mjs tests/carousel-settings.test.mjs tests/completed-missions.test.mjs tests/deck-carousel.test.mjs tests/native-scroll.test.mjs tests/public-content-contracts.test.mjs tests/auth-contracts.test.mjs tests/mission-action-state.test.mjs tests/mission-voice-contracts.test.mjs tests/mission-calendar-contracts.test.mjs tests/navigation-session-cache.test.mjs tests/mission-text-proof.test.mjs tests/mission-text-proof-contracts.test.mjs tests/mission-commitment.test.mjs"
+    "test": "node --test tests/arc-carousel-geometry.test.mjs tests/pack-carousel-navigation.test.mjs tests/view-transition-boundaries.test.mjs tests/home-menu-state.test.mjs tests/calendar-carousel.test.mjs tests/calendar-input.test.mjs tests/carousel-settings.test.mjs tests/completed-missions.test.mjs tests/deck-carousel.test.mjs tests/native-scroll.test.mjs tests/public-content-contracts.test.mjs tests/auth-contracts.test.mjs tests/mission-action-state.test.mjs tests/mission-voice-contracts.test.mjs tests/mission-calendar-contracts.test.mjs tests/navigation-session-cache.test.mjs tests/mission-text-proof.test.mjs tests/mission-text-proof-contracts.test.mjs tests/mission-commitment.test.mjs tests/mission-experience-reveal.test.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "0.12.5",

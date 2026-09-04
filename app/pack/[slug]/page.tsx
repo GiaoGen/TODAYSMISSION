@@ -6,6 +6,7 @@ import { getCurrentPackMembership } from "@/data/repositories/get-pack-membershi
 import { getPackBySlug } from "@/data/repositories/get-packs";
 import { MissionPackDetail } from "@/features/packs/components/MissionPackDetail";
 import { getInitialMissionCompletionStatuses } from "@/features/missions/model/mission-action-state";
+import { getMissionExperiencesAction } from "@/features/missions/actions";
 
 type PackDetailPageProps = {
   params: Promise<{ slug: string }>;
@@ -38,6 +39,7 @@ export default async function PackDetailPage({ params }: PackDetailPageProps) {
       initialActiveMissionId={membership?.activeMissionId ?? null}
       initialMissionCompletionStatuses={initialMissionCompletionStatuses}
       initialPackJoined={Boolean(membership)}
+      loadMissionExperiences={getMissionExperiencesAction}
       pack={pack}
     />
   );
