@@ -57,6 +57,14 @@ test("public Experience DTO and action never expose contributor or completion-pr
   }
 });
 
+test("one Experience source can fail without hiding the other source", () => {
+  const repository = read("data/repositories/get-mission-experiences.ts");
+  assert.match(repository, /voiceResult\.error && textResult\.error/);
+  assert.match(repository, /voiceResult\.error \? \[\] : \(voiceResult\.data \?\? \[\]\)/);
+  assert.match(repository, /textResult\.error \? \[\] : \(textResult\.data \?\? \[\]\)/);
+  assert.doesNotMatch(repository, /voiceResult\.error \|\| textResult\.error/);
+});
+
 test("text experiences are unpublished by default and readable only to permanent joined users", () => {
   const migration = read("supabase/migrations/20260904124236_create_mission_text_experiences.sql");
   assert.match(migration, /is_published boolean not null default false/);

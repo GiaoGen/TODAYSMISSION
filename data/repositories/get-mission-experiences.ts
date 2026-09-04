@@ -73,16 +73,19 @@ export async function getPublishedMissionExperiences(
       .limit(EXPERIENCE_POOL_LIMIT),
   ]);
 
-  if (voiceResult.error || textResult.error) throw new Error("Failed to read Mission experiences.");
+  if (voiceResult.error && textResult.error) throw new Error("Failed to read Mission experiences.");
+
+  const voices = voiceResult.error ? [] : (voiceResult.data ?? []);
+  const textExperiences = textResult.error ? [] : (textResult.data ?? []);
 
   const pending: PendingExperience[] = [
-    ...voiceResult.data.map((voice) => ({
+    ...voices.map((voice) => ({
       id: voice.id,
       kind: "audio" as const,
       storagePath: voice.storage_path,
       createdAt: voice.created_at,
     })),
-    ...textResult.data.map((experience) => ({
+    ...textExperiences.map((experience) => ({
       id: experience.id,
       kind: "text" as const,
       text: experience.body,
