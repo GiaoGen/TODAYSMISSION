@@ -9,6 +9,7 @@ import ts from "typescript";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { getGalleryCopyCount, getMissionStreamMetrics } from "../features/packs/model/mission-gallery-layout.ts";
+import { getNextIncompleteMissionIndex } from "../features/packs/model/mission-selection.ts";
 import * as dayTransitions from "../features/calendar/model/calendar-day-transition.ts";
 import * as returnStates from "../features/packs/model/pack-carousel-return-state.ts";
 import { createHomeCarouselState } from "../features/packs/model/home-carousel-state.ts";
@@ -345,7 +346,15 @@ test("actual home date handler snapshots both wheels, rejects duplicate navigati
 
 // Execute the real gallery effect with deterministic DOM/RAF/timer stand-ins.
 // This verifies sequencing and cleanup, not browser rendering or visual quality.
-function galleryHarness(count, { reduced = false, saved = null, looping = false, expansionRequested = true } = {}) {
+function galleryHarness(count, {
+  reduced = false,
+  saved = null,
+  looping = false,
+  expansionRequested = true,
+  manualBrowsingEnabled = true,
+  initialMissionIndex = 0,
+  statuses,
+} = {}) {
   const source = ts.createSourceFile("MissionGallery.tsx", read("features/packs/components/MissionGallery.tsx"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const component = source.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === "MissionGallery");
   const effect = findNode(component, node => ts.isCallExpression(node) && node.expression.getText(source) === "useLayoutEffect" && node.arguments[0]?.getText(source).includes("const root = rootRef.current"));
@@ -392,6 +401,10 @@ function galleryHarness(count, { reduced = false, saved = null, looping = false,
     rootRef: { current: root }, trackRef: { current: track }, missionRefs: { current: cards },
     primaryCopyRef: { current: Math.floor(copies / 2) }, measureRef: { current: null },
     missionIdsRef: { current: Array.from({ length: count }, (_, index) => `mission-${index}`) },
+    initialMissionIndexRef: { current: initialMissionIndex },
+    missionCompletionStatusesRef: { current: statuses },
+    manualBrowsingEnabledRef: { current: manualBrowsingEnabled },
+    getNextIncompleteMissionIndex,
     onActiveMissionChangeRef: { current: missionId => activeMissionChanges.push(missionId) }, onExpansionSettledRef: { current: () => { settled++; } }, activeMissionIdRef: { current: null },
     onSelectNextReadyRef: { current: selector => { selectNext = selector; } },
     expansionRequestedRef: { current: expansionRequested }, requestExpansionRef: { current: null },
@@ -426,7 +439,12 @@ function galleryHarness(count, { reduced = false, saved = null, looping = false,
       [...timers.values()].forEach(fn => fn()); timers.clear();
       await new Promise(resolve => setImmediate(resolve));
     },
-    event(name, extra = {}) { now += 16; listeners.get(name)?.({ type: name, button: 0, pointerId: 1, clientX: 100, target: root, preventDefault() {}, ...extra }); },
+    event(name, extra = {}) {
+      now += 16;
+      const event = { type: name, button: 0, pointerId: 1, clientX: 100, target: root, preventDefault() {}, ...extra };
+      listeners.get(name)?.(event);
+      return event;
+    },
     cardTarget: () => new Element(true),
     actionTarget: () => new Element(false, true),
   };
@@ -466,6 +484,46 @@ test("Chrome Try another uses the live snap driver once and selects the next Mis
   for (let frame = 0; frame < 240 && gallery.root.dataset.moving === "true"; frame++) gallery.frame();
   assert.equal(await selection, true);
   assert.equal(gallery.activeMissionChanges.at(-1), "mission-1");
+  gallery.cleanup();
+});
+
+test("Chrome controlled Pack ignores manual drag, wheel and arrows while Try another skips completed slots", async () => {
+  const gallery = galleryHarness(3, {
+    looping: true,
+    manualBrowsingEnabled: false,
+    statuses: { "mission-0": "incomplete", "mission-1": "completed", "mission-2": "incomplete" },
+  });
+  await gallery.expand();
+  const initial = trackPosition(gallery);
+  gallery.event("pointerdown");
+  gallery.event("pointermove", { clientX: 20 });
+  gallery.event("pointerup", { clientX: 20 });
+  assert.equal(trackPosition(gallery), initial);
+  let wheelPrevented = false;
+  gallery.event("wheel", { deltaX: 120, deltaY: 0, preventDefault() { wheelPrevented = true; } });
+  assert.equal(wheelPrevented, false, "blocked Gallery wheel input must not trap page scrolling");
+  let arrowPrevented = false;
+  gallery.event("keydown", { key: "ArrowRight", preventDefault() { arrowPrevented = true; } });
+  assert.equal(arrowPrevented, false);
+  assert.equal(trackPosition(gallery), initial);
+  const selection = gallery.selectNext();
+  settleGallery(gallery);
+  assert.equal(await selection, true);
+  assert.equal(gallery.activeMissionChanges.at(-1), "mission-2");
+  gallery.cleanup();
+});
+
+test("Chrome Pack centers its first incomplete Mission on the initial interactive frame", async () => {
+  const gallery = galleryHarness(4, {
+    looping: true,
+    manualBrowsingEnabled: false,
+    initialMissionIndex: 2,
+    statuses: { "mission-0": "completed", "mission-1": "completed", "mission-2": "incomplete", "mission-3": "incomplete" },
+  });
+  await gallery.expand();
+  const origin = 1920 / 2 - (Math.floor(getGalleryCopyCount(4, 1920) / 2) * 4 * 272 + 120);
+  assert.equal(trackPosition(gallery), origin - 2 * 272);
+  assert.equal(gallery.activeMissionChanges.at(-1), "mission-2");
   gallery.cleanup();
 });
 

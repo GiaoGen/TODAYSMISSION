@@ -1,11 +1,16 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import type { PackDetail } from "@/data/contracts/pack-summary";
 import type { MissionCompletionStatus } from "@/features/missions/model/mission-action-state";
 import { getCompletedMissionCount } from "@/features/packs/model/pack-progress";
+import {
+  getInitialMissionIndex,
+  getIncompleteMissionIndexes,
+  getMissionBrowsingMode,
+  getNextIncompleteMissionIndex,
+} from "@/features/packs/model/mission-selection";
 import { MissionActionLayer } from "@/features/missions/components/MissionActionLayer";
 import { MissionCompletionConfetti } from "@/features/missions/components/MissionCompletionConfetti";
 import { MissionGallery } from "./MissionGallery";
@@ -47,14 +52,17 @@ export function MissionPackDetail({
       ? "completed"
       : "incomplete") as MissionCompletionStatus,
   ]));
-  const [activeMissionId, setActiveMissionId] = useState(pack.missions[0]?.id ?? null);
   const [packJoined, setPackJoined] = useState(initialPackJoined || (sameUser && sessionSnapshot.joinedPackIds.includes(pack.id)));
   const [gallerySettled, setGallerySettled] = useState(false);
   const [missionCompletionStatuses, setMissionCompletionStatuses] = useState(initialStatuses);
+  const initialMissionIndex = getInitialMissionIndex(pack.missions.map((mission) => mission.id), initialStatuses);
+  const initialMissionId = pack.missions[initialMissionIndex]?.id ?? null;
+  const [activeMissionId, setActiveMissionId] = useState(initialMissionId);
   const [completionRequestedMissionIds, setCompletionRequestedMissionIds] = useState<ReadonlySet<string>>(() => new Set());
   const [completionEventId, setCompletionEventId] = useState<string | null>(null);
   const [selectingNext, setSelectingNext] = useState(false);
   const [galleryInteractionLocked, setGalleryInteractionLocked] = useState(false);
+  const pendingAutoAdvanceMissionIdRef = useRef<string | null>(null);
   const selectNextMissionRef = useRef<(() => Promise<boolean>) | null>(null);
   const completionMotionRef = useRef<MissionCompletionMotionHandle | null>(null);
   const selectingNextRef = useRef(false);
@@ -64,12 +72,24 @@ export function MissionPackDetail({
     ? missionCompletionStatuses[activeMission.id] ?? "incomplete"
     : "incomplete";
   const completedMissionCount = getCompletedMissionCount(missionCompletionStatuses);
+  const incompleteMissionCount = getIncompleteMissionIndexes(
+    pack.missions.map((mission) => mission.id),
+    missionCompletionStatuses,
+  ).length;
+  const packFullyCompleted = completedMissionCount === pack.missions.length;
+  const manualBrowsingEnabled = getMissionBrowsingMode({
+    isJoined: packJoined,
+    completedMissionCount,
+    missionCount: pack.missions.length,
+  }) === "free" && packFullyCompleted;
 
   const handleActiveMissionChange = (missionId: string) => {
     setActiveMissionId(missionId);
   };
 
   const handleCompleted = (missionId: string, completedLocalDate: string) => {
+    pendingAutoAdvanceMissionIdRef.current = missionId;
+    setGalleryInteractionLocked(false);
     setMissionCompletionStatuses((current) => current[missionId] === "completed"
       ? current
       : { ...current, [missionId]: "completed" });
@@ -84,7 +104,7 @@ export function MissionPackDetail({
     });
   };
 
-  const handleSelectNext = async () => {
+  const handleSelectNext = useCallback(async () => {
     const selectNext = selectNextMissionRef.current;
     if (!selectNext || selectingNextRef.current) return;
 
@@ -96,14 +116,29 @@ export function MissionPackDetail({
       selectingNextRef.current = false;
       setSelectingNext(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    const completedMissionId = pendingAutoAdvanceMissionIdRef.current;
+    if (!completedMissionId || !gallerySettled) return;
+    if (activeMissionId !== completedMissionId) {
+      pendingAutoAdvanceMissionIdRef.current = null;
+      return;
+    }
+
+    pendingAutoAdvanceMissionIdRef.current = null;
+    const currentIndex = pack.missions.findIndex((mission) => mission.id === completedMissionId);
+    const nextIndex = getNextIncompleteMissionIndex(currentIndex, pack.missions.map((mission) => mission.id), missionCompletionStatuses);
+    if (nextIndex === null) return;
+    void handleSelectNext();
+  }, [activeMissionId, gallerySettled, handleSelectNext, missionCompletionStatuses, pack.missions]);
 
   const missionAction = activeMission && gallerySettled && currentStatus !== "completed" ? (
     <MissionActionLayer
       key={activeMission.id}
       activeMission={activeMission}
       completionRequested={completionRequestedMissionIds.has(activeMission.id)}
-      canSelectNext={pack.missions.length > 1}
+      canSelectNext={incompleteMissionCount > 1}
       selectingNext={selectingNext}
       onCompletionRequested={() => {
         setCompletionRequestedMissionIds((current) => {
@@ -130,6 +165,8 @@ export function MissionPackDetail({
         completionMotionRef={completionMotionRef}
         missions={pack.missions}
         missionCompletionStatuses={missionCompletionStatuses}
+        initialMissionId={initialMissionId ?? undefined}
+        manualBrowsingEnabled={manualBrowsingEnabled}
         missionAction={missionAction}
         interactionLocked={galleryInteractionLocked}
         expandMissions={packJoined}

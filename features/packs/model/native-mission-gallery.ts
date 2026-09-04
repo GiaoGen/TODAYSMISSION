@@ -1,4 +1,6 @@
 import { createNativeScrollController, type NativeScrollController } from "./native-scroll-controller.ts";
+import { getNextIncompleteMissionIndex } from "./mission-selection.ts";
+import type { MissionCompletionStatus } from "@/features/missions/model/mission-action-state";
 
 type NativeMissionGalleryOptions = {
   root: HTMLElement;
@@ -6,8 +8,12 @@ type NativeMissionGalleryOptions = {
   cards: readonly (HTMLLIElement | null)[];
   count: number;
   copies: () => number;
+  missionIds?: readonly string[];
+  getMissionCompletionStatuses?: () => Readonly<Record<string, MissionCompletionStatus>> | undefined;
   cardClass: string;
   navigateHome: () => void;
+  initialPosition?: number;
+  manualBrowsingEnabled?: boolean;
   autoExpand?: boolean;
   onExpansionSettled?: () => void;
   onActiveMissionChange?: (index: number) => void;
@@ -21,15 +27,22 @@ export function mountNativeMissionGallery({
   cards,
   count,
   copies,
+  missionIds,
+  getMissionCompletionStatuses,
   cardClass,
   navigateHome,
+  initialPosition = 0,
+  manualBrowsingEnabled: initialManualBrowsingEnabled = true,
   autoExpand = true,
   onExpansionSettled,
   onActiveMissionChange,
 }: NativeMissionGalleryOptions) {
+  const selectionMissionIds = missionIds ?? Array.from({ length: count }, (_, index) => String(index));
+  const readMissionCompletionStatuses = getMissionCompletionStatuses ?? (() => undefined);
   let controller: NativeScrollController | undefined;
   let disposed = false;
   let interactive = false;
+  let manualBrowsingEnabled = initialManualBrowsingEnabled;
   let expansionStarted = false;
   let closing = false;
   let width = 0;
@@ -78,7 +91,7 @@ export function mountNativeMissionGallery({
     const layout = { count, copies: nextCopies, stride };
     if (controller) controller.restore(layout, lastPosition);
     else controller = createNativeScrollController(viewport, {
-      ...layout, disabled: true, reducedMotion: reduced,
+      ...layout, disabled: true, position: initialPosition, manualBrowsingEnabled, reducedMotion: reduced,
       onProgress: ({ index }) => { onActiveMissionChange?.(index); },
       onSettled: ({ index, position }) => {
         lastPosition = position;
@@ -117,7 +130,7 @@ export function mountNativeMissionGallery({
     if (event.target instanceof Element && event.target.closest("[data-gallery-action]")) return;
     if (event.key === "Escape" && (interactive || !expansionStarted)) { event.preventDefault(); close(); }
     else if (!interactive || root.dataset.interactionLocked === "true") return;
-    else if (count > 1 && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
+    else if (manualBrowsingEnabled && count > 1 && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
       event.preventDefault();
       const base = Math.floor(measuredCopies / 2) * count;
       controller?.selectSlot(base + Math.round(controller.position()) + (event.key === "ArrowRight" ? 1 : -1));
@@ -139,7 +152,15 @@ export function mountNativeMissionGallery({
 
     nextSelectionResolve = resolve;
     const base = Math.floor(measuredCopies / 2) * count;
-    controller.selectSlot(base + Math.round(controller.position()) + 1);
+    const currentIndex = Math.round(controller.position());
+    const targetIndex = getNextIncompleteMissionIndex(currentIndex, selectionMissionIds, readMissionCompletionStatuses());
+    if (targetIndex === null) {
+      nextSelectionResolve = null;
+      resolve(false);
+      return;
+    }
+    const steps = (targetIndex - currentIndex + count) % count;
+    controller.selectSlot(base + currentIndex + steps);
   });
 
   root.dataset.phase = "collapsed";
@@ -176,6 +197,11 @@ export function mountNativeMissionGallery({
     expand,
     measure,
     selectNext,
+    setManualBrowsingEnabled(enabled: boolean) {
+      manualBrowsingEnabled = enabled;
+      root.dataset.manualBrowsingEnabled = String(enabled);
+      controller?.setManualBrowsingEnabled(enabled);
+    },
     whenIdle(work: () => void) {
       const apply = () => { work(); measureNow(); };
       if (controller) controller.whenIdle(apply);

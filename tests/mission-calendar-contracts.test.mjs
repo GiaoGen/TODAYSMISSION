@@ -81,6 +81,7 @@ test("completed day route is private runtime data and uses the existing MissionG
   assert.match(completedPage, /getDayGalleryId\(day\.date\)/);
   assert.match(completedPage, /title=\{`\$\{day\.date\} Completed Missions`\}/);
   assert.match(completedPage, /completedDate=\{day\.date\}/);
+  assert.match(completedPage, /manualBrowsingEnabled=\{true\}/);
   assert.match(completedPage, /if \(!day\) notFound\(\)/);
 });
 
@@ -94,6 +95,9 @@ test("Pack progress is derived from completion state and updates without persist
   assert.match(packDetail, /getCompletedMissionCount\(missionCompletionStatuses\)/);
   assert.match(packDetail, /completedMissionCount=\{packJoined \? completedMissionCount : undefined\}/);
   assert.match(packDetail, /gallerySettled && currentStatus !== "completed"/);
+  assert.match(packDetail, /getInitialMissionIndex/);
+  assert.match(packDetail, /getNextIncompleteMissionIndex/);
+  assert.match(packDetail, /manualBrowsingEnabled/);
   assert.match(read("features/packs/components/MissionGallery.tsx"), /className=\{styles\.packProgress\}/);
   assert.doesNotMatch(packDetail, /pack_progress|progress_table|fetch\(/i);
 });

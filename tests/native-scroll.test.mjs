@@ -146,9 +146,13 @@ for (const modern of [true, false]) {
     assert.equal(h.frames.size, 0);
     if (modern) assert.equal(h.timers.size, 0, "do not race native scrollend with a timer");
     assert.equal(h.viewport.listeners.has("pointermove"), false);
-    assert.equal(h.viewport.listeners.has("touchmove"), false);
-    assert.equal(h.viewport.listeners.has("wheel"), false);
-    assert.ok([...h.viewport.listeners.values()].every(listener => listener.options.passive));
+    assert.equal(h.viewport.listeners.has("touchmove"), true);
+    assert.equal(h.viewport.listeners.has("wheel"), true);
+    assert.equal(h.viewport.listeners.get("touchmove").options.passive, false);
+    assert.equal(h.viewport.listeners.get("wheel").options.passive, false);
+    assert.ok([...h.viewport.listeners.entries()]
+      .filter(([name]) => name !== "touchmove" && name !== "wheel")
+      .every(([, listener]) => listener.options.passive));
     h.controller.destroy();
     assert.equal(h.timers.size, 0);
     assert.equal(h.viewport.listeners.size, 0);
@@ -310,7 +314,8 @@ test("buffer counts cover multiple viewports without unbounded DOM growth", () =
   }
 });
 
-function galleryHarness({ count = 3, looping = true, modern = true, autoExpand = true } = {}) {
+function galleryHarness({ count = 3, looping = true, modern = true, autoExpand = true,
+  manualBrowsingEnabled = true, initialPosition = 0, statuses } = {}) {
   const env = environment({ modern });
   const viewport = new env.Scroller();
   const rootElement = new env.Element();
@@ -336,6 +341,7 @@ function galleryHarness({ count = 3, looping = true, modern = true, autoExpand =
   });
   let returned = 0;
   const activeMissionChanges = [];
+  const missionIds = Array.from({ length: count }, (_, index) => `mission-${index}`);
   const { mountNativeMissionGallery } = load("features/packs/model/native-mission-gallery.ts", env.globals);
   const gallery = mountNativeMissionGallery({
     root: rootElement,
@@ -343,8 +349,12 @@ function galleryHarness({ count = 3, looping = true, modern = true, autoExpand =
     cards,
     count,
     copies: () => copies,
+    missionIds,
+    getMissionCompletionStatuses: () => statuses,
     cardClass: "missionCard",
     navigateHome() { returned++; },
+    initialPosition,
+    manualBrowsingEnabled,
     autoExpand,
     onActiveMissionChange(index) { activeMissionChanges.push(index); },
   });
@@ -374,6 +384,57 @@ test("Safari Try another uses native snapping once and selects the next Mission"
   await single.expand();
   assert.equal(await single.gallery.selectNext(), false);
   single.gallery.destroy();
+});
+
+test("Safari controlled Pack blocks touch, wheel and arrows while programmatic Try another skips completed slots", async () => {
+  const h = galleryHarness({
+    count: 3,
+    looping: true,
+    manualBrowsingEnabled: false,
+    statuses: { "mission-0": "incomplete", "mission-1": "completed", "mission-2": "incomplete" },
+  });
+  await h.expand();
+  const initial = h.viewport.left;
+  let wheelPrevented = false;
+  h.viewport.emit("wheel", { deltaX: 160, deltaY: 0, preventDefault() { wheelPrevented = true; } });
+  assert.equal(wheelPrevented, true);
+  assert.equal(h.viewport.left, initial);
+  h.viewport.left = initial + h.stride;
+  h.viewport.emit("scroll");
+  assert.equal(h.viewport.left, initial, "a native user offset is restored without publishing a new Mission");
+  let touchPrevented = false;
+  h.viewport.emit("touchstart", { touches: [{ clientX: 200, clientY: 0 }] });
+  h.viewport.emit("touchmove", { touches: [{ clientX: 120, clientY: 0 }], preventDefault() { touchPrevented = true; } });
+  assert.equal(touchPrevented, true);
+  h.viewport.emit("touchend", { touches: [] });
+  const beforeArrow = h.viewport.left;
+  h.rootElement.emit("keydown", { key: "ArrowRight", preventDefault() { throw new Error("manual arrow must not be consumed"); } });
+  assert.equal(h.viewport.left, beforeArrow);
+
+  const selection = h.gallery.selectNext();
+  h.viewport.completeSmooth();
+  assert.equal(await selection, true);
+  assert.equal(h.activeMissionChanges.at(-1), 2, "programmatic navigation goes from A to C");
+  h.gallery.destroy();
+});
+
+test("Safari Pack restores the first incomplete Mission before expansion and can unlock native browsing live", async () => {
+  const h = galleryHarness({
+    count: 3,
+    looping: true,
+    manualBrowsingEnabled: false,
+    initialPosition: 2,
+    statuses: { "mission-0": "completed", "mission-1": "completed", "mission-2": "incomplete" },
+  });
+  await h.expand();
+  const initial = h.viewport.left;
+  assert.equal(initial, (Math.floor(h.copies / 2) * 3 + 2) * h.stride);
+  assert.equal(h.activeMissionChanges.at(-1), 2);
+  h.gallery.setManualBrowsingEnabled(true);
+  h.viewport.nativeScroll(initial - h.stride);
+  h.viewport.emit("scrollend");
+  assert.equal(h.activeMissionChanges.at(-1), 1, "native manual browsing resumes without remounting");
+  h.gallery.destroy();
 });
 
 for (const looping of [false, true]) for (const count of [1, 2, 8]) {

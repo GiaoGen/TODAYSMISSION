@@ -14,6 +14,7 @@ import type { MissionCompletionStatus } from "@/features/missions/model/mission-
 import { CALENDAR_DAY_TRANSITION_CLASSES, createDirectDayReturnState, getDayTransitionName } from "@/features/calendar/model/calendar-day-transition";
 import { carouselSettingsStore } from "@/features/packs/model/carousel-settings";
 import { getGalleryCopyCount, getMissionStreamMetrics } from "@/features/packs/model/mission-gallery-layout";
+import { getNextIncompleteMissionIndex } from "@/features/packs/model/mission-selection";
 import {
   createDirectPackReturnState,
   getPackCarouselReturnState,
@@ -60,6 +61,8 @@ type MissionGalleryProps = {
   hero: MissionSummary | PackSummary;
   missions: readonly MissionSummary[];
   completedDate?: string;
+  manualBrowsingEnabled: boolean;
+  initialMissionId?: string;
   expandMissions?: boolean;
   interactionLocked?: boolean;
   completedMissionCount?: number;
@@ -139,6 +142,8 @@ export function MissionGallery({
   hero,
   missions,
   completedDate,
+  manualBrowsingEnabled,
+  initialMissionId,
   expandMissions = true,
   interactionLocked = false,
   completedMissionCount,
@@ -159,6 +164,7 @@ export function MissionGallery({
   const missionRefs = useRef<Array<HTMLLIElement | null>>([]);
   const missionCount = missions.length;
   const looping = completedDate === undefined;
+  const initialMissionIndex = Math.max(0, missions.findIndex((mission) => mission.id === initialMissionId));
   const liveViewport = useDeckViewport();
   const [stableViewport, setStableViewport] = useState(liveViewport);
   const viewport = nativeScrolling ? stableViewport : liveViewport;
@@ -184,8 +190,12 @@ export function MissionGallery({
     : looping ? getGalleryCopyCount(missionCount, viewportWidth, streamMetrics.stride) : 1;
   const primaryCopy = Math.floor(copies / 2);
   const primaryCopyRef = useRef(primaryCopy);
+  const initialMissionIndexRef = useRef(initialMissionIndex);
   const measureRef = useRef<(() => void) | null>(null);
   const missionIdsRef = useRef(missions.map((mission) => mission.id));
+  const missionCompletionStatusesRef = useRef(missionCompletionStatuses);
+  const manualBrowsingEnabledRef = useRef(manualBrowsingEnabled);
+  const nativeManualBrowsingRef = useRef<((enabled: boolean) => void) | null>(null);
   const onActiveMissionChangeRef = useRef(onActiveMissionChange);
   const onExpansionSettledRef = useRef(onExpansionSettled);
   const onSelectNextReadyRef = useRef(onSelectNextReady);
@@ -195,10 +205,14 @@ export function MissionGallery({
 
   useLayoutEffect(() => {
     missionIdsRef.current = missions.map((mission) => mission.id);
+    initialMissionIndexRef.current = initialMissionIndex;
+    missionCompletionStatusesRef.current = missionCompletionStatuses;
+    manualBrowsingEnabledRef.current = manualBrowsingEnabled;
+    nativeManualBrowsingRef.current?.(manualBrowsingEnabled);
     onActiveMissionChangeRef.current = onActiveMissionChange;
     onExpansionSettledRef.current = onExpansionSettled;
     onSelectNextReadyRef.current = onSelectNextReady;
-  }, [missions, onActiveMissionChange, onExpansionSettled, onSelectNextReady]);
+  }, [initialMissionIndex, manualBrowsingEnabled, missionCompletionStatuses, missions, onActiveMissionChange, onExpansionSettled, onSelectNextReady]);
 
   useLayoutEffect(() => {
     expansionRequestedRef.current = expandMissions;
@@ -264,12 +278,17 @@ export function MissionGallery({
       const native = mountNativeMissionGallery({
         root, viewport: scrollRef.current, cards, count: missionCount,
         copies: () => 2 * primaryCopyRef.current + 1,
+        missionIds: missionIdsRef.current,
+        getMissionCompletionStatuses: () => missionCompletionStatusesRef.current,
         cardClass: styles.missionCard, navigateHome, autoExpand: false,
+        initialPosition: initialMissionIndexRef.current,
+        manualBrowsingEnabled: manualBrowsingEnabledRef.current,
         onExpansionSettled: () => onExpansionSettledRef.current?.(),
         onActiveMissionChange: notifyActiveMission,
       });
       measureRef.current = native.measure;
       nativeIdleRef.current = native.whenIdle;
+      nativeManualBrowsingRef.current = native.setManualBrowsingEnabled;
       requestExpansionRef.current = native.expand;
       onSelectNextReadyRef.current?.(native.selectNext);
       if (expansionRequestedRef.current) native.expand();
@@ -277,6 +296,7 @@ export function MissionGallery({
         measureRef.current = null;
         nativeIdleRef.current = null;
         requestExpansionRef.current = null;
+        nativeManualBrowsingRef.current = null;
         onSelectNextReadyRef.current?.(null);
         native.destroy();
       };
@@ -501,7 +521,7 @@ export function MissionGallery({
       const previousOrigin = origin;
       const slotOffset = previousStride
         ? (position - previousOrigin) / previousStride
-        : 0;
+        : -initialMissionIndexRef.current;
 
       stride = middleSecond.offsetLeft - middleFirst.offsetLeft;
       cycleWidth = looping && rightFirst ? rightFirst.offsetLeft - middleFirst.offsetLeft : 0;
@@ -515,7 +535,13 @@ export function MissionGallery({
 
     const onPointerDown = (event: PointerEvent) => {
       if (event.target instanceof Element && event.target.closest("[data-gallery-action]")) return;
-      if (root.dataset.interactionLocked === "true" || !interactive || event.button !== 0 || pointerId !== null) {
+      if (
+        root.dataset.interactionLocked === "true" ||
+        !manualBrowsingEnabledRef.current ||
+        !interactive ||
+        event.button !== 0 ||
+        pointerId !== null
+      ) {
         return;
       }
 
@@ -583,7 +609,12 @@ export function MissionGallery({
 
     const onWheel = (event: WheelEvent) => {
       if (event.target instanceof Element && event.target.closest("[data-gallery-action]")) return;
-      if (root.dataset.interactionLocked === "true" || !interactive || missionCount === 1) {
+      if (
+        root.dataset.interactionLocked === "true" ||
+        !manualBrowsingEnabledRef.current ||
+        !interactive ||
+        missionCount === 1
+      ) {
         return;
       }
 
@@ -614,6 +645,7 @@ export function MissionGallery({
       }
       if (
         root.dataset.interactionLocked === "true" ||
+        !manualBrowsingEnabledRef.current ||
         !interactive ||
         missionCount === 1 ||
         (event.key !== "ArrowLeft" && event.key !== "ArrowRight")
@@ -665,7 +697,22 @@ export function MissionGallery({
         resolve(false);
         return;
       }
-      settleAt(nearestSnap(position) - stride, 0, resolve);
+      const currentIndex = missionIdsRef.current.indexOf(activeMissionIdRef.current ?? "");
+      const fallbackIndex = missionCount > 0
+        ? ((Math.round((origin - position) / stride) % missionCount) + missionCount) % missionCount
+        : 0;
+      const targetIndex = getNextIncompleteMissionIndex(
+        currentIndex >= 0 ? currentIndex : fallbackIndex,
+        missionIdsRef.current,
+        missionCompletionStatusesRef.current,
+      );
+      if (targetIndex === null) {
+        resolve(false);
+        return;
+      }
+      const selectedIndex = currentIndex >= 0 ? currentIndex : fallbackIndex;
+      const steps = (targetIndex - selectedIndex + missionCount) % missionCount;
+      settleAt(nearestSnap(position) - steps * stride, 0, resolve);
     });
 
     measureRef.current = measure;
@@ -754,6 +801,7 @@ export function MissionGallery({
         data-phase="collapsed"
         data-kind={completedDate ? "day" : "pack"}
         data-interaction-locked={interactionLocked}
+        data-manual-browsing-enabled={manualBrowsingEnabled}
         data-native-scroll={nativeScrolling}
         data-single={missionCount === 1}
         style={streamStyle}
