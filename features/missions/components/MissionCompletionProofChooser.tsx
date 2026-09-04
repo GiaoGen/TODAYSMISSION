@@ -31,9 +31,9 @@ export function MissionTextProofCard({
 }) {
   return (
     <div className={styles.textProofFace} data-gallery-action>
-      <section aria-label="Text proof" className={styles.textProofCard}>
+      <section aria-label="Text experience" className={styles.textProofCard}>
         <div className={styles.textProofHeader}>
-          <span>MISSION PROOF</span>
+          <span>MISSION EXPERIENCE</span>
           <span>{value.length}/1000</span>
         </div>
         <textarea
@@ -115,9 +115,9 @@ export function MissionCompletionProofChooser({
           value={textDraft}
         />
       ) : null}
-      <div aria-label="Choose completion proof" className={styles.proofChooserCapsule}>
+      <div aria-label="Choose completion experience" className={styles.proofChooserCapsule}>
         <button
-          aria-label={mode === "text" ? "Upload text proof" : "Type proof"}
+          aria-label={mode === "text" ? "Upload text experience" : "Type experience"}
           className={`${styles.proofChooserOption} ${styles.proofChooserType}`}
           disabled={submitting || (mode === "text" && normalizeMissionTextProof(textDraft) === null)}
           onClick={() => {
@@ -129,7 +129,7 @@ export function MissionCompletionProofChooser({
           <span>{mode === "text" ? "upload" : "type"}</span>
         </button>
         <button
-          aria-label="Record audio proof"
+          aria-label="Record audio experience"
           className={`${styles.proofChooserOption} ${styles.proofChooserRecord}`}
           disabled={submitting}
           onClick={() => {

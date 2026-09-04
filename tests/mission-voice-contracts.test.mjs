@@ -18,7 +18,7 @@ const read = file => readFileSync(path.join(root, file), "utf8");
 const migration = read("supabase/migrations/20260902064257_create_mission_voices.sql");
 const actions = read("features/missions/actions.ts");
 const actionLayer = read("features/missions/components/MissionActionLayer.tsx");
-const recorder = read("features/missions/components/MissionVoiceRecorder.tsx");
+const recorder = read("features/missions/components/MissionProofRecorder.tsx");
 const listener = read("features/missions/components/MissionVoiceListener.tsx");
 const repository = read("data/repositories/get-mission-voices.ts");
 
@@ -69,31 +69,35 @@ test("Mission Voice Storage is independent, private, and does not gate INSERT on
   assert.match(migration, /create policy "Joined users can read published Mission voices"/);
 });
 
-test("incomplete Mission cannot share and completed Mission can request a target", () => {
-  assert.match(actions, /from\("mission_completions"\)/);
-  assert.match(actions, /Complete this Mission before sharing an experience/);
+test("incomplete Mission prepares its audio Experience before completion", () => {
+  assert.match(actions, /createMissionExperienceAudioUploadTarget/);
+  assert.match(actions, /active_mission_id/);
+  assert.match(actions, /Take this Mission before completing it/);
   assert.match(actions, /get_my_mission_voice_statuses/);
   assert.match(actions, /pathBase: `\$\{user\.id\}\/\$\{missionId\}\/\$\{crypto\.randomUUID\(\)\}`/);
 });
 
-test("submit action keeps is_published server-owned and reports already_shared", () => {
-  assert.match(actions, /rpc\("submit_mission_voice"/);
-  assert.match(actions, /status !== "submitted" && result\.status !== "already_shared"/);
+test("Audio completion owns the Experience insert and keeps publication server-owned", () => {
+  assert.match(actions, /completeMissionWithAudioAction/);
+  assert.match(actions, /p_storage_path: audioPath/);
+  assert.match(recorder, /createMissionExperienceAudioUploadTarget/);
+  assert.match(recorder, /completeMissionWithAudioAction/);
+  assert.doesNotMatch(actions, /submitMissionVoiceAction|rpc\("submit_mission_voice"/);
   assert.doesNotMatch(actions, /p_is_published|is_published\s*:/);
 });
 
-test("Mission Voice Recorder uploads only to its own bucket without upsert", () => {
-  assert.match(recorder, /createMissionVoiceUploadTarget/);
+test("Mission completion recorder uploads to the Experience bucket without upsert", () => {
+  assert.match(recorder, /createMissionExperienceAudioUploadTarget/);
   assert.match(recorder, /from\("mission-voices"\)/);
   assert.match(recorder, /upsert: false/);
-  assert.match(recorder, /submitMissionVoiceAction/);
-  assert.match(recorder, /controls/);
-  assert.doesNotMatch(recorder, /proof_path|mission-proofs/);
+  assert.match(recorder, /completeMissionWithAudioAction/);
+  assert.doesNotMatch(recorder, /mission-proofs/);
 });
 
 test("the normal incomplete action area no longer keeps Mission Voice listening controls", () => {
   assert.doesNotMatch(actionLayer, /I am nervous|MissionVoiceListener|nervousOpen/);
   assert.doesNotMatch(actionLayer, /MissionVoiceRecorder|voiceRecorderOpen|Share what it was like|Submitted for review|> Completed/);
+  assert.doesNotMatch(actions, /submitMissionVoiceAction|createMissionVoiceUploadTarget/);
   assert.match(actionLayer, /MissionCompleteSlider/);
   assert.match(actionLayer, /try another/);
   assert.match(actionLayer, /completionRequested \?/);

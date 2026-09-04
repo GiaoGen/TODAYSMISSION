@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 
 import {
   completeMissionWithAudioAction,
-  createMissionProofUploadTarget,
+  createMissionExperienceAudioUploadTarget,
 } from "@/features/missions/actions";
 import {
   getMissionProofFormat,
@@ -33,12 +33,12 @@ const WAVEFORM_BAR_COUNT = 34;
 function recordingError(error: unknown): string {
   if (error instanceof DOMException) {
     if (error.name === "NotAllowedError" || error.name === "SecurityError") {
-      return "Microphone permission is required to record proof.";
+      return "Microphone permission is required to record an experience.";
     }
     if (error.name === "NotFoundError") return "No microphone was found.";
     if (error.name === "NotSupportedError") return "Audio recording is not supported in this browser.";
   }
-  return "We couldn't start recording. Please try again.";
+  return "We couldn't start recording an experience. Please try again.";
 }
 
 function stopStream(stream: MediaStream | null) {
@@ -294,7 +294,7 @@ export function MissionProofRecorder({ missionId, onCompleted, onInteractionLock
         startedAtRef.current = null;
         selectedFormatRef.current = null;
         setState("idle");
-        setError("We couldn't record that proof. Please try again.");
+        setError("We couldn't record that experience. Please try again.");
       };
 
       recorder.start();
@@ -364,27 +364,27 @@ export function MissionProofRecorder({ missionId, onCompleted, onInteractionLock
     setError(null);
 
     try {
-      const target = await createMissionProofUploadTarget(submissionMissionId);
+      const target = await createMissionExperienceAudioUploadTarget(submissionMissionId);
       if (generationRef.current !== generation || missionIdRef.current !== submissionMissionId) return;
       if (!target.ok) {
         setState("recorded");
         setError(target.error);
         return;
       }
-      const proofPath = `${target.pathBase}.${format.extension}`;
+      const audioPath = `${target.pathBase}.${format.extension}`;
       const supabase = createClient();
       const { error: uploadError } = await supabase.storage
-        .from("mission-proofs")
-        .upload(proofPath, blob, { contentType: format.mimeType, upsert: false });
+        .from("mission-voices")
+        .upload(audioPath, blob, { contentType: format.mimeType, upsert: false });
       if (generationRef.current !== generation || missionIdRef.current !== submissionMissionId) return;
       if (uploadError) {
         if (process.env.NODE_ENV !== "production") console.error("Mission proof upload failed.", uploadError);
         setState("recorded");
-        setError("We couldn't upload the audio proof. Please try again.");
+        setError("We couldn't upload the audio experience. Please try again.");
         return;
       }
 
-      const completion = await completeMissionWithAudioAction(submissionMissionId, proofPath, localDateKey(new Date()));
+      const completion = await completeMissionWithAudioAction(submissionMissionId, audioPath, localDateKey(new Date()));
       if (generationRef.current !== generation || missionIdRef.current !== submissionMissionId) return;
       if (!completion.ok) {
         setState("recorded");

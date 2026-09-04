@@ -14,37 +14,34 @@ export type Database = {
   }
   public: {
     Tables: {
-      mission_completions: {
+      mission_completion_legacy_proofs: {
         Row: {
-          completed_at: string
-          completed_local_date: string
+          archived_at: string
           mission_id: string
           proof_path: string | null
           proof_text: string | null
-          proof_type: string
+          proof_type: string | null
           user_id: string
         }
         Insert: {
-          completed_at?: string
-          completed_local_date: string
+          archived_at?: string
           mission_id: string
           proof_path?: string | null
           proof_text?: string | null
-          proof_type?: string
+          proof_type?: string | null
           user_id: string
         }
         Update: {
-          completed_at?: string
-          completed_local_date?: string
+          archived_at?: string
           mission_id?: string
           proof_path?: string | null
           proof_text?: string | null
-          proof_type?: string
+          proof_type?: string | null
           user_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "mission_completions_mission_id_fkey"
+            foreignKeyName: "mission_completion_legacy_proofs_mission_id_fkey"
             columns: ["mission_id"]
             isOneToOne: false
             referencedRelation: "missions"
@@ -52,34 +49,28 @@ export type Database = {
           },
         ]
       }
-      mission_voices: {
+      mission_completions: {
         Row: {
-          created_at: string
-          id: string
-          is_published: boolean
+          completed_at: string
+          completed_local_date: string
           mission_id: string
-          storage_path: string
           user_id: string
         }
         Insert: {
-          created_at?: string
-          id?: string
-          is_published?: boolean
+          completed_at?: string
+          completed_local_date: string
           mission_id: string
-          storage_path: string
           user_id: string
         }
         Update: {
-          created_at?: string
-          id?: string
-          is_published?: boolean
+          completed_at?: string
+          completed_local_date?: string
           mission_id?: string
-          storage_path?: string
           user_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "mission_voices_mission_id_fkey"
+            foreignKeyName: "mission_completions_mission_id_fkey"
             columns: ["mission_id"]
             isOneToOne: false
             referencedRelation: "missions"
@@ -115,6 +106,41 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "mission_text_experiences_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: false
+            referencedRelation: "missions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mission_voices: {
+        Row: {
+          created_at: string
+          id: string
+          is_published: boolean
+          mission_id: string
+          storage_path: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_published?: boolean
+          mission_id: string
+          storage_path: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_published?: boolean
+          mission_id?: string
+          storage_path?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mission_voices_mission_id_fkey"
             columns: ["mission_id"]
             isOneToOne: false
             referencedRelation: "missions"
@@ -199,6 +225,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "pack_memberships_active_mission_pack_fkey"
+            columns: ["active_mission_id", "pack_id"]
+            isOneToOne: false
+            referencedRelation: "missions"
+            referencedColumns: ["id", "pack_id"]
+          },
+          {
             foreignKeyName: "pack_memberships_pack_id_fkey"
             columns: ["pack_id"]
             isOneToOne: false
@@ -251,21 +284,11 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      take_mission: {
-        Args: {
-          p_mission_id: string
-          p_pack_id: string
-        }
-        Returns: {
-          active_mission_id: string
-          status: string
-        }[]
-      }
       complete_mission_with_audio: {
         Args: {
           p_completed_local_date: string
           p_mission_id: string
-          p_proof_path: string
+          p_storage_path: string
         }
         Returns: {
           completed_at: string
@@ -275,9 +298,9 @@ export type Database = {
       }
       complete_mission_with_text: {
         Args: {
+          p_body: string
           p_completed_local_date: string
           p_mission_id: string
-          p_proof_text: string
         }
         Returns: {
           completed_at: string
@@ -291,11 +314,11 @@ export type Database = {
           mission_id: string
         }[]
       }
-      submit_mission_voice: {
-        Args: { p_mission_id: string; p_storage_path: string }
+      take_mission: {
+        Args: { p_mission_id: string; p_pack_id: string }
         Returns: {
+          active_mission_id: string
           status: string
-          voice_id: string
         }[]
       }
     }
@@ -316,12 +339,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -345,11 +368,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -370,11 +393,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -395,11 +418,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -412,11 +435,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }

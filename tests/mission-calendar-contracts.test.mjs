@@ -107,14 +107,15 @@ test("slider progress directly drives the matching completion face and resets on
   assert.match(gallery, /missionCompletionStatuses\?\.\[mission\.id\] === "completed"/);
 });
 
-test("completion proof keeps real recording, preview and upload in the shared capsule", () => {
+test("completion audio experience keeps real recording, preview and upload in the shared capsule", () => {
   assert.match(proofRecorder, /navigator\.mediaDevices\.getUserMedia/);
   assert.match(proofRecorder, /new MediaRecorder/);
   assert.match(proofRecorder, /createAnalyser\(\)/);
   assert.match(proofRecorder, /className=\{styles\.proofWaveform\}/);
   assert.match(proofRecorder, /Upload recording/);
   assert.match(proofRecorder, /Play recording/);
-  assert.match(proofRecorder, /\.from\("mission-proofs"\)/);
+  assert.match(proofRecorder, /\.from\("mission-voices"\)/);
+  assert.match(proofRecorder, /createMissionExperienceAudioUploadTarget/);
   assert.match(proofRecorder, /completeMissionWithAudioAction/);
   assert.match(actionLayer, /completionRequested \? \([\s\S]*MissionCompletionProofChooser/);
   assert.match(read("features/missions/components/MissionCompletionProofChooser.tsx"), /MissionProofRecorder/);
