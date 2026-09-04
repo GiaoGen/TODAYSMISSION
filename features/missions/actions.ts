@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import type { MissionVoicePlayback } from "@/data/contracts/mission-voice";
 import { getPublishedMissionVoicesForMission } from "@/data/repositories/get-mission-voices";
 import { parseDateKey } from "@/features/calendar/model/calendar-month";
+import { normalizeMissionTextProof } from "@/features/missions/model/mission-text-proof";
 import { createClient } from "@/lib/supabase/server";
 
 export type MissionProofUploadTargetResult =
@@ -127,6 +128,50 @@ export async function completeMissionWithAudioAction(
   });
 
   if (error) return failedCompletion("We couldn't verify the audio proof. Please try again.");
+
+  const completion = data[0];
+  if (!completion || completion.status !== "completed" || !completion.completed_at || !completion.completed_local_date) {
+    return failedCompletion("We couldn't complete this mission. Please try again.");
+  }
+
+  revalidatePath(`/completed/${completion.completed_local_date}`);
+
+  return {
+    ok: true,
+    status: "completed",
+    completedAt: completion.completed_at,
+    completedLocalDate: completion.completed_local_date,
+  };
+}
+
+export async function completeMissionWithTextAction(
+  missionId: string,
+  text: string,
+  completedLocalDate: string,
+): Promise<CompleteMissionWithAudioResult> {
+  const proofText = normalizeMissionTextProof(text);
+  if (!UUID_PATTERN.test(missionId) || !proofText
+    || typeof completedLocalDate !== "string" || !parseDateKey(completedLocalDate)) {
+    return failedCompletion("That mission proof is invalid.");
+  }
+
+  const supabase = await createClient();
+  const { data: userData, error: authError } = await supabase.auth.getUser();
+
+  if (authError) {
+    if (isAuthSessionMissingError(authError)) return failedCompletion("Please log in to complete a mission.");
+    return failedCompletion("We couldn't verify your login. Please try again.");
+  }
+
+  if (!userData.user) return failedCompletion("Please log in to complete a mission.");
+
+  const { data, error } = await supabase.rpc("complete_mission_with_text", {
+    p_mission_id: missionId,
+    p_proof_text: proofText,
+    p_completed_local_date: completedLocalDate,
+  });
+
+  if (error) return failedCompletion("We couldn't verify the text proof. Please try again.");
 
   const completion = data[0];
   if (!completion || completion.status !== "completed" || !completion.completed_at || !completion.completed_local_date) {

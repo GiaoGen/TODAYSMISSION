@@ -7,6 +7,7 @@ type NativeScrollOptions = NativeScrollLayout & {
   position?: number;
   disabled?: boolean;
   manualBrowsingEnabled?: boolean;
+  manualBrowsingBoundary?: { minIndex: number; maxIndex: number };
   reducedMotion?: boolean;
   onProgress?: (selection: NativeScrollSelection) => void;
   onSettled: (selection: NativeScrollSelection) => void;
@@ -23,6 +24,7 @@ export function createNativeScrollController(viewport: HTMLElement, options: Nat
   let layout: NativeScrollLayout = options;
   let locked = options.disabled ?? false;
   let manualBrowsingEnabled = options.manualBrowsingEnabled ?? true;
+  let manualBrowsingBoundary = options.manualBrowsingBoundary;
   let disposed = false;
   let moving = false;
   let touching = false;
@@ -42,6 +44,13 @@ export function createNativeScrollController(viewport: HTMLElement, options: Nat
   const baseSlot = () => Math.floor(layout.copies / 2) * layout.count;
   const maxOffset = () => Math.max(0, layout.count * layout.copies - 1) * layout.stride;
   const bounded = (left: number) => Math.max(0, Math.min(maxOffset(), left));
+  const manualBounded = (left: number) => {
+    const boundary = manualBrowsingBoundary;
+    if (manualBrowsingEnabled || !boundary || layout.stride <= 0) return bounded(left);
+    const logicalPosition = bounded(left) / layout.stride - baseSlot();
+    const constrainedPosition = Math.max(boundary.minIndex, Math.min(boundary.maxIndex, logicalPosition));
+    return bounded((baseSlot() + constrainedPosition) * layout.stride);
+  };
   const position = () => layout.stride > 0 ? bounded(viewport.scrollLeft) / layout.stride - baseSlot() : 0;
   const clearTimer = () => { clearTimeout(timer); timer = undefined; };
   const markMoving = (value: boolean) => {
@@ -86,6 +95,14 @@ export function createNativeScrollController(viewport: HTMLElement, options: Nat
       return;
     }
     silentOffset = null;
+    if (!manualBrowsingEnabled && manualBrowsingBoundary) {
+      const allowed = manualBounded(left);
+      if (Math.abs(left - allowed) > POSITION_EPSILON) {
+        jump(allowed);
+        markMoving(false);
+        return;
+      }
+    }
     // Rubber-banding is not a stable position, even if a timer has gone quiet.
     if (Math.abs(left - bounded(left)) > POSITION_EPSILON) return;
     const nearest = Math.round(left / layout.stride) * layout.stride;
@@ -131,7 +148,13 @@ export function createNativeScrollController(viewport: HTMLElement, options: Nat
       silentOffset = null;
       return;
     }
-    if (!manualBrowsingEnabled && !programmaticSelection) {
+    if (!manualBrowsingEnabled && manualBrowsingBoundary && !programmaticSelection) {
+      const allowed = manualBounded(viewport.scrollLeft);
+      if (Math.abs(viewport.scrollLeft - allowed) > POSITION_EPSILON) {
+        blockUserScroll();
+        return;
+      }
+    } else if (!manualBrowsingEnabled && !programmaticSelection) {
       blockUserScroll();
       return;
     }
@@ -156,7 +179,7 @@ export function createNativeScrollController(viewport: HTMLElement, options: Nat
   };
   const onPointerDown = (event: PointerEvent) => {
     pointerStart = { x: event.clientX, y: event.clientY };
-    if (!manualBrowsingEnabled) lastAllowedLeft = bounded(viewport.scrollLeft);
+    if (!manualBrowsingEnabled) lastAllowedLeft = manualBounded(viewport.scrollLeft);
     if (!moving) suppressClickUntil = 0;
     calibrated = false;
     silentOffset = null;
@@ -176,10 +199,10 @@ export function createNativeScrollController(viewport: HTMLElement, options: Nat
     clearTimer();
     const touch = event.touches[0];
     touchStart = touch ? { x: touch.clientX, y: touch.clientY } : null;
-    if (!manualBrowsingEnabled) lastAllowedLeft = bounded(viewport.scrollLeft);
+    if (!manualBrowsingEnabled) lastAllowedLeft = manualBounded(viewport.scrollLeft);
   };
   const onTouchMove = (event: TouchEvent) => {
-    if (manualBrowsingEnabled || locked || !touchStart || event.touches.length !== 1) return;
+    if (manualBrowsingEnabled || (manualBrowsingBoundary && manualBrowsingBoundary.maxIndex > manualBrowsingBoundary.minIndex) || locked || !touchStart || event.touches.length !== 1) return;
     const touch = event.touches[0];
     const deltaX = touch.clientX - touchStart.x;
     const deltaY = touch.clientY - touchStart.y;
@@ -195,7 +218,7 @@ export function createNativeScrollController(viewport: HTMLElement, options: Nat
     else if (!touching) flushIdleWork();
   };
   const onWheel = (event: WheelEvent) => {
-    if (manualBrowsingEnabled || locked) return;
+    if (manualBrowsingEnabled || (manualBrowsingBoundary && manualBrowsingBoundary.maxIndex > manualBrowsingBoundary.minIndex) || locked) return;
     const horizontal = Math.abs(event.deltaX) > Math.abs(event.deltaY) || event.shiftKey;
     if (!horizontal) return;
     event.preventDefault();
@@ -217,7 +240,7 @@ export function createNativeScrollController(viewport: HTMLElement, options: Nat
     cancelVisualFrame();
     revision++;
     pointerStart = null;
-    const target = bounded(lastAllowedLeft);
+    const target = manualBounded(lastAllowedLeft);
     if (Math.abs(viewport.scrollLeft - target) > POSITION_EPSILON) jump(target);
     markMoving(false);
   }
@@ -275,10 +298,20 @@ export function createNativeScrollController(viewport: HTMLElement, options: Nat
       if (!manualBrowsingEnabled) blockUserScroll();
       flushIdleWork();
     },
+    setManualBrowsing(enabled: boolean, boundary?: { minIndex: number; maxIndex: number }) {
+      manualBrowsingEnabled = enabled;
+      manualBrowsingBoundary = boundary;
+      viewport.dataset.nativeManualBrowsingEnabled = String(enabled);
+      if (!enabled) blockUserScroll();
+    },
     setManualBrowsingEnabled(enabled: boolean) {
       manualBrowsingEnabled = enabled;
       viewport.dataset.nativeManualBrowsingEnabled = String(enabled);
       if (!enabled) blockUserScroll();
+    },
+    rebaseMissionOrder(indexDelta: number) {
+      if (disposed || locked || indexDelta === 0) return;
+      jump(viewport.scrollLeft - indexDelta * layout.stride);
     },
     destroy() {
       disposed = true;

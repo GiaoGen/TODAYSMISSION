@@ -6,7 +6,7 @@ import type { MissionSummary } from "@/data/contracts/pack-summary";
 import { MISSION_SLIDER_THUMB_SIZE } from "@/features/missions/model/mission-action-state";
 import { getMissionThemeAppearance } from "@/features/packs/components/MissionStreamCard";
 import { MissionCompleteSlider } from "./MissionCompleteSlider";
-import { MissionProofRecorder } from "./MissionProofRecorder";
+import { MissionCompletionProofChooser } from "./MissionCompletionProofChooser";
 import styles from "./MissionActionLayer.module.css";
 
 type MissionActionLayerProps = {
@@ -54,7 +54,7 @@ export function MissionActionLayer({
     >
       <div className={styles.panel}>
         {completionRequested ? (
-          <MissionProofRecorder
+          <MissionCompletionProofChooser
             key={activeMission.id}
             missionId={activeMission.id}
             onCompleted={onCompleted}

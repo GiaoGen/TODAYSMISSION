@@ -9,11 +9,13 @@ type NativeMissionGalleryOptions = {
   count: number;
   copies: () => number;
   missionIds?: readonly string[];
+  selectionMissionIds?: readonly string[];
   getMissionCompletionStatuses?: () => Readonly<Record<string, MissionCompletionStatus>> | undefined;
   cardClass: string;
   navigateHome: () => void;
   initialPosition?: number;
   manualBrowsingEnabled?: boolean;
+  manualBrowsingBoundary?: { minIndex: number; maxIndex: number };
   autoExpand?: boolean;
   onExpansionSettled?: () => void;
   onActiveMissionChange?: (index: number) => void;
@@ -28,21 +30,25 @@ export function mountNativeMissionGallery({
   count,
   copies,
   missionIds,
+  selectionMissionIds: providedSelectionMissionIds,
   getMissionCompletionStatuses,
   cardClass,
   navigateHome,
   initialPosition = 0,
   manualBrowsingEnabled: initialManualBrowsingEnabled = true,
+  manualBrowsingBoundary: initialManualBrowsingBoundary,
   autoExpand = true,
   onExpansionSettled,
   onActiveMissionChange,
 }: NativeMissionGalleryOptions) {
   const selectionMissionIds = missionIds ?? Array.from({ length: count }, (_, index) => String(index));
+  const navigationMissionIds = providedSelectionMissionIds ?? selectionMissionIds;
   const readMissionCompletionStatuses = getMissionCompletionStatuses ?? (() => undefined);
   let controller: NativeScrollController | undefined;
   let disposed = false;
   let interactive = false;
   let manualBrowsingEnabled = initialManualBrowsingEnabled;
+  let manualBrowsingBoundary = initialManualBrowsingBoundary;
   let expansionStarted = false;
   let closing = false;
   let width = 0;
@@ -91,7 +97,7 @@ export function mountNativeMissionGallery({
     const layout = { count, copies: nextCopies, stride };
     if (controller) controller.restore(layout, lastPosition);
     else controller = createNativeScrollController(viewport, {
-      ...layout, disabled: true, position: initialPosition, manualBrowsingEnabled, reducedMotion: reduced,
+      ...layout, disabled: true, position: initialPosition, manualBrowsingEnabled, manualBrowsingBoundary, reducedMotion: reduced,
       onProgress: ({ index }) => { onActiveMissionChange?.(index); },
       onSettled: ({ index, position }) => {
         lastPosition = position;
@@ -130,10 +136,15 @@ export function mountNativeMissionGallery({
     if (event.target instanceof Element && event.target.closest("[data-gallery-action]")) return;
     if (event.key === "Escape" && (interactive || !expansionStarted)) { event.preventDefault(); close(); }
     else if (!interactive || root.dataset.interactionLocked === "true") return;
-    else if (manualBrowsingEnabled && count > 1 && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
+    else if ((manualBrowsingEnabled || manualBrowsingBoundary) && count > 1 && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
       event.preventDefault();
       const base = Math.floor(measuredCopies / 2) * count;
-      controller?.selectSlot(base + Math.round(controller.position()) + (event.key === "ArrowRight" ? 1 : -1));
+      const current = Math.round(controller?.position() ?? 0);
+      const direction = event.key === "ArrowRight" ? 1 : -1;
+      const target = manualBrowsingBoundary
+        ? Math.min(manualBrowsingBoundary.maxIndex, Math.max(manualBrowsingBoundary.minIndex, current + direction))
+        : current + direction;
+      controller?.selectSlot(base + target);
     }
   };
   const selectNext = (): Promise<boolean> => new Promise((resolve) => {
@@ -152,15 +163,28 @@ export function mountNativeMissionGallery({
 
     nextSelectionResolve = resolve;
     const base = Math.floor(measuredCopies / 2) * count;
-    const currentIndex = Math.round(controller.position());
-    const targetIndex = getNextIncompleteMissionIndex(currentIndex, selectionMissionIds, readMissionCompletionStatuses());
-    if (targetIndex === null) {
+    const currentDisplayIndex = Math.round(controller.position());
+    const currentMissionId = selectionMissionIds[currentDisplayIndex] ?? selectionMissionIds[0];
+    const currentSelectionIndex = navigationMissionIds.indexOf(currentMissionId ?? "");
+    const targetSelectionIndex = getNextIncompleteMissionIndex(
+      currentSelectionIndex >= 0 ? currentSelectionIndex : 0,
+      navigationMissionIds,
+      readMissionCompletionStatuses(),
+    );
+    if (targetSelectionIndex === null) {
       nextSelectionResolve = null;
       resolve(false);
       return;
     }
-    const steps = (targetIndex - currentIndex + count) % count;
-    controller.selectSlot(base + currentIndex + steps);
+    const targetMissionId = navigationMissionIds[targetSelectionIndex];
+    const targetDisplayIndex = selectionMissionIds.indexOf(targetMissionId ?? "");
+    if (targetDisplayIndex < 0) {
+      nextSelectionResolve = null;
+      resolve(false);
+      return;
+    }
+    const steps = (targetDisplayIndex - currentDisplayIndex + count) % count;
+    controller.selectSlot(base + currentDisplayIndex + steps);
   });
 
   root.dataset.phase = "collapsed";
@@ -197,10 +221,21 @@ export function mountNativeMissionGallery({
     expand,
     measure,
     selectNext,
+    setManualBrowsing(enabled: boolean, boundary?: { minIndex: number; maxIndex: number }) {
+      manualBrowsingEnabled = enabled;
+      manualBrowsingBoundary = boundary;
+      root.dataset.manualBrowsingEnabled = String(enabled);
+      controller?.setManualBrowsing(enabled, boundary);
+    },
     setManualBrowsingEnabled(enabled: boolean) {
       manualBrowsingEnabled = enabled;
       root.dataset.manualBrowsingEnabled = String(enabled);
       controller?.setManualBrowsingEnabled(enabled);
+    },
+    rebaseMissionOrder(indexDelta: number) {
+      if (indexDelta === 0) return;
+      lastPosition -= indexDelta;
+      controller?.rebaseMissionOrder(indexDelta);
     },
     whenIdle(work: () => void) {
       const apply = () => { work(); measureNow(); };

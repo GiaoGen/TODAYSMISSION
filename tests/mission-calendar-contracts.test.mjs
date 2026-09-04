@@ -120,7 +120,8 @@ test("completion proof keeps real recording, preview and upload in the shared ca
   assert.match(proofRecorder, /Play recording/);
   assert.match(proofRecorder, /\.from\("mission-proofs"\)/);
   assert.match(proofRecorder, /completeMissionWithAudioAction/);
-  assert.match(actionLayer, /completionRequested \? \([\s\S]*MissionProofRecorder/);
+  assert.match(actionLayer, /completionRequested \? \([\s\S]*MissionCompletionProofChooser/);
+  assert.match(read("features/missions/components/MissionCompletionProofChooser.tsx"), /MissionProofRecorder/);
   assert.doesNotMatch(actionLayer, /CompletionProofTransition|setTimeout\(/);
   assert.match(proofRecorder, /"requesting"/);
   assert.match(proofRecorder, /startLockRef\.current/);

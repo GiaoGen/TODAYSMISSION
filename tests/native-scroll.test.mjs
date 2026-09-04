@@ -315,7 +315,7 @@ test("buffer counts cover multiple viewports without unbounded DOM growth", () =
 });
 
 function galleryHarness({ count = 3, looping = true, modern = true, autoExpand = true,
-  manualBrowsingEnabled = true, initialPosition = 0, statuses } = {}) {
+  manualBrowsingEnabled = true, manualBrowsingBoundary, initialPosition = 0, statuses } = {}) {
   const env = environment({ modern });
   const viewport = new env.Scroller();
   const rootElement = new env.Element();
@@ -355,6 +355,7 @@ function galleryHarness({ count = 3, looping = true, modern = true, autoExpand =
     navigateHome() { returned++; },
     initialPosition,
     manualBrowsingEnabled,
+    manualBrowsingBoundary,
     autoExpand,
     onActiveMissionChange(index) { activeMissionChanges.push(index); },
   });
@@ -434,6 +435,35 @@ test("Safari Pack restores the first incomplete Mission before expansion and can
   h.viewport.nativeScroll(initial - h.stride);
   h.viewport.emit("scrollend");
   assert.equal(h.activeMissionChanges.at(-1), 1, "native manual browsing resumes without remounting");
+  h.gallery.destroy();
+});
+
+test("Safari bounded Pack browsing allows completed cards to the left but blocks remaining incomplete cards", async () => {
+  const h = galleryHarness({
+    count: 4,
+    looping: true,
+    manualBrowsingEnabled: false,
+    manualBrowsingBoundary: { minIndex: 0, maxIndex: 2 },
+    initialPosition: 2,
+    statuses: {
+      "mission-0": "completed",
+      "mission-1": "completed",
+      "mission-2": "incomplete",
+      "mission-3": "incomplete",
+    },
+  });
+  await h.expand();
+  const boundary = h.viewport.left;
+  h.viewport.nativeScroll(boundary + h.stride);
+  h.viewport.emit("scroll");
+  assert.equal(h.viewport.left, boundary, "native scrolling cannot enter the remaining incomplete group");
+  h.viewport.nativeScroll(boundary - h.stride);
+  h.viewport.emit("scroll");
+  h.viewport.emit("scrollend");
+  assert.equal(h.activeMissionChanges.at(-1), 1, "completed Missions remain manually browseable on the left");
+  h.rootElement.emit("keydown", { key: "ArrowRight", preventDefault() {} });
+  h.viewport.completeSmooth();
+  assert.equal(h.activeMissionChanges.at(-1), 2, "the boundary card can be reached again with a keyboard arrow");
   h.gallery.destroy();
 });
 

@@ -19,21 +19,27 @@ export type Database = {
           completed_at: string
           completed_local_date: string
           mission_id: string
-          proof_path: string
+          proof_path: string | null
+          proof_text: string | null
+          proof_type: string
           user_id: string
         }
         Insert: {
           completed_at?: string
           completed_local_date: string
           mission_id: string
-          proof_path: string
+          proof_path?: string | null
+          proof_text?: string | null
+          proof_type?: string
           user_id: string
         }
         Update: {
           completed_at?: string
           completed_local_date?: string
           mission_id?: string
-          proof_path?: string
+          proof_path?: string | null
+          proof_text?: string | null
+          proof_type?: string
           user_id?: string
         }
         Relationships: [
@@ -212,6 +218,18 @@ export type Database = {
           p_completed_local_date: string
           p_mission_id: string
           p_proof_path: string
+        }
+        Returns: {
+          completed_at: string
+          completed_local_date: string
+          status: string
+        }[]
+      }
+      complete_mission_with_text: {
+        Args: {
+          p_completed_local_date: string
+          p_mission_id: string
+          p_proof_text: string
         }
         Returns: {
           completed_at: string
