@@ -6,7 +6,7 @@
 .primary {
   min-height: 48px;
   border: 1px solid var(--ui-text);
-  border-radius: 14px;
+  border-radius: 999px;
   background: var(--ui-text);
   color: var(--page-background);
   font: inherit;

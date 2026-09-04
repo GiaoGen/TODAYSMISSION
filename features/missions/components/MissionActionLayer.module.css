@@ -74,7 +74,7 @@
   padding: 6px;
   border: 0;
   border-radius: 999px;
-  background: light-dark(#deddd9, #353533);
+  background: light-dark(#c7c7c2, #464642);
   color: #111;
   animation: capsuleIn 180ms ease-out both;
 }
@@ -102,17 +102,31 @@
 .proofChooserOption:focus-visible { outline: 2px solid var(--ui-text); outline-offset: 2px; }
 .proofChooserOption:disabled { cursor: wait; opacity: .48; }
 
+.textProofFace {
+  position: fixed;
+  z-index: 4;
+  top: 50%;
+  right: auto;
+  bottom: auto;
+  left: 50%;
+  width: var(--mission-card-width, min(320px, calc(100vw - 32px)));
+  aspect-ratio: 1 / 1.42;
+  margin: 0;
+  overflow: hidden;
+  border-radius: calc(26 * var(--stream-unit, 1px));
+  pointer-events: auto;
+  transform: translate3d(-50%, -50%, 0);
+}
+
 .textProofCard {
   position: absolute;
-  z-index: 4;
-  right: 0;
-  bottom: calc(100% + 16px);
-  left: 0;
+  inset: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  width: min(var(--mission-card-width, 320px), calc(100vw - 32px));
-  aspect-ratio: 1 / 1.42;
-  margin: 0 auto;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  margin: 0;
   padding: clamp(18px, 4%, 28px);
   border-radius: calc(26 * var(--stream-unit, 1px));
   background: #fff;
@@ -120,7 +134,13 @@
     0 calc(26 * var(--stream-unit, 1px)) calc(58 * var(--stream-unit, 1px)) rgb(35 29 17 / 13%),
     0 calc(4 * var(--stream-unit, 1px)) calc(10 * var(--stream-unit, 1px)) rgb(35 29 17 / 5%);
   color: #111;
-  animation: textProofDrop 360ms cubic-bezier(.2, .75, .24, 1) both;
+  transform: translate3d(0, -100%, 0);
+  animation: completionCardDrop 180ms cubic-bezier(.2, .75, .24, 1) both;
+}
+
+.textProofFace:focus-within {
+  outline: 2px solid rgb(17 17 17 / 16%);
+  outline-offset: 6px;
 }
 
 .textProofHeader {
@@ -141,14 +161,19 @@
 }
 
 .textProofInput {
+  box-sizing: border-box;
   width: 100%;
   min-height: 0;
   margin: 20px 0 14px;
   padding: 0;
   border: 0;
+  border-radius: 0;
   outline: 0;
   resize: none;
+  appearance: none;
+  -webkit-appearance: none;
   background: transparent;
+  box-shadow: none;
   color: #111;
   font: inherit;
   font-size: 18px;
@@ -156,13 +181,22 @@
 }
 
 .textProofInput::placeholder { color: #111; opacity: .42; }
-.textProofInput:focus-visible { outline: 2px solid rgb(17 17 17 / 25%); outline-offset: 5px; }
+.textProofInput:focus,
+.textProofInput:focus-visible {
+  outline: 0;
+  box-shadow: none;
+}
 
 .textProofError {
   margin: 0;
   color: #b32424;
   font-size: 12px;
   line-height: 1.35;
+}
+
+@media (max-width: 599px) {
+  .textProofFace,
+  .textProofCard { border-radius: calc(23 * var(--stream-mobile-unit, 1px)); }
 }
 
 .takeMission {
@@ -546,9 +580,13 @@
   to { opacity: 1; transform: none; }
 }
 
-@keyframes textProofDrop {
-  from { opacity: 0; transform: translateY(-28px); }
-  to { opacity: 1; transform: translateY(0); }
+@keyframes completionCardDrop {
+  from {
+    transform: translate3d(0, -100%, 0);
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+  }
 }
 
 @keyframes waveformIn {
@@ -581,5 +619,8 @@
   .slider,
   .proofWaveform,
   .proofChooserCapsule,
-  .textProofCard { animation: none; }
+  .textProofCard {
+    animation: none;
+    transform: translate3d(0, 0, 0);
+  }
 }

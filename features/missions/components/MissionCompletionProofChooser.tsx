@@ -30,24 +30,26 @@ export function MissionTextProofCard({
   error?: string | null;
 }) {
   return (
-    <section aria-label="Text proof" className={styles.textProofCard} data-gallery-action>
-      <div className={styles.textProofHeader}>
-        <span>MISSION PROOF</span>
-        <span>{value.length}/1000</span>
-      </div>
-      <textarea
-        aria-describedby={error ? "mission-text-proof-error" : undefined}
-        aria-label="What happened?"
-        className={styles.textProofInput}
-        disabled={disabled}
-        maxLength={1000}
-        onChange={(event) => onChange(event.target.value)}
-        onPointerDown={(event) => event.stopPropagation()}
-        placeholder="What happened?"
-        value={value}
-      />
-      {error ? <p className={styles.textProofError} id="mission-text-proof-error">{error}</p> : null}
-    </section>
+    <div className={styles.textProofFace} data-gallery-action>
+      <section aria-label="Text proof" className={styles.textProofCard}>
+        <div className={styles.textProofHeader}>
+          <span>MISSION PROOF</span>
+          <span>{value.length}/1000</span>
+        </div>
+        <textarea
+          aria-describedby={error ? "mission-text-proof-error" : undefined}
+          aria-label="What happened?"
+          className={styles.textProofInput}
+          disabled={disabled}
+          maxLength={1000}
+          onChange={(event) => onChange(event.target.value)}
+          onPointerDown={(event) => event.stopPropagation()}
+          placeholder="What happened?"
+          value={value}
+        />
+        {error ? <p className={styles.textProofError} id="mission-text-proof-error">{error}</p> : null}
+      </section>
+    </div>
   );
 }
 
