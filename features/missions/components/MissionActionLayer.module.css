@@ -165,6 +165,29 @@
   line-height: 1.35;
 }
 
+.takeMission {
+  box-sizing: border-box;
+  display: grid;
+  width: 100%;
+  height: var(--tm-capsule-height);
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--tm-accent) 32%, transparent);
+  border-radius: 999px;
+  background: var(--tm-accent);
+  color: var(--tm-on-accent);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: .015em;
+  cursor: pointer;
+  animation: capsuleIn 220ms ease-out both;
+  transition: filter 150ms ease, transform 150ms ease;
+}
+
+.takeMission:hover { filter: brightness(.96); }
+.takeMission:active { transform: scale(.992); }
+.takeMission:focus-visible { outline: 2px solid var(--ui-text); outline-offset: 2px; }
+
 .proofCapsule {
   box-sizing: border-box;
   width: 100%;
@@ -355,6 +378,7 @@
   color-scheme: light dark;
   user-select: none;
   -webkit-user-select: none;
+  animation: capsuleIn 220ms ease-out both;
 }
 
 .slider,
@@ -552,6 +576,8 @@
   .slider *,
   .auxiliaryAction { transition: none !important; }
   .proofCapsule,
+  .takeMission,
+  .slider,
   .proofWaveform,
   .proofChooserCapsule,
   .textProofCard { animation: none; }

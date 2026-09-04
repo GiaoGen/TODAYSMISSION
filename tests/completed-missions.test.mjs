@@ -9,7 +9,6 @@ import ts from "typescript";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { getGalleryCopyCount, getMissionStreamMetrics } from "../features/packs/model/mission-gallery-layout.ts";
-import { getNextIncompleteMissionIndex } from "../features/packs/model/mission-selection.ts";
 import * as dayTransitions from "../features/calendar/model/calendar-day-transition.ts";
 import * as returnStates from "../features/packs/model/pack-carousel-return-state.ts";
 import { createHomeCarouselState } from "../features/packs/model/home-carousel-state.ts";
@@ -351,9 +350,6 @@ function galleryHarness(count, {
   saved = null,
   looping = false,
   expansionRequested = true,
-  manualBrowsingEnabled = true,
-  initialMissionIndex = 0,
-  statuses,
 } = {}) {
   const source = ts.createSourceFile("MissionGallery.tsx", read("features/packs/components/MissionGallery.tsx"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const component = source.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === "MissionGallery");
@@ -368,6 +364,7 @@ function galleryHarness(count, {
   let returned = saved;
   let settled = 0;
   let selectNext = null;
+  let setInteractionLocked = null;
   const activeMissionChanges = [];
   let finishCollapse;
   const animationFinished = new Promise(resolve => { finishCollapse = resolve; });
@@ -401,21 +398,12 @@ function galleryHarness(count, {
     rootRef: { current: root }, trackRef: { current: track }, missionRefs: { current: cards },
     primaryCopyRef: { current: Math.floor(copies / 2) }, measureRef: { current: null },
     missionIdsRef: { current: Array.from({ length: count }, (_, index) => `mission-${index}`) },
-    previousMissionIdsRef: { current: Array.from({ length: count }, (_, index) => `mission-${index}`) },
-    selectionMissionIdsRef: { current: Array.from({ length: count }, (_, index) => `mission-${index}`) },
-    initialMissionIndexRef: { current: initialMissionIndex },
-    missionCompletionStatusesRef: { current: statuses },
-    manualBrowsingEnabledRef: { current: manualBrowsingEnabled },
-    manualBrowsingBoundaryRef: { current: undefined },
-    rebaseMissionOrderRef: { current: null },
-    getNextIncompleteMissionIndex,
     onActiveMissionChangeRef: { current: missionId => activeMissionChanges.push(missionId) }, onExpansionSettledRef: { current: () => { settled++; } }, activeMissionIdRef: { current: null },
     onSelectNextReadyRef: { current: selector => { selectNext = selector; } },
+    onInteractionLockReady: setter => { setInteractionLocked = setter; },
     expansionRequestedRef: { current: expansionRequested }, requestExpansionRef: { current: null },
     missionCount: count, looping, id: looping ? "mock-pack-01" : dayTransitions.getDayGalleryId("2026-08-28"),
     completedDate: looping ? undefined : "2026-08-28",
-    selectionMissionIds: undefined,
-    manualBrowsingBoundary: undefined,
     performance: { now: () => now }, Element, styles: { missionCard: "missionCard" },
     requestAnimationFrame: fn => { frames.set(++token, fn); return token; }, cancelAnimationFrame: id => frames.delete(id),
     window: { matchMedia: () => ({ matches: reduced }), setTimeout: fn => { timers.set(++token, fn); return token; }, clearTimeout: id => timers.delete(id) },
@@ -439,6 +427,7 @@ function galleryHarness(count, {
     returned: () => returned,
     settled: () => settled,
     selectNext: () => selectNext?.() ?? Promise.resolve(false),
+    setInteractionLocked: locked => setInteractionLocked?.(locked),
     async expand() {
       env.requestExpansionRef.current?.();
       frame(); finishExpansion();
@@ -493,43 +482,36 @@ test("Chrome Try another uses the live snap driver once and selects the next Mis
   gallery.cleanup();
 });
 
-test("Chrome controlled Pack ignores manual drag, wheel and arrows while Try another skips completed slots", async () => {
-  const gallery = galleryHarness(3, {
-    looping: true,
-    manualBrowsingEnabled: false,
-    statuses: { "mission-0": "incomplete", "mission-1": "completed", "mission-2": "incomplete" },
-  });
+test("Chrome commitment lock cancels active momentum and ignores all Mission navigation input", async () => {
+  const gallery = galleryHarness(4, { looping: true });
   await gallery.expand();
-  const initial = trackPosition(gallery);
-  gallery.event("pointerdown");
-  gallery.event("pointermove", { clientX: 20 });
-  gallery.event("pointerup", { clientX: 20 });
-  assert.equal(trackPosition(gallery), initial);
+
+  gallery.event("pointerdown", { clientX: 500 });
+  gallery.event("pointermove", { clientX: 420 });
+  gallery.event("pointerup", { clientX: 420 });
+  assert.equal(gallery.root.dataset.moving, "true", "a fast release starts momentum before commitment");
+
+  gallery.setInteractionLocked(true);
+  const lockedPosition = trackPosition(gallery);
+  assert.equal(gallery.root.dataset.moving, "false");
+  assert.equal(gallery.root.dataset.dragging, "false");
+
+  gallery.event("pointerdown", { clientX: 500 });
+  gallery.event("pointermove", { clientX: 40 });
+  gallery.event("pointerup", { clientX: 40 });
   let wheelPrevented = false;
-  gallery.event("wheel", { deltaX: 120, deltaY: 0, preventDefault() { wheelPrevented = true; } });
-  assert.equal(wheelPrevented, false, "blocked Gallery wheel input must not trap page scrolling");
+  gallery.event("wheel", { deltaX: 220, deltaY: 0, preventDefault() { wheelPrevented = true; } });
   let arrowPrevented = false;
   gallery.event("keydown", { key: "ArrowRight", preventDefault() { arrowPrevented = true; } });
-  assert.equal(arrowPrevented, false);
-  assert.equal(trackPosition(gallery), initial);
-  const selection = gallery.selectNext();
-  settleGallery(gallery);
-  assert.equal(await selection, true);
-  assert.equal(gallery.activeMissionChanges.at(-1), "mission-2");
-  gallery.cleanup();
-});
+  assert.equal(wheelPrevented, false, "locked Gallery does not trap page wheel scrolling");
+  assert.equal(arrowPrevented, false, "locked Gallery does not consume Mission arrows");
+  assert.equal(trackPosition(gallery), lockedPosition);
+  for (let frame = 0; frame < 10; frame++) gallery.frame();
+  assert.equal(trackPosition(gallery), lockedPosition, "cancelled momentum never resumes after locking");
+  assert.equal(await gallery.selectNext(), false);
 
-test("Chrome Pack centers its first incomplete Mission on the initial interactive frame", async () => {
-  const gallery = galleryHarness(4, {
-    looping: true,
-    manualBrowsingEnabled: false,
-    initialMissionIndex: 2,
-    statuses: { "mission-0": "completed", "mission-1": "completed", "mission-2": "incomplete", "mission-3": "incomplete" },
-  });
-  await gallery.expand();
-  const origin = 1920 / 2 - (Math.floor(getGalleryCopyCount(4, 1920) / 2) * 4 * 272 + 120);
-  assert.equal(trackPosition(gallery), origin - 2 * 272);
-  assert.equal(gallery.activeMissionChanges.at(-1), "mission-2");
+  gallery.event("keydown", { key: "Escape" });
+  assert.equal(gallery.root.dataset.phase, "closing", "Escape still closes while Mission navigation is locked");
   gallery.cleanup();
 });
 

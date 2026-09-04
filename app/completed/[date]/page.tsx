@@ -25,7 +25,6 @@ export default async function CompletedMissionsPage({ params }: { params: Promis
       hero={day.missions[0]}
       missions={day.missions}
       completedDate={day.date}
-      manualBrowsingEnabled={true}
     />
   );
 }

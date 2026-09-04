@@ -6,8 +6,6 @@ export type NativeScrollSelection = { index: number; slot: number; position: num
 type NativeScrollOptions = NativeScrollLayout & {
   position?: number;
   disabled?: boolean;
-  manualBrowsingEnabled?: boolean;
-  manualBrowsingBoundary?: { minIndex: number; maxIndex: number };
   reducedMotion?: boolean;
   onProgress?: (selection: NativeScrollSelection) => void;
   onSettled: (selection: NativeScrollSelection) => void;
@@ -23,8 +21,6 @@ const POSITION_EPSILON = 1;
 export function createNativeScrollController(viewport: HTMLElement, options: NativeScrollOptions) {
   let layout: NativeScrollLayout = options;
   let locked = options.disabled ?? false;
-  let manualBrowsingEnabled = options.manualBrowsingEnabled ?? true;
-  let manualBrowsingBoundary = options.manualBrowsingBoundary;
   let disposed = false;
   let moving = false;
   let touching = false;
@@ -37,20 +33,10 @@ export function createNativeScrollController(viewport: HTMLElement, options: Nat
   let silentOffset: number | null = null;
   let idleWork: (() => void) | null = null;
   let visualFrame: number | null = null;
-  let programmaticSelection = false;
-  let lastAllowedLeft = 0;
-  let touchStart: { x: number; y: number } | null = null;
   const supportsScrollEnd = Reflect.has(viewport, "onscrollend");
   const baseSlot = () => Math.floor(layout.copies / 2) * layout.count;
   const maxOffset = () => Math.max(0, layout.count * layout.copies - 1) * layout.stride;
   const bounded = (left: number) => Math.max(0, Math.min(maxOffset(), left));
-  const manualBounded = (left: number) => {
-    const boundary = manualBrowsingBoundary;
-    if (manualBrowsingEnabled || !boundary || layout.stride <= 0) return bounded(left);
-    const logicalPosition = bounded(left) / layout.stride - baseSlot();
-    const constrainedPosition = Math.max(boundary.minIndex, Math.min(boundary.maxIndex, logicalPosition));
-    return bounded((baseSlot() + constrainedPosition) * layout.stride);
-  };
   const position = () => layout.stride > 0 ? bounded(viewport.scrollLeft) / layout.stride - baseSlot() : 0;
   const clearTimer = () => { clearTimeout(timer); timer = undefined; };
   const markMoving = (value: boolean) => {
@@ -72,10 +58,8 @@ export function createNativeScrollController(viewport: HTMLElement, options: Nat
     options.onSettled(value);
   };
   const jump = (left: number) => {
-    const boundedLeft = bounded(left);
-    lastAllowedLeft = boundedLeft;
-    silentOffset = boundedLeft;
-    viewport.scrollTo({ left: boundedLeft, behavior: "instant" });
+    silentOffset = left;
+    viewport.scrollTo({ left, behavior: "instant" });
   };
   const flushIdleWork = () => {
     const work = idleWork;
@@ -88,21 +72,11 @@ export function createNativeScrollController(viewport: HTMLElement, options: Nat
     const left = viewport.scrollLeft;
     if (silentOffset !== null && Math.abs(left - silentOffset) <= POSITION_EPSILON) {
       silentOffset = null;
-      lastAllowedLeft = bounded(left);
-      programmaticSelection = false;
       markMoving(false);
       flushIdleWork();
       return;
     }
     silentOffset = null;
-    if (!manualBrowsingEnabled && manualBrowsingBoundary) {
-      const allowed = manualBounded(left);
-      if (Math.abs(left - allowed) > POSITION_EPSILON) {
-        jump(allowed);
-        markMoving(false);
-        return;
-      }
-    }
     // Rubber-banding is not a stable position, even if a timer has gone quiet.
     if (Math.abs(left - bounded(left)) > POSITION_EPSILON) return;
     const nearest = Math.round(left / layout.stride) * layout.stride;
@@ -119,8 +93,6 @@ export function createNativeScrollController(viewport: HTMLElement, options: Nat
       const canonical = (baseSlot() + wrapNativeIndex(position(), layout.count)) * layout.stride;
       if (Math.abs(canonical - left) > POSITION_EPSILON) jump(canonical);
     }
-    lastAllowedLeft = bounded(viewport.scrollLeft);
-    programmaticSelection = false;
     markMoving(false);
     suppressClickUntil = performance.now() + 180;
     publish();
@@ -144,20 +116,6 @@ export function createNativeScrollController(viewport: HTMLElement, options: Nat
   }
   const onScroll = () => {
     if (disposed || locked) return;
-    if (!manualBrowsingEnabled && silentOffset !== null && Math.abs(viewport.scrollLeft - silentOffset) <= POSITION_EPSILON) {
-      silentOffset = null;
-      return;
-    }
-    if (!manualBrowsingEnabled && manualBrowsingBoundary && !programmaticSelection) {
-      const allowed = manualBounded(viewport.scrollLeft);
-      if (Math.abs(viewport.scrollLeft - allowed) > POSITION_EPSILON) {
-        blockUserScroll();
-        return;
-      }
-    } else if (!manualBrowsingEnabled && !programmaticSelection) {
-      blockUserScroll();
-      return;
-    }
     // No offset read/write here. Only the visible artwork consumes progress,
     // once per rendering frame, independently of scrollend and snap correction.
     revision++;
@@ -178,8 +136,8 @@ export function createNativeScrollController(viewport: HTMLElement, options: Nat
     if (moving) finish();
   };
   const onPointerDown = (event: PointerEvent) => {
+    if (disposed || locked) return;
     pointerStart = { x: event.clientX, y: event.clientY };
-    if (!manualBrowsingEnabled) lastAllowedLeft = manualBounded(viewport.scrollLeft);
     if (!moving) suppressClickUntil = 0;
     calibrated = false;
     silentOffset = null;
@@ -194,56 +152,23 @@ export function createNativeScrollController(viewport: HTMLElement, options: Nat
     if (moving) scheduleQuietCheck();
   };
   const onPointerCancel = () => { pointerStart = null; suppressClickUntil = performance.now() + 240; };
-  const onTouchStart = (event: TouchEvent) => {
+  const onTouchStart = () => {
+    if (disposed || locked) return;
     touching = true;
     clearTimer();
-    const touch = event.touches[0];
-    touchStart = touch ? { x: touch.clientX, y: touch.clientY } : null;
-    if (!manualBrowsingEnabled) lastAllowedLeft = manualBounded(viewport.scrollLeft);
-  };
-  const onTouchMove = (event: TouchEvent) => {
-    if (manualBrowsingEnabled || (manualBrowsingBoundary && manualBrowsingBoundary.maxIndex > manualBrowsingBoundary.minIndex) || locked || !touchStart || event.touches.length !== 1) return;
-    const touch = event.touches[0];
-    const deltaX = touch.clientX - touchStart.x;
-    const deltaY = touch.clientY - touchStart.y;
-    if (Math.abs(deltaX) <= Math.abs(deltaY) || Math.abs(deltaX) <= 4) return;
-    event.preventDefault();
-    blockUserScroll();
   };
   const onTouchEnd = (event: TouchEvent) => {
     touching = event.touches.length > 0;
-    if (!touching) touchStart = null;
-    if (!touching && !manualBrowsingEnabled && !programmaticSelection) blockUserScroll();
     if (!touching && moving) scheduleQuietCheck();
     else if (!touching) flushIdleWork();
   };
-  const onWheel = (event: WheelEvent) => {
-    if (manualBrowsingEnabled || (manualBrowsingBoundary && manualBrowsingBoundary.maxIndex > manualBrowsingBoundary.minIndex) || locked) return;
-    const horizontal = Math.abs(event.deltaX) > Math.abs(event.deltaY) || event.shiftKey;
-    if (!horizontal) return;
-    event.preventDefault();
-    blockUserScroll();
-  };
-  const listeners: [string, EventListener, AddEventListenerOptions?][] = [
+  const listeners: [string, EventListener][] = [
     ["scroll", onScroll], ["pointerdown", onPointerDown as EventListener],
     ["pointerup", onPointerUp as EventListener], ["pointercancel", onPointerCancel],
-    ["touchstart", onTouchStart as EventListener], ["touchmove", onTouchMove as EventListener, { passive: false }],
-    ["touchend", onTouchEnd as EventListener], ["touchcancel", onTouchEnd as EventListener],
-    ["wheel", onWheel as EventListener, { passive: false }],
+    ["touchstart", onTouchStart], ["touchend", onTouchEnd as EventListener], ["touchcancel", onTouchEnd as EventListener],
   ];
   if (supportsScrollEnd) listeners.push(["scrollend", onScrollEnd]);
-  listeners.forEach(([name, handler, eventOptions]) => viewport.addEventListener(name, handler, eventOptions ?? { passive: true }));
-
-  function blockUserScroll() {
-    if (disposed || locked || manualBrowsingEnabled || programmaticSelection) return;
-    clearTimer();
-    cancelVisualFrame();
-    revision++;
-    pointerStart = null;
-    const target = manualBounded(lastAllowedLeft);
-    if (Math.abs(viewport.scrollLeft - target) > POSITION_EPSILON) jump(target);
-    markMoving(false);
-  }
+  listeners.forEach(([name, handler]) => viewport.addEventListener(name, handler, { passive: true }));
 
   const controller = {
     restore(next: NativeScrollLayout, requestedPosition: number) {
@@ -254,7 +179,6 @@ export function createNativeScrollController(viewport: HTMLElement, options: Nat
       const normalized = layout.copies > 1 ? wrapNativeIndex(requestedPosition, layout.count)
         : Math.max(0, Math.min(Math.max(0, layout.count - 1), requestedPosition));
       jump((baseSlot() + normalized) * layout.stride);
-      programmaticSelection = false;
       markMoving(false);
       publish();
     },
@@ -269,7 +193,6 @@ export function createNativeScrollController(viewport: HTMLElement, options: Nat
       if (locked || touching) return;
       clearTimer();
       silentOffset = null;
-      programmaticSelection = true;
       calibrated = true;
       const left = bounded(slot * layout.stride);
       if (Math.abs(viewport.scrollLeft - left) <= POSITION_EPSILON) { finish(); return; }
@@ -295,23 +218,27 @@ export function createNativeScrollController(viewport: HTMLElement, options: Nat
     resume() {
       locked = false;
       viewport.dataset.nativeLocked = "false";
-      if (!manualBrowsingEnabled) blockUserScroll();
       flushIdleWork();
     },
-    setManualBrowsing(enabled: boolean, boundary?: { minIndex: number; maxIndex: number }) {
-      manualBrowsingEnabled = enabled;
-      manualBrowsingBoundary = boundary;
-      viewport.dataset.nativeManualBrowsingEnabled = String(enabled);
-      if (!enabled) blockUserScroll();
-    },
-    setManualBrowsingEnabled(enabled: boolean) {
-      manualBrowsingEnabled = enabled;
-      viewport.dataset.nativeManualBrowsingEnabled = String(enabled);
-      if (!enabled) blockUserScroll();
-    },
-    rebaseMissionOrder(indexDelta: number) {
-      if (disposed || locked || indexDelta === 0) return;
-      jump(viewport.scrollLeft - indexDelta * layout.stride);
+    setInteractionLocked(nextLocked: boolean) {
+      if (disposed || locked === nextLocked) return;
+      if (!nextLocked) {
+        locked = false;
+        viewport.dataset.nativeLocked = "false";
+        return;
+      }
+
+      cancelVisualFrame();
+      clearTimer();
+      touching = false;
+      pointerStart = null;
+      locked = true;
+      viewport.dataset.nativeLocked = "true";
+      const snappedLeft = layout.stride > 0
+        ? Math.round(bounded(viewport.scrollLeft) / layout.stride) * layout.stride
+        : bounded(viewport.scrollLeft);
+      jump(snappedLeft);
+      markMoving(false);
     },
     destroy() {
       disposed = true;
@@ -322,7 +249,6 @@ export function createNativeScrollController(viewport: HTMLElement, options: Nat
     },
   };
   viewport.dataset.nativeLocked = String(locked);
-  viewport.dataset.nativeManualBrowsingEnabled = String(manualBrowsingEnabled);
   controller.restore(options, options.position ?? 0);
   return controller;
 }

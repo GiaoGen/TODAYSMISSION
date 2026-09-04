@@ -11,11 +11,13 @@ import styles from "./MissionActionLayer.module.css";
 
 type MissionActionLayerProps = {
   activeMission: MissionSummary;
+  committed: boolean;
   completionRequested: boolean;
   canSelectNext: boolean;
   selectingNext: boolean;
   onCompletionRequested: () => void;
   onCompletionProgressChange: (progress: number) => void;
+  onCommit: () => void;
   onCompleted: (completedLocalDate: string) => void;
   onProofInteractionLockChange: (locked: boolean) => void;
   onSelectNext: () => void;
@@ -29,11 +31,13 @@ type ActionLayerStyle = CSSProperties & {
 
 export function MissionActionLayer({
   activeMission,
+  committed,
   completionRequested,
   canSelectNext,
   selectingNext,
   onCompletionRequested,
   onCompletionProgressChange,
+  onCommit,
   onCompleted,
   onProofInteractionLockChange,
   onSelectNext,
@@ -53,19 +57,30 @@ export function MissionActionLayer({
       style={style}
     >
       <div className={styles.panel}>
-        {completionRequested ? (
+        {committed && completionRequested ? (
           <MissionCompletionProofChooser
             key={activeMission.id}
             missionId={activeMission.id}
             onCompleted={onCompleted}
             onInteractionLockChange={onProofInteractionLockChange}
           />
-        ) : (
+        ) : committed ? (
           <>
             <MissionCompleteSlider
               onCompletionRequested={onCompletionRequested}
               onProgressChange={onCompletionProgressChange}
             />
+          </>
+        ) : (
+          <>
+            <button
+              aria-label="Take this mission"
+              className={styles.takeMission}
+              onClick={onCommit}
+              type="button"
+            >
+              <span>take this mission</span>
+            </button>
             <button
               aria-label="Switch mission"
               className={styles.auxiliaryAction}
