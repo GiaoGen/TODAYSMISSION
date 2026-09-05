@@ -109,6 +109,7 @@
   align-items: center;
   gap: var(--detail-gap);
   list-style: none;
+  pointer-events: none;
   transform: translate3d(0, -50%, 0);
 }
 

@@ -379,7 +379,8 @@ function galleryHarness(count, {
     }
   }
   const root = Object.assign(new Element(), {
-    clientWidth: 1920, dataset: {}, focus() {},
+    clientWidth: 1920, dataset: { experienceReveal: "closed" }, focus() {},
+    dispatchEvent: event => { listeners.get(event.type)?.(event); return !event.defaultPrevented; },
     addEventListener: (name, handler) => listeners.set(name, handler),
     removeEventListener: name => listeners.delete(name),
     getAnimations: () => root.dataset.phase === "closing" ? [{ finished: animationFinished }]
@@ -387,6 +388,10 @@ function galleryHarness(count, {
     hasPointerCapture: id => capture === id,
     setPointerCapture: id => { capture = id; }, releasePointerCapture: () => { capture = null; },
   });
+  class Event {
+    constructor(type) { this.type = type; this.defaultPrevented = false; }
+    preventDefault() { this.defaultPrevented = true; }
+  }
   const copies = looping ? getGalleryCopyCount(count, root.clientWidth) : 1;
   const cards = Array.from({ length: copies * count }, (_, index) => ({
     offsetLeft: index * 272, offsetWidth: 240, style: { setProperty(name, value) { this[name] = value; } },
@@ -400,12 +405,11 @@ function galleryHarness(count, {
     missionIdsRef: { current: Array.from({ length: count }, (_, index) => `mission-${index}`) },
     onActiveMissionChangeRef: { current: missionId => activeMissionChanges.push(missionId) }, onExpansionSettledRef: { current: () => { settled++; } }, activeMissionIdRef: { current: null },
     onSelectNextReadyRef: { current: selector => { selectNext = selector; } },
-    revealCloseRequestRef: { current: null },
     onInteractionLockReady: setter => { setInteractionLocked = setter; },
     expansionRequestedRef: { current: expansionRequested }, requestExpansionRef: { current: null },
     missionCount: count, looping, id: looping ? "mock-pack-01" : dayTransitions.getDayGalleryId("2026-08-28"),
     completedDate: looping ? undefined : "2026-08-28",
-    performance: { now: () => now }, Element, styles: { missionCard: "missionCard" },
+    performance: { now: () => now }, Element, Event, styles: { missionCard: "missionCard" },
     requestAnimationFrame: fn => { frames.set(++token, fn); return token; }, cancelAnimationFrame: id => frames.delete(id),
     window: { matchMedia: () => ({ matches: reduced }), setTimeout: fn => { timers.set(++token, fn); return token; }, clearTimeout: id => timers.delete(id) },
     ResizeObserver: class { observe() {} disconnect() {} },
@@ -528,10 +532,13 @@ test("Chrome commitment lock still lets a blank gallery click return home", asyn
 test("an open Reveal consumes a blank gallery click and stays in the Pack", async () => {
   const gallery = galleryHarness(3, { looping: true });
   await gallery.expand();
-  let closeRequests = 0;
-  gallery.env.revealCloseRequestRef.current = () => { closeRequests++; return true; };
+  gallery.root.dataset.experienceReveal = "open";
+  gallery.root.addEventListener("mission-experience-reveal-close", event => {
+    event.preventDefault();
+    gallery.root.dataset.experienceReveal = "closing";
+  });
   gallery.event("click");
-  assert.equal(closeRequests, 1);
+  assert.equal(gallery.root.dataset.experienceReveal, "closing");
   assert.equal(gallery.root.dataset.phase, "settled");
   assert.equal(gallery.navigations.length, 0);
   gallery.cleanup();

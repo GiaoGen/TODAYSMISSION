@@ -19,7 +19,8 @@
   user-select: text;
 }
 
-.underlay[data-reveal-open="true"] { pointer-events: auto; }
+.underlay[data-reveal-open="true"],
+.underlay[data-reveal-active="true"] { pointer-events: auto; }
 
 .content {
   position: absolute;

@@ -106,9 +106,26 @@ test("audio Reveal uses the complete waveform as its accessible playback control
 
 test("Gallery blank clicks request Reveal close before navigation", () => {
   const gallery = read("features/packs/components/MissionGallery.tsx");
-  assert.match(gallery, /revealCloseRequestRef\.current\?\.\(\)\) return;/);
-  assert.match(gallery, /onCloseRequestReady=\{setRevealCloseRequest\}/);
+  assert.match(gallery, /root\.dataset\.experienceReveal && root\.dataset\.experienceReveal !== "closed"/);
+  assert.match(gallery, /dispatchEvent\(new Event\("mission-experience-reveal-close", \{ cancelable: true \}\)\)/);
+  const native = read("features/packs/model/native-mission-gallery.ts");
+  assert.match(native, /root\.dataset\.experienceReveal && root\.dataset\.experienceReveal !== "closed"/);
+  assert.match(native, /dispatchEvent\(new Event\("mission-experience-reveal-close", \{ cancelable: true \}\)\)/);
   const reveal = read("features/missions/components/MissionExperienceReveal.tsx");
-  assert.match(reveal, /if \(!revealOpenRef\.current\) return false;/);
+  assert.match(reveal, /root\.dataset\.experienceReveal = state/);
+  assert.match(reveal, /setRevealState\("dragging"\)/);
+  assert.match(reveal, /setRevealState\(open \? "open" : "closing"\)/);
+  assert.match(reveal, /setRevealState\("closed"\)/);
+  assert.match(reveal, /root\.addEventListener\("mission-experience-reveal-close", onCloseRequest\)/);
   assert.match(reveal, /resetReveal\(false\);/);
+});
+
+test("track transparency exposes active Reveal content without changing card ownership", () => {
+  const galleryCss = read("features/packs/components/MissionGallery.module.css");
+  const reveal = read("features/missions/components/MissionExperienceReveal.tsx");
+  const revealCss = read("features/missions/components/MissionExperienceReveal.module.css");
+  assert.match(galleryCss, /\.track \{[\s\S]*pointer-events: none;[\s\S]*\}/);
+  assert.match(galleryCss, /\.missionMotion \{[\s\S]*pointer-events: auto;[\s\S]*\}/);
+  assert.match(revealCss, /\.underlay \{[\s\S]*z-index: 9;[\s\S]*\}/);
+  assert.match(reveal, /data-reveal-active=\{sessionActive\}/);
 });

@@ -27,7 +27,6 @@ type MissionExperienceRevealProps = {
     | { ok: false; error: string }
   >;
   rootRef: RefObject<HTMLElement | null>;
-  onCloseRequestReady?: (requestClose: (() => boolean) | null) => void;
 };
 
 function isRevealBlockedTarget(target: EventTarget | null) {
@@ -41,7 +40,6 @@ export function MissionExperienceReveal({
   enabled,
   loadExperiences,
   rootRef,
-  onCloseRequestReady,
 }: MissionExperienceRevealProps) {
   const underlayRef = useRef<HTMLElement>(null);
   const textRef = useRef<HTMLParagraphElement>(null);
@@ -58,7 +56,6 @@ export function MissionExperienceReveal({
   const [selected, setSelected] = useState<MissionExperience | null>(null);
   const [sessionActive, setSessionActive] = useState(false);
   const [revealOpen, setRevealOpen] = useState(false);
-  const revealOpenRef = useRef(false);
   const [loadState, setLoadState] = useState<"idle" | "loading" | "ready" | "failed">("idle");
   const [playing, setPlaying] = useState(false);
   const loading = loadState === "idle" || loadState === "loading";
@@ -90,6 +87,11 @@ export function MissionExperienceReveal({
     underlayRef.current?.style.setProperty("--experience-progress", String(progress));
   }, []);
 
+  const setRevealState = useCallback((state: "closed" | "dragging" | "open" | "closing") => {
+    const root = rootRef.current;
+    if (root) root.dataset.experienceReveal = state;
+  }, [rootRef]);
+
   const finishClosed = useCallback(() => {
     const card = activeCardRef.current;
     if (card) {
@@ -101,11 +103,11 @@ export function MissionExperienceReveal({
     targetTravelRef.current = 0;
     selectedRef.current = null;
     sessionActiveRef.current = false;
-    revealOpenRef.current = false;
+    setRevealState("closed");
     setSelected(null);
     setSessionActive(false);
     setRevealOpen(false);
-  }, []);
+  }, [setRevealState]);
 
   const resetReveal = useCallback((immediate: boolean) => {
     clearSnapTimer();
@@ -116,7 +118,7 @@ export function MissionExperienceReveal({
       card.dataset.experienceReveal = "closing";
     }
     applyTravel(0);
-    revealOpenRef.current = false;
+    setRevealState("closing");
     setRevealOpen(false);
 
     if (immediate || !card) {
@@ -131,7 +133,7 @@ export function MissionExperienceReveal({
       finishClosed();
       snapTimerRef.current = null;
     }, reduced ? REDUCED_SNAP_DURATION_MS : SNAP_DURATION_MS);
-  }, [applyTravel, clearSnapTimer, finishClosed, resetAudio]);
+  }, [applyTravel, clearSnapTimer, finishClosed, resetAudio, setRevealState]);
 
   const chooseExperience = useCallback(() => {
     if (sessionActiveRef.current) return selectedRef.current;
@@ -153,7 +155,7 @@ export function MissionExperienceReveal({
     card.dataset.experienceReveal = open ? "opening" : "closing";
     if (!open) resetAudio();
     applyTravel(open ? targetTravelRef.current : 0);
-    revealOpenRef.current = open;
+    setRevealState(open ? "open" : "closing");
     setRevealOpen(open);
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     snapTimerRef.current = window.setTimeout(() => {
@@ -162,18 +164,7 @@ export function MissionExperienceReveal({
       if (!open) finishClosed();
       snapTimerRef.current = null;
     }, reduced ? REDUCED_SNAP_DURATION_MS : SNAP_DURATION_MS);
-  }, [applyTravel, clearSnapTimer, finishClosed, resetAudio]);
-
-  const requestClose = useCallback(() => {
-    if (!revealOpenRef.current) return false;
-    resetReveal(false);
-    return true;
-  }, [resetReveal]);
-
-  useLayoutEffect(() => {
-    onCloseRequestReady?.(requestClose);
-    return () => onCloseRequestReady?.(null);
-  }, [onCloseRequestReady, requestClose]);
+  }, [applyTravel, clearSnapTimer, finishClosed, resetAudio, setRevealState]);
 
   useEffect(() => {
     poolRef.current = [];
@@ -289,6 +280,7 @@ export function MissionExperienceReveal({
         }
         intent = "vertical";
         root.dataset.experienceGesture = "vertical";
+        setRevealState("dragging");
         const experience = chooseExperience();
         const cardHeight = activeCardRef.current?.offsetHeight ?? 0;
         targetTravelRef.current = getMissionExperienceRevealTravel(cardHeight, experience?.kind ?? "empty");
@@ -344,6 +336,11 @@ export function MissionExperienceReveal({
         resetReveal(false);
       }
     };
+    const onCloseRequest = (event: Event) => {
+      if (root.dataset.experienceReveal === "closed") return;
+      event.preventDefault();
+      resetReveal(false);
+    };
 
     root.addEventListener("pointerdown", onPointerDown, true);
     root.addEventListener("pointermove", onPointerMove, { capture: true, passive: false });
@@ -351,6 +348,7 @@ export function MissionExperienceReveal({
     root.addEventListener("pointercancel", finishPointer, true);
     root.addEventListener("pointerleave", onPointerLeave, true);
     root.addEventListener("keydown", onKeyDown);
+    root.addEventListener("mission-experience-reveal-close", onCloseRequest);
     return () => {
       clearGesture();
       root.removeEventListener("pointerdown", onPointerDown, true);
@@ -359,8 +357,9 @@ export function MissionExperienceReveal({
       root.removeEventListener("pointercancel", finishPointer, true);
       root.removeEventListener("pointerleave", onPointerLeave, true);
       root.removeEventListener("keydown", onKeyDown);
+      root.removeEventListener("mission-experience-reveal-close", onCloseRequest);
     };
-  }, [activeMissionId, applyTravel, chooseExperience, enabled, resetReveal, rootRef, snapReveal]);
+  }, [activeMissionId, applyTravel, chooseExperience, enabled, resetReveal, rootRef, setRevealState, snapReveal]);
 
   useLayoutEffect(() => () => {
     clearSnapTimer();
@@ -374,7 +373,10 @@ export function MissionExperienceReveal({
       card.style.removeProperty("--experience-card-y");
     }
     const root = rootRef.current;
-    if (root) delete root.dataset.experienceGesture;
+    if (root) {
+      delete root.dataset.experienceGesture;
+      root.dataset.experienceReveal = "closed";
+    }
   }, [clearSnapTimer, resetAudio, rootRef]);
 
   const togglePlayback = async () => {
@@ -398,6 +400,7 @@ export function MissionExperienceReveal({
       aria-hidden={!sessionActive}
       className={styles.underlay}
       data-experience-kind={selected?.kind ?? "empty"}
+      data-reveal-active={sessionActive}
       data-gallery-action
       data-reveal-open={revealOpen}
       ref={underlayRef}

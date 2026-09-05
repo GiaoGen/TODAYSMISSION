@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties, ReactNode, RefObject } from "react";
-import { useCallback, useLayoutEffect, useRef, useState, ViewTransition } from "react";
+import { useLayoutEffect, useRef, useState, ViewTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { getDeckMetrics } from "@/features/packs/model/arc-carousel-geometry";
@@ -208,14 +208,9 @@ export function MissionGallery({
   const onActiveMissionChangeRef = useRef(onActiveMissionChange);
   const onExpansionSettledRef = useRef(onExpansionSettled);
   const onSelectNextReadyRef = useRef(onSelectNextReady);
-  const revealCloseRequestRef = useRef<(() => boolean) | null>(null);
   const activeMissionIdRef = useRef<string | null>(null);
   const expansionRequestedRef = useRef(expandMissions);
   const requestExpansionRef = useRef<(() => void) | null>(null);
-  const setRevealCloseRequest = useCallback((requestClose: (() => boolean) | null) => {
-    revealCloseRequestRef.current = requestClose;
-  }, []);
-
   useLayoutEffect(() => {
     missionIdsRef.current = missions.map((mission) => mission.id);
     onActiveMissionChangeRef.current = onActiveMissionChange;
@@ -702,7 +697,10 @@ export function MissionGallery({
         return;
       }
 
-      if (revealCloseRequestRef.current?.()) return;
+      if (root.dataset.experienceReveal && root.dataset.experienceReveal !== "closed") {
+        root.dispatchEvent(new Event("mission-experience-reveal-close", { cancelable: true }));
+        return;
+      }
       closeGallery();
     };
 
@@ -821,6 +819,7 @@ export function MissionGallery({
         data-kind={completedDate ? "day" : "pack"}
         data-interaction-locked={interactionLocked}
         data-native-scroll={nativeScrolling}
+        data-experience-reveal="closed"
         data-single={missionCount === 1}
         style={streamStyle}
         ref={rootRef}
@@ -855,7 +854,6 @@ export function MissionGallery({
             enabled
             key={experienceMissionId}
             loadExperiences={loadMissionExperiences}
-            onCloseRequestReady={setRevealCloseRequest}
             rootRef={rootRef}
           />
         ) : null}

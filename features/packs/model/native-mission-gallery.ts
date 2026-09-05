@@ -123,6 +123,10 @@ export function mountNativeMissionGallery({
     if (!expansionStarted) { close(); return; }
     if (event.target instanceof Element && event.target.closest(`.${cardClass}`)) return;
     if (!interactive) return;
+    if (root.dataset.experienceReveal && root.dataset.experienceReveal !== "closed") {
+      root.dispatchEvent(new Event("mission-experience-reveal-close", { cancelable: true }));
+      return;
+    }
     if (root.dataset.interactionLocked !== "true" && !controller?.canActivate()) return;
     close();
   };

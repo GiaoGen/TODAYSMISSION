@@ -54,10 +54,12 @@ function environment({ modern = true } = {}) {
     addEventListener(name, callback, options) { this.listeners.set(name, { callback, options }); }
     removeEventListener(name) { this.listeners.delete(name); }
     emit(name, fields = {}) { this.listeners.get(name)?.callback({ type: name, target: this, clientX: 100, clientY: 0, touches: [], ...fields }); }
+    dispatchEvent(event) { this.listeners.get(event.type)?.callback(event); return !event.defaultPrevented; }
     closest() { return null; }
   }
   const globals = {
     Element, performance: { now: () => now },
+    Event: class { constructor(type) { this.type = type; this.defaultPrevented = false; } preventDefault() { this.defaultPrevented = true; } },
     setTimeout(callback, delay = 0) { const id = ++token; timers.set(id, { callback, due: now + delay }); return id; },
     clearTimeout(id) { timers.delete(id); },
     requestAnimationFrame(callback) { const id = ++token; frames.set(id, callback); return id; },
@@ -411,6 +413,24 @@ test("Safari commitment lock still lets a blank gallery click return home", asyn
   const h = galleryHarness({ count: 4 });
   await h.expand();
   h.setInteractionLocked(true);
+  h.rootElement.emit("click");
+  assert.equal(h.rootElement.dataset.phase, "closing");
+  h.gallery.destroy();
+});
+
+test("Safari open Reveal blank clicks are consumed before Home navigation", async () => {
+  const h = galleryHarness({ count: 4 });
+  await h.expand();
+  h.rootElement.dataset.experienceReveal = "open";
+  h.rootElement.addEventListener("mission-experience-reveal-close", event => {
+    event.preventDefault();
+    h.rootElement.dataset.experienceReveal = "closing";
+  });
+  h.rootElement.emit("click");
+  assert.equal(h.rootElement.dataset.experienceReveal, "closing");
+  assert.equal(h.rootElement.dataset.phase, "settled");
+  assert.equal(h.returned, 0);
+  h.rootElement.dataset.experienceReveal = "closed";
   h.rootElement.emit("click");
   assert.equal(h.rootElement.dataset.phase, "closing");
   h.gallery.destroy();
