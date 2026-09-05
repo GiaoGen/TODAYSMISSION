@@ -13,7 +13,7 @@
   background: color-mix(in srgb, var(--page-background) 72%, #f6f0e2);
   box-shadow: 0 16px 36px rgb(35 29 17 / calc(4% + var(--experience-progress) * 7%));
   color: #24221e;
-  opacity: calc(.72 + var(--experience-progress) * .28);
+  opacity: var(--experience-progress);
   pointer-events: none;
   transform: translate3d(-50%, calc(-50% + (1 - var(--experience-progress)) * 10px), 0);
   user-select: text;
@@ -64,28 +64,21 @@
 
 .audioExperience audio { display: none; }
 
-.playbackToggle {
-  display: grid;
-  width: clamp(42px, calc(48 * var(--stream-unit, 1px)), 52px);
-  height: clamp(42px, calc(48 * var(--stream-unit, 1px)), 52px);
-  flex: 0 0 auto;
-  place-items: center;
-  border: 1px solid rgb(36 34 30 / 22%);
-  border-radius: 50%;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-}
-
-.playbackToggle:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
-.playbackToggle svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-
 .waveform {
   position: relative;
   width: 100%;
+  flex: 1 1 auto;
   height: 46px;
+  padding: 0;
   overflow: hidden;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
 }
+
+.waveform:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
 
 .waveformBars {
   position: absolute;
@@ -110,7 +103,7 @@
   overflow: hidden;
 }
 
-.waveformPlayed .waveformBars { width: calc(var(--mission-card-width) - 96px); }
+.waveformPlayed .waveformBars { width: 100%; }
 .waveformPlayed .waveformBars i { background: rgb(36 34 30 / 78%); }
 
 @media (max-width: 599px) {
@@ -123,7 +116,6 @@
   color: #f1eadb;
 }
 :global(:root[data-theme="dark"]) .empty { color: rgb(241 234 219 / 58%); }
-:global(:root[data-theme="dark"]) .playbackToggle { border-color: rgb(241 234 219 / 24%); }
 :global(:root[data-theme="dark"]) .waveformBars i { background: rgb(241 234 219 / 24%); }
 :global(:root[data-theme="dark"]) .waveformPlayed .waveformBars i { background: rgb(241 234 219 / 78%); }
 

@@ -87,3 +87,28 @@ test("gesture controller preserves horizontal arbitration and resets playback on
   assert.match(gallery, /experienceGesture === "pending" \|\| root\.dataset\.experienceGesture === "vertical"/);
   assert.doesNotMatch(completedPage, /experienceMissionId|experienceRevealEnabled|MissionExperienceReveal/);
 });
+
+test("Reveal stays visually closed until travel begins", () => {
+  const css = read("features/missions/components/MissionExperienceReveal.module.css");
+  assert.match(css, /opacity:\s*var\(--experience-progress\)/);
+  assert.doesNotMatch(css, /opacity:\s*calc\(\.72/);
+});
+
+test("audio Reveal uses the complete waveform as its accessible playback control", () => {
+  const component = read("features/missions/components/MissionExperienceReveal.tsx");
+  const css = read("features/missions/components/MissionExperienceReveal.module.css");
+  assert.match(component, /<button[\s\S]*aria-pressed=\{playing\}[\s\S]*className=\{styles\.waveform\}/);
+  assert.match(component, /className=\{styles\.waveform\}[\s\S]*event\.stopPropagation\(\)/);
+  assert.doesNotMatch(component, /styles\.playbackToggle/);
+  assert.match(css, /\.waveformPlayed \.waveformBars \{ width: 100%; \}/);
+  assert.match(css, /\.waveform:focus-visible/);
+});
+
+test("Gallery blank clicks request Reveal close before navigation", () => {
+  const gallery = read("features/packs/components/MissionGallery.tsx");
+  assert.match(gallery, /revealCloseRequestRef\.current\?\.\(\)\) return;/);
+  assert.match(gallery, /onCloseRequestReady=\{setRevealCloseRequest\}/);
+  const reveal = read("features/missions/components/MissionExperienceReveal.tsx");
+  assert.match(reveal, /if \(!revealOpenRef\.current\) return false;/);
+  assert.match(reveal, /resetReveal\(false\);/);
+});

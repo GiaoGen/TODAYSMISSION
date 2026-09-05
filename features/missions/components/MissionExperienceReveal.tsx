@@ -27,6 +27,7 @@ type MissionExperienceRevealProps = {
     | { ok: false; error: string }
   >;
   rootRef: RefObject<HTMLElement | null>;
+  onCloseRequestReady?: (requestClose: (() => boolean) | null) => void;
 };
 
 function isRevealBlockedTarget(target: EventTarget | null) {
@@ -40,6 +41,7 @@ export function MissionExperienceReveal({
   enabled,
   loadExperiences,
   rootRef,
+  onCloseRequestReady,
 }: MissionExperienceRevealProps) {
   const underlayRef = useRef<HTMLElement>(null);
   const textRef = useRef<HTMLParagraphElement>(null);
@@ -56,6 +58,7 @@ export function MissionExperienceReveal({
   const [selected, setSelected] = useState<MissionExperience | null>(null);
   const [sessionActive, setSessionActive] = useState(false);
   const [revealOpen, setRevealOpen] = useState(false);
+  const revealOpenRef = useRef(false);
   const [loadState, setLoadState] = useState<"idle" | "loading" | "ready" | "failed">("idle");
   const [playing, setPlaying] = useState(false);
   const loading = loadState === "idle" || loadState === "loading";
@@ -98,6 +101,7 @@ export function MissionExperienceReveal({
     targetTravelRef.current = 0;
     selectedRef.current = null;
     sessionActiveRef.current = false;
+    revealOpenRef.current = false;
     setSelected(null);
     setSessionActive(false);
     setRevealOpen(false);
@@ -112,6 +116,7 @@ export function MissionExperienceReveal({
       card.dataset.experienceReveal = "closing";
     }
     applyTravel(0);
+    revealOpenRef.current = false;
     setRevealOpen(false);
 
     if (immediate || !card) {
@@ -148,6 +153,7 @@ export function MissionExperienceReveal({
     card.dataset.experienceReveal = open ? "opening" : "closing";
     if (!open) resetAudio();
     applyTravel(open ? targetTravelRef.current : 0);
+    revealOpenRef.current = open;
     setRevealOpen(open);
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     snapTimerRef.current = window.setTimeout(() => {
@@ -157,6 +163,17 @@ export function MissionExperienceReveal({
       snapTimerRef.current = null;
     }, reduced ? REDUCED_SNAP_DURATION_MS : SNAP_DURATION_MS);
   }, [applyTravel, clearSnapTimer, finishClosed, resetAudio]);
+
+  const requestClose = useCallback(() => {
+    if (!revealOpenRef.current) return false;
+    resetReveal(false);
+    return true;
+  }, [resetReveal]);
+
+  useLayoutEffect(() => {
+    onCloseRequestReady?.(requestClose);
+    return () => onCloseRequestReady?.(null);
+  }, [onCloseRequestReady, requestClose]);
 
   useEffect(() => {
     poolRef.current = [];
@@ -393,19 +410,19 @@ export function MissionExperienceReveal({
           <div className={styles.audioExperience}>
             <button
               aria-label={playing ? "Pause shared experience" : "Play shared experience"}
-              className={styles.playbackToggle}
+              aria-pressed={playing}
+              className={styles.waveform}
               data-experience-control
-              onClick={() => void togglePlayback()}
+              onClick={(event) => {
+                event.stopPropagation();
+                void togglePlayback();
+              }}
+              onKeyDown={(event) => event.stopPropagation()}
+              onPointerDown={(event) => event.stopPropagation()}
+              onPointerUp={(event) => event.stopPropagation()}
               tabIndex={revealOpen ? 0 : -1}
               type="button"
             >
-              {playing ? (
-                <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 6v12M16 6v12" /></svg>
-              ) : (
-                <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m9 6 9 6-9 6Z" /></svg>
-              )}
-            </button>
-            <div aria-hidden="true" className={styles.waveform}>
               <div className={styles.waveformBars}>
                 {waveform.map((height, index) => <i key={index} style={{ height: `${height * 100}%` }} />)}
               </div>
@@ -414,7 +431,7 @@ export function MissionExperienceReveal({
                   {waveform.map((height, index) => <i key={index} style={{ height: `${height * 100}%` }} />)}
                 </div>
               </div>
-            </div>
+            </button>
             <audio
               onEnded={() => setPlaying(false)}
               onPause={() => setPlaying(false)}

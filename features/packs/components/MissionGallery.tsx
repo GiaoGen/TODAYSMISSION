@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties, ReactNode, RefObject } from "react";
-import { useLayoutEffect, useRef, useState, ViewTransition } from "react";
+import { useCallback, useLayoutEffect, useRef, useState, ViewTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { getDeckMetrics } from "@/features/packs/model/arc-carousel-geometry";
@@ -208,9 +208,13 @@ export function MissionGallery({
   const onActiveMissionChangeRef = useRef(onActiveMissionChange);
   const onExpansionSettledRef = useRef(onExpansionSettled);
   const onSelectNextReadyRef = useRef(onSelectNextReady);
+  const revealCloseRequestRef = useRef<(() => boolean) | null>(null);
   const activeMissionIdRef = useRef<string | null>(null);
   const expansionRequestedRef = useRef(expandMissions);
   const requestExpansionRef = useRef<(() => void) | null>(null);
+  const setRevealCloseRequest = useCallback((requestClose: (() => boolean) | null) => {
+    revealCloseRequestRef.current = requestClose;
+  }, []);
 
   useLayoutEffect(() => {
     missionIdsRef.current = missions.map((mission) => mission.id);
@@ -698,6 +702,7 @@ export function MissionGallery({
         return;
       }
 
+      if (revealCloseRequestRef.current?.()) return;
       closeGallery();
     };
 
@@ -850,6 +855,7 @@ export function MissionGallery({
             enabled
             key={experienceMissionId}
             loadExperiences={loadMissionExperiences}
+            onCloseRequestReady={setRevealCloseRequest}
             rootRef={rootRef}
           />
         ) : null}

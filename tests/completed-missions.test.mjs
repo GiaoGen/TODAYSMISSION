@@ -400,6 +400,7 @@ function galleryHarness(count, {
     missionIdsRef: { current: Array.from({ length: count }, (_, index) => `mission-${index}`) },
     onActiveMissionChangeRef: { current: missionId => activeMissionChanges.push(missionId) }, onExpansionSettledRef: { current: () => { settled++; } }, activeMissionIdRef: { current: null },
     onSelectNextReadyRef: { current: selector => { selectNext = selector; } },
+    revealCloseRequestRef: { current: null },
     onInteractionLockReady: setter => { setInteractionLocked = setter; },
     expansionRequestedRef: { current: expansionRequested }, requestExpansionRef: { current: null },
     missionCount: count, looping, id: looping ? "mock-pack-01" : dayTransitions.getDayGalleryId("2026-08-28"),
@@ -521,6 +522,18 @@ test("Chrome commitment lock still lets a blank gallery click return home", asyn
   gallery.setInteractionLocked(true);
   gallery.event("click");
   assert.equal(gallery.root.dataset.phase, "closing");
+  gallery.cleanup();
+});
+
+test("an open Reveal consumes a blank gallery click and stays in the Pack", async () => {
+  const gallery = galleryHarness(3, { looping: true });
+  await gallery.expand();
+  let closeRequests = 0;
+  gallery.env.revealCloseRequestRef.current = () => { closeRequests++; return true; };
+  gallery.event("click");
+  assert.equal(closeRequests, 1);
+  assert.equal(gallery.root.dataset.phase, "settled");
+  assert.equal(gallery.navigations.length, 0);
   gallery.cleanup();
 });
 
