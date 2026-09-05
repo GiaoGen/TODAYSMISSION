@@ -26,6 +26,12 @@ export function getPackCarouselReturnState() {
   return returnState;
 }
 
+export function consumePackCarouselReturnState() {
+  const consumed = returnState;
+  returnState = null;
+  return consumed;
+}
+
 export function getServerPackCarouselReturnState() {
   return null;
 }

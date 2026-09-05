@@ -15,7 +15,6 @@ const componentFiles = {
   NativePackCarousel: "features/packs/components/NativePackCarousel.tsx",
   CalendarCarousel: "features/calendar/components/CalendarCarousel.tsx",
   PackDetailPage: "app/pack/[slug]/page.tsx",
-  PackRouteContent: "app/pack/[slug]/page.tsx",
   PackUserState: "app/pack/[slug]/PackUserState.tsx",
   MissionPackDetail: "features/packs/components/MissionPackDetail.tsx",
   MissionGallery: "features/packs/components/MissionGallery.tsx",

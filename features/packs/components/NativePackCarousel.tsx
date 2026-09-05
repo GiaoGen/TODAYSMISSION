@@ -15,7 +15,7 @@ import { getPackTransitionName, PACK_CLOSE_TRANSITION_TYPE, PACK_OPEN_TRANSITION
 import styles from "./ArcCarousel.module.css";
 import { prefetchNavigationRoute } from "@/features/navigation/model/navigation-prefetch";
 
-export function NativePackCarousel({ packs, placement = "bottom", collection = placement === "top" ? "joined" : "all", initialCarouselState, interactionDisabled = false, swappingIn = false, onOpenPack, ref }: ArcCarouselProps) {
+export function NativePackCarousel({ packs, placement = "bottom", collection = placement === "top" ? "joined" : "all", initialCarouselState, interactionDisabled = false, suppressEntranceAnimation = false, swappingIn = false, onOpenPack, ref }: ArcCarouselProps) {
   const router = useRouter();
   const liveViewport = useDeckViewport();
   const [viewport, setViewport] = useState(liveViewport);
@@ -143,7 +143,7 @@ export function NativePackCarousel({ packs, placement = "bottom", collection = p
   const exitClass = placement === "top" ? "pack-home-top-exit" : "pack-home-exit";
 
   return (
-    <ViewTransition default="none" enter={{ [PACK_CLOSE_TRANSITION_TYPE]: enterClass, default: enterClass }} exit={{ [PACK_OPEN_TRANSITION_TYPE]: exitClass, default: "none" }}>
+    <ViewTransition default="none" enter={suppressEntranceAnimation ? undefined : { [PACK_CLOSE_TRANSITION_TYPE]: enterClass, default: enterClass }} exit={{ [PACK_OPEN_TRANSITION_TYPE]: exitClass, default: "none" }}>
       <section className={styles.root} data-native-scroll="true" data-placement={placement} data-swapping-in={swappingIn} inert={interactionDisabled} ref={rootRef} style={style}
         aria-label={`${placement === "top" ? "上轮盘" : "下轮盘"}：${COLLECTION_LABELS[collection]}（模拟数据）/ ${collection === "joined" ? "Joined" : "All"} packs (mock)`}>
         <div className={styles.nativeViewport} ref={scrollRef} role="group" tabIndex={count > 0 ? 0 : -1}

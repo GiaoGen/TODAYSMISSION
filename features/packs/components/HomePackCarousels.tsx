@@ -10,6 +10,7 @@ import type { CarouselPlacement } from "@/features/packs/model/arc-carousel-geom
 import type { CarouselHandle } from "@/features/packs/model/carousel-handle";
 import {
   getPackCarouselReturnState,
+  consumePackCarouselReturnState,
   setPackCarouselReturnState,
   resolveCarouselState,
 } from "@/features/packs/model/pack-carousel-return-state";
@@ -72,12 +73,13 @@ export function HomePackCarousels({ packs, joinedPacks, currentUser, calendar, o
 
   useLayoutEffect(() => {
     // Freeze the destination before React captures the shared-element snapshot.
-    const returning = getPackCarouselReturnState() !== null;
+    const returning = returnState !== null;
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     navigationLockRef.current = returning;
     if (returning) {
       topRef.current?.freezeAndSnapshot();
       bottomRef.current?.freezeAndSnapshot();
+      consumePackCarouselReturnState();
     }
     const timer = window.setTimeout(() => {
       navigationLockRef.current = false;
@@ -86,7 +88,7 @@ export function HomePackCarousels({ packs, joinedPacks, currentUser, calendar, o
       setReady(true);
     }, returning && !reducedMotion && "startViewTransition" in document ? 520 : 0);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [returnState]);
 
   useLayoutEffect(() => {
     if (view.phase === "idle") {
@@ -229,6 +231,7 @@ export function HomePackCarousels({ packs, joinedPacks, currentUser, calendar, o
           !returnState?.completedDate ? returnState?.packId : undefined,
         )}
         interactionDisabled={busy || menuOpen}
+        suppressEntranceAnimation={returnState !== null}
         swappingIn={view.phase === "entering" && view.changing.includes("bottom")}
         ref={bottomRef}
         onOpenPack={openPack}

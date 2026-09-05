@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
-import { getPackBySlug } from "@/data/repositories/get-packs";
+import { getPackBySlug, getPacks } from "@/data/repositories/get-packs";
 import { PackPublicShell } from "@/features/packs/components/PackPublicShell";
 import { PackUserState } from "./PackUserState";
 
@@ -9,15 +9,12 @@ type PackDetailPageProps = {
   params: Promise<{ slug: string }>;
 };
 
-export default function PackDetailPage({ params }: PackDetailPageProps) {
-  return (
-    <Suspense fallback={null}>
-      <PackRouteContent params={params} />
-    </Suspense>
-  );
+export async function generateStaticParams() {
+  const packs = await getPacks();
+  return packs.map((pack) => ({ slug: pack.slug }));
 }
 
-async function PackRouteContent({ params }: PackDetailPageProps) {
+export default async function PackDetailPage({ params }: PackDetailPageProps) {
   const { slug } = await params;
   const pack = await getPackBySlug(slug);
 

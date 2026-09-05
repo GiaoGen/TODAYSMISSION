@@ -4,6 +4,7 @@ import test from "node:test";
 
 import {
   createDirectPackReturnState,
+  consumePackCarouselReturnState,
   getInitialCarouselState,
   getPackCarouselReturnState,
   getPackEntrySource,
@@ -87,6 +88,13 @@ test("direct detail entry returns to bottom and includes a Pack outside the init
   assert.equal(getServerPackCarouselReturnState(), null);
 });
 
+test("a Pack return snapshot is consumed once, so the next Home mount is a first visit", () => {
+  setPackCarouselReturnState(entry("bottom"));
+  assert.equal(getPackCarouselReturnState()?.packId, "pack-4");
+  assert.equal(consumePackCarouselReturnState()?.packId, "pack-4");
+  assert.equal(getPackCarouselReturnState(), null);
+});
+
 test("reordered data restores identity instead of the old numeric slot", () => {
   const reordered = [packs[4], packs[0], packs[2], packs[6], packs[8]];
   assert.deepEqual(getInitialCarouselState(reordered, 5, "top", entry()), {
@@ -139,4 +147,14 @@ test("top and bottom reuse the same keyframes with opposite edge offsets", () =>
   assert.match(css, /::view-transition-new\(\.pack-home-enter\),\s*::view-transition-new\(\.pack-home-top-enter\)\s*\{\s*animation: pack-wheel-enter 520ms/);
   assert.match(css, /::view-transition-old\(\.pack-home-top-exit\),\s*::view-transition-new\(\.pack-home-top-enter\)\s*\{\s*--pack-wheel-offset: -112vh;/);
   assert.equal(css.match(/var\(--pack-wheel-offset, 112vh\)/g)?.length, 2);
+});
+
+test("returning Home suppresses only the carousel's first-enter flag", () => {
+  const home = readFileSync(new URL("../features/packs/components/HomePackCarousels.tsx", import.meta.url), "utf8");
+  const arc = readFileSync(new URL("../features/packs/components/ArcCarousel.tsx", import.meta.url), "utf8");
+  const native = readFileSync(new URL("../features/packs/components/NativePackCarousel.tsx", import.meta.url), "utf8");
+  assert.match(home, /suppressEntranceAnimation=\{returnState !== null\}/);
+  assert.match(home, /consumePackCarouselReturnState\(\)/);
+  assert.match(arc, /enter=\{suppressEntranceAnimation \? undefined : \{/);
+  assert.match(native, /enter=\{suppressEntranceAnimation \? undefined : \{/);
 });

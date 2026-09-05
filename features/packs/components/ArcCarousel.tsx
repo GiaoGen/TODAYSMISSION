@@ -37,6 +37,7 @@ export type ArcCarouselProps = {
   collection?: PackCollection;
   initialCarouselState?: InitialCarouselState;
   interactionDisabled?: boolean;
+  suppressEntranceAnimation?: boolean;
   swappingIn?: boolean;
   onOpenPack: (pack: PackSummary, placement: CarouselPlacement) => void;
   ref?: Ref<ArcCarouselHandle>;
@@ -74,6 +75,7 @@ export function TransformArcCarousel({
   collection = placement === "top" ? "joined" : "all",
   initialCarouselState,
   interactionDisabled = false,
+  suppressEntranceAnimation = false,
   swappingIn = false,
   onOpenPack,
   ref,
@@ -324,7 +326,7 @@ export function TransformArcCarousel({
   return (
     <ViewTransition
       default="none"
-      enter={{ [PACK_CLOSE_TRANSITION_TYPE]: enterClass, default: enterClass }}
+      enter={suppressEntranceAnimation ? undefined : { [PACK_CLOSE_TRANSITION_TYPE]: enterClass, default: enterClass }}
       exit={{ [PACK_OPEN_TRANSITION_TYPE]: exitClass, default: "none" }}
     >
       <section

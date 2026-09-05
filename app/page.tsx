@@ -23,16 +23,6 @@ async function HomeUserState({ packs }: { packs: readonly PackSummary[] }) {
   />;
 }
 
-function HomePublicShell({ packs }: { packs: readonly PackSummary[] }) {
-  return <HomeCarouselEntry
-    calendar={{ registeredOn: "1970-01-01", completedOn: [] }}
-    currentUser={null}
-    joinedPacks={[]}
-    onLogout={logout}
-    packs={packs}
-  />;
-}
-
 export default async function Home() {
   const packs = await getPacks();
 
@@ -41,7 +31,7 @@ export default async function Home() {
   }
 
   return (
-    <Suspense fallback={<HomePublicShell packs={packs} />}>
+    <Suspense fallback={null}>
       <HomeUserState packs={packs} />
     </Suspense>
   );
