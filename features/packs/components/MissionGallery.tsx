@@ -71,6 +71,7 @@ type MissionGalleryProps = {
   missionAction?: ReactNode;
   waitingAction?: ReactNode;
   experienceMissionId?: string;
+  experienceMissionCompleted?: boolean;
   experienceRevealEnabled?: boolean;
   loadMissionExperiences?: (missionId: string) => Promise<
     | { ok: true; experiences: readonly MissionExperience[] }
@@ -158,6 +159,7 @@ export function MissionGallery({
   missionAction,
   waitingAction,
   experienceMissionId,
+  experienceMissionCompleted = completedDate !== undefined,
   experienceRevealEnabled = false,
   loadMissionExperiences,
   onExpansionSettled,
@@ -848,11 +850,11 @@ export function MissionGallery({
           </p>
         ) : null}
 
-        {!completedDate && experienceMissionId && experienceRevealEnabled && loadMissionExperiences ? (
+        {experienceMissionId && experienceRevealEnabled && loadMissionExperiences ? (
           <MissionExperienceReveal
             activeMissionId={experienceMissionId}
             enabled
-            key={experienceMissionId}
+            key={`${experienceMissionId}:${experienceMissionCompleted ? "completed" : "community"}`}
             loadExperiences={loadMissionExperiences}
             rootRef={rootRef}
           />

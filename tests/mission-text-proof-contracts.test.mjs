@@ -74,7 +74,10 @@ test("text experience card follows the completion card drop and stays borderless
   assert.match(textInput, /border: 0/);
   assert.match(textInput, /appearance: none/);
   assert.match(textInput, /box-shadow: none/);
-  assert.match(proofStyles, /\.proofChooserCapsule \{[\s\S]*background: light-dark\(#c7c7c2, #464642\)/);
+  const chooser = proofStyles.match(/\.proofChooserCapsule \{([\s\S]*?)\n\}/)?.[1] ?? "";
+  assert.match(chooser, /background: transparent/);
+  assert.match(chooser, /border-radius: 0/);
+  assert.doesNotMatch(chooser, /padding:/);
 });
 
 test("Take this Pack keeps its dimensions and becomes a pill", () => {

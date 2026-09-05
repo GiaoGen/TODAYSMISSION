@@ -108,3 +108,62 @@ export async function getPublishedMissionExperiences(
     return { id: experience.id, kind: "audio", signedPlaybackUrl: data.signedUrl };
   }));
 }
+
+export async function getMyMissionExperience(
+  missionId: string,
+): Promise<readonly MissionExperience[]> {
+  const supabase = await createClient();
+  const { data: userData, error: authError } = await supabase.auth.getUser();
+
+  if (authError) {
+    if (isAuthSessionMissingError(authError)) return [];
+    throw new Error("Failed to read the current Auth user.");
+  }
+
+  const user = userData.user;
+  if (!user || user.is_anonymous) return [];
+
+  const { data: completion, error: completionError } = await supabase
+    .from("mission_completions")
+    .select("mission_id")
+    .eq("user_id", user.id)
+    .eq("mission_id", missionId)
+    .maybeSingle();
+
+  if (completionError) throw new Error("Failed to verify Mission completion.");
+  if (!completion) return [];
+
+  const [voiceResult, textResult] = await Promise.all([
+    supabase
+      .from("mission_voices")
+      .select("id,storage_path,created_at")
+      .eq("user_id", user.id)
+      .eq("mission_id", missionId)
+      .order("created_at", { ascending: false })
+      .limit(1),
+    supabase
+      .from("mission_text_experiences")
+      .select("id,body,created_at")
+      .eq("user_id", user.id)
+      .eq("mission_id", missionId)
+      .order("created_at", { ascending: false })
+      .limit(1),
+  ]);
+
+  if (voiceResult.error || textResult.error) throw new Error("Failed to read your Mission experience.");
+
+  const voice = voiceResult.data?.[0];
+  const textExperience = textResult.data?.[0];
+  if (!voice && !textExperience) return [];
+
+  if (voice && (!textExperience || voice.created_at >= textExperience.created_at)) {
+    const { data, error } = await supabase.storage
+      .from("mission-voices")
+      .createSignedUrl(voice.storage_path, MISSION_VOICE_URL_LIFETIME_SECONDS);
+
+    if (error || !data?.signedUrl) throw new Error("Failed to prepare your Mission experience playback.");
+    return [{ id: voice.id, kind: "audio", signedPlaybackUrl: data.signedUrl }];
+  }
+
+  return [{ id: textExperience.id, kind: "text", text: textExperience.body }];
+}

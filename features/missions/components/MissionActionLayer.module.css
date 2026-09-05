@@ -71,10 +71,9 @@
   box-sizing: border-box;
   width: 100%;
   height: var(--tm-capsule-height);
-  padding: 6px;
   border: 0;
-  border-radius: 999px;
-  background: light-dark(#c7c7c2, #464642);
+  border-radius: 0;
+  background: transparent;
   color: #111;
   animation: capsuleIn 180ms ease-out both;
 }

@@ -80,7 +80,9 @@ test("completed day route is private runtime data and uses the existing MissionG
   assert.match(completedPage, /redirect\(`\/login\?next=\$\{encodeURIComponent/);
   assert.match(completedPage, /getDayGalleryId\(day\.date\)/);
   assert.match(completedPage, /title=\{`\$\{day\.date\} Completed Missions`\}/);
-  assert.match(completedPage, /completedDate=\{day\.date\}/);
+  assert.match(completedPage, /CompletedMissionGallery/);
+  assert.match(completedPage, /date=\{day\.date\}/);
+  assert.match(read("features/packs/components/CompletedMissionGallery.tsx"), /completedDate=\{date\}/);
   assert.match(completedPage, /if \(!day\) notFound\(\)/);
 });
 

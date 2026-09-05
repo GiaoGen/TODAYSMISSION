@@ -45,7 +45,7 @@ export function canRevealMissionExperience({
   joined: boolean;
   settled: boolean;
 }) {
-  return joined && settled && !completed && !completedDay;
+  return joined && settled && (completed || !completedDay);
 }
 
 export function getDeterministicWaveform(experienceId: string, count = 28): readonly number[] {

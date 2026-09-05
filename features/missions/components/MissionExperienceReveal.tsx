@@ -248,8 +248,7 @@ export function MissionExperienceReveal({
     const findCard = (target: EventTarget | null) => {
       if (!(target instanceof Element)) return null;
       const card = target.closest<HTMLLIElement>("[data-completion-mission-id]");
-      return card?.dataset.completionMissionId === activeMissionId
-        && card.dataset.completionState === "incomplete" ? card : null;
+      return card?.dataset.completionMissionId === activeMissionId ? card : null;
     };
     const onPointerDown = (event: PointerEvent) => {
       if (event.button !== 0 || pointerId !== null || isRevealBlockedTarget(event.target)) return;

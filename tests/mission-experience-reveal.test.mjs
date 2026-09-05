@@ -34,9 +34,10 @@ test("experience travel is relative to card height and clamps long text", () => 
   assert.equal(getMissionExperienceRevealTravel(cardHeight, "text", 900), 444);
 });
 
-test("only an incomplete joined Pack Mission in the settled Pack Gallery is eligible", () => {
+test("completed Missions and incomplete Pack Missions in settled galleries are eligible", () => {
   assert.equal(canRevealMissionExperience({ completed: false, completedDay: false, joined: true, settled: true }), true);
-  assert.equal(canRevealMissionExperience({ completed: true, completedDay: false, joined: true, settled: true }), false);
+  assert.equal(canRevealMissionExperience({ completed: true, completedDay: false, joined: true, settled: true }), true);
+  assert.equal(canRevealMissionExperience({ completed: true, completedDay: true, joined: true, settled: true }), true);
   assert.equal(canRevealMissionExperience({ completed: false, completedDay: true, joined: true, settled: true }), false);
   assert.equal(canRevealMissionExperience({ completed: false, completedDay: false, joined: false, settled: true }), false);
 });
@@ -59,10 +60,14 @@ test("public Experience DTO and action never expose contributor or completion-pr
 
 test("one Experience source can fail without hiding the other source", () => {
   const repository = read("data/repositories/get-mission-experiences.ts");
-  assert.match(repository, /voiceResult\.error && textResult\.error/);
-  assert.match(repository, /voiceResult\.error \? \[\] : \(voiceResult\.data \?\? \[\]\)/);
-  assert.match(repository, /textResult\.error \? \[\] : \(textResult\.data \?\? \[\]\)/);
-  assert.doesNotMatch(repository, /voiceResult\.error \|\| textResult\.error/);
+  const publishedPath = repository.slice(
+    repository.indexOf("export async function getPublishedMissionExperiences"),
+    repository.indexOf("export async function getMyMissionExperience"),
+  );
+  assert.match(publishedPath, /voiceResult\.error && textResult\.error/);
+  assert.match(publishedPath, /voiceResult\.error \? \[\] : \(voiceResult\.data \?\? \[\]\)/);
+  assert.match(publishedPath, /textResult\.error \? \[\] : \(textResult\.data \?\? \[\]\)/);
+  assert.doesNotMatch(publishedPath, /voiceResult\.error \|\| textResult\.error/);
 });
 
 test("text experiences are unpublished by default and readable only to permanent joined users", () => {
@@ -83,15 +88,46 @@ test("gesture controller preserves horizontal arbitration and resets playback on
   assert.match(component, /Math\.abs\(deltaX\) > Math\.abs\(deltaY\)/);
   assert.match(component, /audio\?\.pause\(\)/);
   assert.match(component, /audio\.currentTime = 0/);
-  assert.match(gallery, /key=\{experienceMissionId\}/);
+  assert.match(gallery, /experienceMissionCompleted/);
+  assert.match(gallery, /key=\{`\$\{experienceMissionId\}:\$\{experienceMissionCompleted/);
   assert.match(gallery, /experienceGesture === "pending" \|\| root\.dataset\.experienceGesture === "vertical"/);
-  assert.doesNotMatch(completedPage, /experienceMissionId|experienceRevealEnabled|MissionExperienceReveal/);
+  assert.match(completedPage, /CompletedMissionGallery/);
+  assert.match(completedPage, /getMyMissionExperienceAction/);
 });
 
 test("Reveal stays visually closed until travel begins", () => {
   const css = read("features/missions/components/MissionExperienceReveal.module.css");
   assert.match(css, /opacity:\s*var\(--experience-progress\)/);
   assert.doesNotMatch(css, /opacity:\s*calc\(\.72/);
+});
+
+test("completed Mission owner read path is completion-gated and keeps unpublished data private", () => {
+  const repository = read("data/repositories/get-mission-experiences.ts");
+  const ownPath = repository.slice(repository.indexOf("export async function getMyMissionExperience"));
+  const migration = read("supabase/migrations/20260905135417_completed_mission_owner_experience_read.sql");
+  assert.match(ownPath, /from\("mission_completions"\)/);
+  assert.match(ownPath, /eq\("user_id", user\.id\)/);
+  assert.match(ownPath, /if \(!completion\) return \[\]/);
+  assert.match(ownPath, /from\("mission_voices"\)[\s\S]*eq\("user_id", user\.id\)/);
+  assert.match(ownPath, /from\("mission_text_experiences"\)[\s\S]*eq\("user_id", user\.id\)/);
+  assert.doesNotMatch(ownPath, /is_published/);
+  assert.match(ownPath, /createSignedUrl\(voice\.storage_path/);
+  assert.match(migration, /Owners can view their own Mission text experiences/);
+  assert.match(migration, /Owners can view their own Mission voices/);
+  assert.match(migration, /Owners can read their own Mission voice objects/);
+  assert.match(migration, /voice\.user_id = \(select auth\.uid\(\)\)/);
+});
+
+test("Pack and Calendar use the same Reveal with community/owner loader routing", () => {
+  const pack = read("features/packs/components/MissionPackDetail.tsx");
+  const page = read("app/pack/[slug]/page.tsx");
+  const completedGallery = read("features/packs/components/CompletedMissionGallery.tsx");
+  assert.match(pack, /experienceMissionCompleted=\{currentStatus === "completed"\}/);
+  assert.match(pack, /currentStatus === "completed" \? loadMyMissionExperience : loadMissionExperiences/);
+  assert.match(page, /loadMyMissionExperience=\{getMyMissionExperienceAction\}/);
+  assert.match(completedGallery, /MissionGallery/);
+  assert.match(completedGallery, /experienceMissionCompleted/);
+  assert.match(completedGallery, /onActiveMissionChange=\{setActiveMissionId\}/);
 });
 
 test("audio Reveal uses the complete waveform as its accessible playback control", () => {

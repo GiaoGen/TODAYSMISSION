@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 
 import type { MissionVoicePlayback } from "@/data/contracts/mission-voice";
 import type { MissionExperience } from "@/data/contracts/mission-experience";
-import { getPublishedMissionExperiences } from "@/data/repositories/get-mission-experiences";
+import { getMyMissionExperience, getPublishedMissionExperiences } from "@/data/repositories/get-mission-experiences";
 import { getPublishedMissionVoicesForMission } from "@/data/repositories/get-mission-voices";
 import { parseDateKey } from "@/features/calendar/model/calendar-month";
 import { normalizeMissionTextProof } from "@/features/missions/model/mission-text-proof";
@@ -222,5 +222,18 @@ export async function getMissionExperiencesAction(missionId: string): Promise<Mi
     };
   } catch {
     return { ok: false, error: "We couldn't load shared experiences. Please try again." };
+  }
+}
+
+export async function getMyMissionExperienceAction(missionId: string): Promise<MissionExperienceResult> {
+  if (!UUID_PATTERN.test(missionId)) return { ok: false, error: "That mission is unavailable." };
+
+  try {
+    return {
+      ok: true,
+      experiences: await getMyMissionExperience(missionId),
+    };
+  } catch {
+    return { ok: false, error: "We couldn't load your Mission experience. Please try again." };
   }
 }

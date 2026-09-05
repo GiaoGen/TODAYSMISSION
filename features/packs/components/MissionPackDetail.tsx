@@ -31,6 +31,10 @@ type MissionPackDetailProps = {
     | { ok: true; experiences: readonly MissionExperience[] }
     | { ok: false; error: string }
   >;
+  loadMyMissionExperience?: (missionId: string) => Promise<
+    | { ok: true; experiences: readonly MissionExperience[] }
+    | { ok: false; error: string }
+  >;
 };
 
 export function MissionPackDetail({
@@ -41,6 +45,7 @@ export function MissionPackDetail({
   initialPackJoined,
   initialMissionCompletionStatuses,
   loadMissionExperiences,
+  loadMyMissionExperience,
 }: MissionPackDetailProps) {
   const sessionSnapshot = useSyncExternalStore(
     subscribeSessionSnapshot,
@@ -217,15 +222,15 @@ export function MissionPackDetail({
         missionAction={missionAction}
         interactionLocked={galleryInteractionLocked}
         experienceMissionId={activeMission?.id}
+        experienceMissionCompleted={currentStatus === "completed"}
         experienceRevealEnabled={Boolean(
           authenticated
           && packJoined
           && gallerySettled
           && activeMission
-          && currentStatus !== "completed"
           && !completionRequestedMissionIds.has(activeMission.id)
         )}
-        loadMissionExperiences={loadMissionExperiences}
+        loadMissionExperiences={currentStatus === "completed" ? loadMyMissionExperience : loadMissionExperiences}
         expandMissions={packJoined}
         waitingAction={!packJoined ? (
           <PackMembershipAction
