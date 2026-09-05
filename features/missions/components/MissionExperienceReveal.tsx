@@ -9,7 +9,7 @@ import {
   getMissionExperienceRevealTravel,
   selectMissionExperience,
 } from "@/features/missions/model/mission-experience";
-import { getMissionExperiencePool } from "@/features/missions/model/mission-experience-cache";
+import { getMissionExperiencePool, type MissionExperienceScope } from "@/features/missions/model/mission-experience-cache";
 
 import styles from "./MissionExperienceReveal.module.css";
 
@@ -26,6 +26,7 @@ type MissionExperienceRevealProps = {
     | { ok: true; experiences: readonly MissionExperience[] }
     | { ok: false; error: string }
   >;
+  experienceScope: MissionExperienceScope;
   rootRef: RefObject<HTMLElement | null>;
 };
 
@@ -39,6 +40,7 @@ export function MissionExperienceReveal({
   activeMissionId,
   enabled,
   loadExperiences,
+  experienceScope,
   rootRef,
 }: MissionExperienceRevealProps) {
   const underlayRef = useRef<HTMLElement>(null);
@@ -174,7 +176,7 @@ export function MissionExperienceReveal({
 
     const load = () => {
       setLoadState("loading");
-      void getMissionExperiencePool(activeMissionId, loadExperiences).then((experiences) => {
+      void getMissionExperiencePool(activeMissionId, experienceScope, loadExperiences).then((experiences) => {
         if (cancelled) return;
         poolRef.current = experiences;
         setLoadState("ready");
@@ -202,7 +204,7 @@ export function MissionExperienceReveal({
       if (idleId !== null) window.cancelIdleCallback(idleId);
       if (timerId !== null) globalThis.clearTimeout(timerId);
     };
-  }, [activeMissionId, enabled, loadExperiences]);
+  }, [activeMissionId, enabled, experienceScope, loadExperiences]);
 
   useLayoutEffect(() => {
     if (!sessionActive) return;

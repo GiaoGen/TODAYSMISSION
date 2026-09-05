@@ -7,6 +7,7 @@ import {
   batchRoutes,
   createCompletedRoutePrefetchPlan,
   prefetchCompletedRoutes,
+  prefetchNavigationRoute,
   prefetchPackRoutes,
 } from "../model/navigation-prefetch";
 
@@ -39,25 +40,25 @@ export function NavigationPrefetch({ packs, completedDates }: NavigationPrefetch
     const scheduledCleanups: Array<() => void> = [];
     const plan = createCompletedRoutePrefetchPlan(completedDates);
     const historicalBatches = batchRoutes(plan.historicalRoutes);
+    const keepWarm = (route: string) => {
+      if (cancelled) return;
+      prefetchNavigationRoute(router, route, keepWarm);
+    };
 
     const scheduleHistoricalBatch = (index: number) => {
       if (cancelled || index >= historicalBatches.length) return;
       const cleanup = scheduleWhenIdle(() => {
         if (cancelled) return;
         const batch = historicalBatches[index];
-        prefetchCompletedRoutes(router, batch);
+        prefetchCompletedRoutes(router, batch, keepWarm);
         scheduleHistoricalBatch(index + 1);
       });
       scheduledCleanups.push(cleanup);
     };
 
-    const cleanupInitial = scheduleWhenIdle(() => {
-      if (cancelled) return;
-      prefetchPackRoutes(router, packs);
-      prefetchCompletedRoutes(router, plan.priorityRoutes);
-      scheduleHistoricalBatch(0);
-    });
-    scheduledCleanups.push(cleanupInitial);
+    prefetchPackRoutes(router, packs, keepWarm);
+    prefetchCompletedRoutes(router, plan.priorityRoutes, keepWarm);
+    scheduleHistoricalBatch(0);
 
     return () => {
       cancelled = true;

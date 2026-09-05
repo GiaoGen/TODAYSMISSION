@@ -3,26 +3,23 @@ import "server-only";
 import { isAuthSessionMissingError } from "@supabase/supabase-js";
 
 import type { PackMembership } from "@/data/contracts/pack-membership";
+import type { CurrentUser } from "@/data/contracts/current-user";
 import type { PackSummary } from "@/data/contracts/pack-summary";
 import { mapPackMembershipRow } from "@/data/mappers/pack-membership-mapper";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "./get-current-user";
 import { getPacks } from "./get-packs";
 
-export async function getCurrentPackMembership(packId: string): Promise<PackMembership | null> {
+export async function getCurrentPackMembership(packId: string, currentUser?: CurrentUser): Promise<PackMembership | null> {
+  const user = currentUser ?? await getCurrentUser();
+  if (!user) return null;
+
   const supabase = await createClient();
-  const { data: userData, error: authError } = await supabase.auth.getUser();
-
-  if (authError) {
-    if (isAuthSessionMissingError(authError)) return null;
-    throw new Error("Failed to read the current Auth user.");
-  }
-
-  if (!userData.user || userData.user.is_anonymous) return null;
 
   const { data, error } = await supabase
     .from("pack_memberships")
     .select("active_mission_id,pack_id,joined_at")
-    .eq("user_id", userData.user.id)
+    .eq("user_id", user.id)
     .eq("pack_id", packId)
     .maybeSingle();
 

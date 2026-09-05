@@ -180,3 +180,15 @@ test("completion mapping ignores no legacy progress fields", () => {
     },
   });
 });
+
+test("public Pack content is cached without auth or cookies and detail avoids a list roundtrip", () => {
+  const source = readFileSync(path.resolve(root, "data/repositories/get-packs.ts"), "utf8");
+  const cachedFunction = source.slice(source.indexOf("async function getCachedPublicPacks"), source.indexOf("export async function getPacks"));
+  const detailFunction = source.slice(source.indexOf("export async function getPackBySlug"));
+
+  assert.match(cachedFunction, /"use cache"/);
+  assert.match(cachedFunction, /cacheLife\(/);
+  assert.match(cachedFunction, /createPublicClient\(/);
+  assert.doesNotMatch(cachedFunction, /createClient\(|cookies\(|getCurrentUser|auth\./);
+  assert.doesNotMatch(detailFunction, /getPacks\(/);
+});

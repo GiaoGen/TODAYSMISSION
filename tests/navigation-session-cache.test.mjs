@@ -13,6 +13,8 @@ import {
   prefetchPackRoutes,
   resetNavigationPrefetchForTests,
 } from "../features/navigation/model/navigation-prefetch.ts";
+import { getMissionExperiencePool } from "../features/missions/model/mission-experience-cache.ts";
+import { readFileSync } from "node:fs";
 import {
   addJoinedPack,
   addMissionCompletion,
@@ -45,6 +47,56 @@ test("Pack prefetch deduplicates a route and retries a synchronous failure", () 
   assert.equal(prefetchCompletedRoutes(failingRouter, ["/completed/2026-09-03"]), 0);
   assert.equal(prefetchCompletedRoutes(failingRouter, ["/completed/2026-09-03"]), 1);
   assert.deepEqual(getPrefetchedRoutesForTests(), ["/completed/2026-09-03"]);
+});
+
+test("prefetch invalidation removes a route so it can be warmed again", () => {
+  resetNavigationPrefetchForTests();
+  const calls = [];
+  const invalidations = [];
+  const router = {
+    prefetch: (route, options) => {
+      calls.push({ route, options });
+      invalidations.push(options.onInvalidate);
+    },
+  };
+
+  assert.equal(prefetchPackRoutes(router, [{ slug: "go-alone" }]), 1);
+  assert.equal(calls[0].options.kind, "full");
+  invalidations[0]();
+  assert.equal(prefetchPackRoutes(router, [{ slug: "go-alone" }]), 1);
+  assert.equal(calls.length, 2);
+});
+
+test("experience cache separates community and own Mission scopes", async () => {
+  const missionId = "scope-test-mission";
+  const loads = [];
+  const load = async id => {
+    loads.push(id);
+    return { ok: true, experiences: [{ id, kind: "text", text: id }] };
+  };
+
+  const community = await getMissionExperiencePool(missionId, { kind: "community" }, load);
+  const own = await getMissionExperiencePool(missionId, { kind: "own", userId: "user-a" }, load);
+
+  assert.notStrictEqual(community, own);
+  assert.deepEqual(loads, [missionId, missionId]);
+  assert.strictEqual(
+    await getMissionExperiencePool(missionId, { kind: "community" }, load),
+    community,
+  );
+  assert.strictEqual(
+    await getMissionExperiencePool(missionId, { kind: "own", userId: "user-a" }, load),
+    own,
+  );
+  assert.equal(loads.length, 2);
+});
+
+test("NavigationPrefetch warms Pack routes immediately and batches historical dates", () => {
+  const source = readFileSync(new URL("../features/navigation/components/NavigationPrefetch.tsx", import.meta.url), "utf8");
+  assert.match(source, /prefetchPackRoutes\(router, packs, keepWarm\)/);
+  assert.match(source, /prefetchCompletedRoutes\(router, plan\.priorityRoutes, keepWarm\)/);
+  assert.match(source, /scheduleHistoricalBatch\(0\)/);
+  assert.match(source, /requestIdleCallback|setTimeout/);
 });
 
 test("completed routes reject invalid dates and prioritize the adjacent calendar months", () => {

@@ -105,7 +105,7 @@ test("Pack membership and gallery display phases are independent", () => {
   const detail = read("features/packs/components/MissionPackDetail.tsx");
   const gallery = read("features/packs/components/MissionGallery.tsx");
   const membership = read("features/packs/components/PackMembershipAction.tsx");
-  const page = read("app/pack/[slug]/page.tsx");
+  const userState = read("app/pack/[slug]/PackUserState.tsx");
   assert.match(detail, /const \[packJoined, setPackJoined\]/);
   assert.match(detail, /const \[gallerySettled, setGallerySettled\]/);
   assert.match(detail, /expandMissions={packJoined}/);
@@ -117,8 +117,8 @@ test("Pack membership and gallery display phases are independent", () => {
   assert.match(membership, /disabled={isTaking}/);
   assert.match(membership, /if \(!result\.ok\) \{\s*setError\(result\.error\);\s*return;/);
   assert.match(membership, /window\.location\.assign\(getPackLoginDestination\(pack\.slug\)\)/);
-  assert.match(page, /getCurrentPackMembership/);
-  assert.match(page, /initialPackJoined={Boolean\(membership\)}/);
+  assert.match(userState, /getCurrentPackMembership/);
+  assert.match(userState, /initialPackJoined={Boolean\(membership\)}/);
 });
 
 test("Mission stream markup copies all five designs from the flat Mission contract", () => {

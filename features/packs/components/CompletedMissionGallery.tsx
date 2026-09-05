@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import type { MissionExperience } from "@/data/contracts/mission-experience";
 import type { MissionSummary } from "@/data/contracts/pack-summary";
+import type { MissionExperienceScope } from "@/features/missions/model/mission-experience-cache";
 import { MissionGallery } from "./MissionGallery";
 
 type CompletedMissionGalleryProps = {
@@ -11,6 +12,7 @@ type CompletedMissionGalleryProps = {
   title: string;
   date: string;
   missions: readonly MissionSummary[];
+  currentUserId: string;
   loadMissionExperiences: (missionId: string) => Promise<
     | { ok: true; experiences: readonly MissionExperience[] }
     | { ok: false; error: string }
@@ -22,6 +24,7 @@ export function CompletedMissionGallery({
   title,
   date,
   missions,
+  currentUserId,
   loadMissionExperiences,
 }: CompletedMissionGalleryProps) {
   const firstMission = missions[0];
@@ -33,6 +36,7 @@ export function CompletedMissionGallery({
     <MissionGallery
       completedDate={date}
       experienceMissionCompleted
+      experienceScope={{ kind: "own", userId: currentUserId } satisfies MissionExperienceScope}
       experienceMissionId={activeMissionId}
       experienceRevealEnabled
       hero={firstMission}

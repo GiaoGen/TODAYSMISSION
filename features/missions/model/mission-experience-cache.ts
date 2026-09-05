@@ -9,6 +9,10 @@ type CacheEntry = {
   promise: Promise<readonly MissionExperience[]>;
 };
 
+export type MissionExperienceScope =
+  | { kind: "community" }
+  | { kind: "own"; userId: string };
+
 const experienceCache = new Map<string, CacheEntry>();
 
 type MissionExperienceLoader = (missionId: string) => Promise<
@@ -18,20 +22,24 @@ type MissionExperienceLoader = (missionId: string) => Promise<
 
 export function getMissionExperiencePool(
   missionId: string,
+  scope: MissionExperienceScope,
   loadExperiences: MissionExperienceLoader,
 ): Promise<readonly MissionExperience[]> {
+  const cacheKey = scope.kind === "own"
+    ? `own:${scope.userId}:${missionId}`
+    : `community:${missionId}`;
   const now = Date.now();
-  const cached = experienceCache.get(missionId);
+  const cached = experienceCache.get(cacheKey);
   if (cached && cached.expiresAt > now) return cached.promise;
 
   const promise = loadExperiences(missionId).then((result) => {
     if (!result.ok) throw new Error(result.error);
     return result.experiences;
   }).catch((error) => {
-    if (experienceCache.get(missionId)?.promise === promise) experienceCache.delete(missionId);
+    if (experienceCache.get(cacheKey)?.promise === promise) experienceCache.delete(cacheKey);
     throw error;
   });
 
-  experienceCache.set(missionId, { expiresAt: now + EXPERIENCE_CACHE_TTL_MS, promise });
+  experienceCache.set(cacheKey, { expiresAt: now + EXPERIENCE_CACHE_TTL_MS, promise });
   return promise;
 }

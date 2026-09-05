@@ -6,6 +6,7 @@ import ts from "typescript";
 const componentFiles = {
   RootLayout: "app/layout.tsx",
   Home: "app/page.tsx",
+  HomeUserState: "app/page.tsx",
   HomeCarouselEntry: "features/packs/components/HomeCarouselEntry.tsx",
   HomePackCarousels: "features/packs/components/HomePackCarousels.tsx",
   HomeUserMenu: "features/packs/components/HomeUserMenu.tsx",
@@ -14,6 +15,8 @@ const componentFiles = {
   NativePackCarousel: "features/packs/components/NativePackCarousel.tsx",
   CalendarCarousel: "features/calendar/components/CalendarCarousel.tsx",
   PackDetailPage: "app/pack/[slug]/page.tsx",
+  PackRouteContent: "app/pack/[slug]/page.tsx",
+  PackUserState: "app/pack/[slug]/PackUserState.tsx",
   MissionPackDetail: "features/packs/components/MissionPackDetail.tsx",
   MissionGallery: "features/packs/components/MissionGallery.tsx",
   CompletedMissionGallery: "features/packs/components/CompletedMissionGallery.tsx",
@@ -77,6 +80,7 @@ function routeBoundaries(componentName, route = []) {
     const element = ts.isJsxElement(node) ? node.openingElement : node;
     const name = element.tagName.getText();
     if (name === "ViewTransition") return [{ owner: componentName, path, element }];
+    if (name === "Suspense") return node.children.flatMap((child) => visit(child, path));
     if (nonTransitionSiblings.has(name)) return [];
     // A non-animated sibling (the menu) is fine. A host enclosing a wheel isn't.
     if (/^[a-z]/.test(name) && !containsTransition(node)) return [];

@@ -7,6 +7,8 @@ import styles from "./page.module.css";
 
 const PENDING_EMAIL_COOKIE = "tm_pending_email";
 
+export const instant = false;
+
 export default async function LoginPage({
   searchParams,
 }: {

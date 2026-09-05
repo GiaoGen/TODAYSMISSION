@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import type { PackDetail } from "@/data/contracts/pack-summary";
 import type { MissionExperience } from "@/data/contracts/mission-experience";
 import type { MissionCompletionStatus } from "@/features/missions/model/mission-action-state";
+import type { MissionExperienceScope } from "@/features/missions/model/mission-experience-cache";
 import { getCompletedMissionCount } from "@/features/packs/model/pack-progress";
 import { MissionActionLayer } from "@/features/missions/components/MissionActionLayer";
 import { MissionCompletionConfetti } from "@/features/missions/components/MissionCompletionConfetti";
@@ -89,6 +90,12 @@ export function MissionPackDetail({
     ? missionCompletionStatuses[activeMission.id] ?? "incomplete"
     : "incomplete";
   const completedMissionCount = getCompletedMissionCount(missionCompletionStatuses);
+  const experienceScope = useMemo<MissionExperienceScope>(
+    () => currentStatus === "completed" && currentUserId
+      ? { kind: "own", userId: currentUserId }
+      : { kind: "community" },
+    [currentStatus, currentUserId],
+  );
 
   const commitMission = useCallback((missionId: string) => {
     if (committedMissionIdRef.current || committingMissionIdRef.current) return;
@@ -223,6 +230,7 @@ export function MissionPackDetail({
         interactionLocked={galleryInteractionLocked}
         experienceMissionId={activeMission?.id}
         experienceMissionCompleted={currentStatus === "completed"}
+        experienceScope={experienceScope}
         experienceRevealEnabled={Boolean(
           authenticated
           && packJoined

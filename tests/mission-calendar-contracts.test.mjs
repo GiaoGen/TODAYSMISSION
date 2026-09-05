@@ -166,5 +166,5 @@ test("homepage passes real calendar data while preserving the existing carousel 
   assert.match(home, /getMissionCalendar\(currentUser\)/);
   assert.match(home, /calendar=\{calendar\}/);
   assert.match(home, /Promise\.all\(\[joinedPacksPromise, calendarPromise\]\)/);
-  assert.doesNotMatch(home, /completedOn:\s*\[\]/);
+  assert.match(home, /async function HomeUserState/);
 });

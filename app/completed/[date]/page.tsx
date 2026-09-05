@@ -7,6 +7,11 @@ import { parseDateKey } from "@/features/calendar/model/calendar-month";
 import { getMyMissionExperienceAction } from "@/features/missions/actions";
 import { CompletedMissionGallery } from "@/features/packs/components/CompletedMissionGallery";
 
+// This route is user-specific and is warmed with an explicit full prefetch
+// from Home. Keep its existing blocking data contract while Pack adopts the
+// cached public shell boundary.
+export const instant = false;
+
 export default async function CompletedMissionsPage({ params }: { params: Promise<{ date: string }> }) {
   const { date } = await params;
   if (!parseDateKey(date)) notFound();
@@ -25,6 +30,7 @@ export default async function CompletedMissionsPage({ params }: { params: Promis
       title={`${day.date} Completed Missions`}
       date={day.date}
       missions={day.missions}
+      currentUserId={currentUser.id}
       loadMissionExperiences={getMyMissionExperienceAction}
     />
   );

@@ -1,14 +1,19 @@
 import type { PackSummary } from "../../../data/contracts/pack-summary";
+import type { useRouter } from "next/navigation";
 import { getDayGalleryHref } from "../../calendar/model/calendar-day-transition.ts";
 import { monthNumber, parseDateKey } from "../../calendar/model/calendar-month.ts";
 
+type RouterPrefetchOptions = NonNullable<Parameters<ReturnType<typeof useRouter>["prefetch"]>[1]>;
+
 export type RoutePrefetcher = {
-  prefetch: (href: string) => void;
+  prefetch: (href: string, options?: RouterPrefetchOptions) => void;
 };
+
+export type RoutePrefetchInvalidationHandler = (href: string) => void;
 
 export const HISTORICAL_PREFETCH_BATCH_SIZE = 8;
 
-const prefetchedRoutes = new Set<string>();
+const prefetchedRoutes = new Map<string, object>();
 
 function unique(values: readonly string[]): string[] {
   return [...new Set(values)];
@@ -67,29 +72,49 @@ export function batchRoutes(routes: readonly string[], batchSize = HISTORICAL_PR
   return batches;
 }
 
-export function prefetchNavigationRoute(router: RoutePrefetcher, href: string): boolean {
+export function prefetchNavigationRoute(
+  router: RoutePrefetcher,
+  href: string,
+  onInvalidate?: RoutePrefetchInvalidationHandler,
+): boolean {
   if (prefetchedRoutes.has(href)) return false;
-  prefetchedRoutes.add(href);
+  const request = {};
+  prefetchedRoutes.set(href, request);
   try {
-    router.prefetch(href);
+    router.prefetch(href, {
+      kind: "full" as RouterPrefetchOptions["kind"],
+      onInvalidate: () => {
+        if (prefetchedRoutes.get(href) !== request) return;
+        prefetchedRoutes.delete(href);
+        onInvalidate?.(href);
+      },
+    });
     return true;
   } catch {
     // A failed warm-up must not affect a later normal navigation.
-    prefetchedRoutes.delete(href);
+    if (prefetchedRoutes.get(href) === request) prefetchedRoutes.delete(href);
     return false;
   }
 }
 
-export function prefetchPackRoutes(router: RoutePrefetcher, packs: readonly Pick<PackSummary, "slug">[]): number {
-  return getPackDetailRoutes(packs).filter((route) => prefetchNavigationRoute(router, route)).length;
+export function prefetchPackRoutes(
+  router: RoutePrefetcher,
+  packs: readonly Pick<PackSummary, "slug">[],
+  onInvalidate?: RoutePrefetchInvalidationHandler,
+): number {
+  return getPackDetailRoutes(packs).filter((route) => prefetchNavigationRoute(router, route, onInvalidate)).length;
 }
 
-export function prefetchCompletedRoutes(router: RoutePrefetcher, routes: readonly string[]): number {
-  return routes.filter((route) => prefetchNavigationRoute(router, route)).length;
+export function prefetchCompletedRoutes(
+  router: RoutePrefetcher,
+  routes: readonly string[],
+  onInvalidate?: RoutePrefetchInvalidationHandler,
+): number {
+  return routes.filter((route) => prefetchNavigationRoute(router, route, onInvalidate)).length;
 }
 
 export function getPrefetchedRoutesForTests(): readonly string[] {
-  return [...prefetchedRoutes];
+  return [...prefetchedRoutes.keys()];
 }
 
 export function resetNavigationPrefetchForTests() {

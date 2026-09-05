@@ -15,7 +15,7 @@ const nativeController = read("features/packs/model/native-scroll-controller.ts"
 const galleryCss = read("features/packs/components/MissionGallery.module.css");
 const actionCss = read("features/missions/components/MissionActionLayer.module.css");
 const calendarPage = read("app/completed/[date]/page.tsx");
-const packPage = read("app/pack/[slug]/page.tsx");
+const packUserState = read("app/pack/[slug]/PackUserState.tsx");
 const membershipRepository = read("data/repositories/get-pack-memberships.ts");
 const migration = read("supabase/migrations/20260904100746_persist_active_mission_commitment.sql");
 const indexMigration = read("supabase/migrations/20260904100913_add_active_mission_commitment_index.sql");
@@ -38,7 +38,7 @@ test("Take persists one membership commitment and restores it on re-entry", () =
   assert.match(packActions, /p_pack_id: packId/);
   assert.match(packActions, /p_mission_id: missionId/);
   assert.match(membershipRepository, /select\("active_mission_id,pack_id,joined_at"\)/);
-  assert.match(packPage, /initialActiveMissionId=\{membership\?\.activeMissionId \?\? null\}/);
+  assert.match(packUserState, /initialActiveMissionId={membership\?\.activeMissionId \?\? null}/);
   assert.match(packDetail, /initialActiveMissionId/);
   assert.doesNotMatch(packDetail, /missionTaken|localStorage|sessionStorage/);
 });

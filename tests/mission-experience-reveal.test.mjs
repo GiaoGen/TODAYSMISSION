@@ -129,11 +129,11 @@ test("completed Mission owner read path uses an auth.uid-gated RPC and keeps unp
 
 test("Pack and Calendar use the same Reveal with community/owner loader routing", () => {
   const pack = read("features/packs/components/MissionPackDetail.tsx");
-  const page = read("app/pack/[slug]/page.tsx");
+  const userState = read("app/pack/[slug]/PackUserState.tsx");
   const completedGallery = read("features/packs/components/CompletedMissionGallery.tsx");
   assert.match(pack, /experienceMissionCompleted=\{currentStatus === "completed"\}/);
   assert.match(pack, /currentStatus === "completed" \? loadMyMissionExperience : loadMissionExperiences/);
-  assert.match(page, /loadMyMissionExperience=\{getMyMissionExperienceAction\}/);
+  assert.match(userState, /loadMyMissionExperience={getMyMissionExperienceAction}/);
   assert.match(completedGallery, /MissionGallery/);
   assert.match(completedGallery, /experienceMissionCompleted/);
   assert.match(completedGallery, /onActiveMissionChange=\{setActiveMissionId\}/);

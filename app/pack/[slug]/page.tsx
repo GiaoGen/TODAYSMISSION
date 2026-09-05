@@ -1,47 +1,33 @@
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 
-import { getCurrentUser } from "@/data/repositories/get-current-user";
-import { getMissionCompletionsForMissions } from "@/data/repositories/get-mission-completions";
-import { getCurrentPackMembership } from "@/data/repositories/get-pack-memberships";
 import { getPackBySlug } from "@/data/repositories/get-packs";
-import { MissionPackDetail } from "@/features/packs/components/MissionPackDetail";
-import { getInitialMissionCompletionStatuses } from "@/features/missions/model/mission-action-state";
-import { getMissionExperiencesAction, getMyMissionExperienceAction } from "@/features/missions/actions";
+import { PackPublicShell } from "@/features/packs/components/PackPublicShell";
+import { PackUserState } from "./PackUserState";
 
 type PackDetailPageProps = {
   params: Promise<{ slug: string }>;
 };
 
-export default async function PackDetailPage({ params }: PackDetailPageProps) {
+export default function PackDetailPage({ params }: PackDetailPageProps) {
+  return (
+    <Suspense fallback={null}>
+      <PackRouteContent params={params} />
+    </Suspense>
+  );
+}
+
+async function PackRouteContent({ params }: PackDetailPageProps) {
   const { slug } = await params;
-  const [pack, currentUser] = await Promise.all([
-    getPackBySlug(slug),
-    getCurrentUser(),
-  ]);
+  const pack = await getPackBySlug(slug);
 
   if (!pack) {
     notFound();
   }
 
-  const missionIds = pack.missions.map((mission) => mission.id);
-  const [membership, missionCompletions] = currentUser
-    ? await Promise.all([
-      getCurrentPackMembership(pack.id),
-      getMissionCompletionsForMissions(missionIds),
-    ])
-    : [null, {}];
-  const initialMissionCompletionStatuses = getInitialMissionCompletionStatuses(missionIds, missionCompletions);
-
   return (
-    <MissionPackDetail
-      authenticated={Boolean(currentUser)}
-      currentUserId={currentUser?.id ?? null}
-      initialActiveMissionId={membership?.activeMissionId ?? null}
-      initialMissionCompletionStatuses={initialMissionCompletionStatuses}
-      initialPackJoined={Boolean(membership)}
-      loadMissionExperiences={getMissionExperiencesAction}
-      loadMyMissionExperience={getMyMissionExperienceAction}
-      pack={pack}
-    />
+    <Suspense fallback={<PackPublicShell pack={pack} />}>
+      <PackUserState pack={pack} />
+    </Suspense>
   );
 }

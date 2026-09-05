@@ -12,6 +12,7 @@ import { mountNativeMissionGallery } from "@/features/packs/model/native-mission
 import type { MissionSummary, PackSummary } from "@/data/contracts/pack-summary";
 import type { MissionCompletionStatus } from "@/features/missions/model/mission-action-state";
 import type { MissionExperience } from "@/data/contracts/mission-experience";
+import type { MissionExperienceScope } from "@/features/missions/model/mission-experience-cache";
 import { CALENDAR_DAY_TRANSITION_CLASSES, createDirectDayReturnState, getDayTransitionName } from "@/features/calendar/model/calendar-day-transition";
 import { carouselSettingsStore } from "@/features/packs/model/carousel-settings";
 import { getGalleryCopyCount, getMissionStreamMetrics } from "@/features/packs/model/mission-gallery-layout";
@@ -72,6 +73,7 @@ type MissionGalleryProps = {
   waitingAction?: ReactNode;
   experienceMissionId?: string;
   experienceMissionCompleted?: boolean;
+  experienceScope?: MissionExperienceScope;
   experienceRevealEnabled?: boolean;
   loadMissionExperiences?: (missionId: string) => Promise<
     | { ok: true; experiences: readonly MissionExperience[] }
@@ -160,6 +162,7 @@ export function MissionGallery({
   waitingAction,
   experienceMissionId,
   experienceMissionCompleted = completedDate !== undefined,
+  experienceScope = { kind: "community" },
   experienceRevealEnabled = false,
   loadMissionExperiences,
   onExpansionSettled,
@@ -856,6 +859,7 @@ export function MissionGallery({
             enabled
             key={`${experienceMissionId}:${experienceMissionCompleted ? "completed" : "community"}`}
             loadExperiences={loadMissionExperiences}
+            experienceScope={experienceScope}
             rootRef={rootRef}
           />
         ) : null}
