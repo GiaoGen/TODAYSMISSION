@@ -314,6 +314,16 @@ export type Database = {
           mission_id: string
         }[]
       }
+      get_my_mission_experience: {
+        Args: { p_mission_id: string }
+        Returns: {
+          body: string | null
+          created_at: string
+          id: string
+          kind: string
+          storage_path: string | null
+        }[]
+      }
       take_mission: {
         Args: { p_mission_id: string; p_pack_id: string }
         Returns: {

@@ -101,21 +101,30 @@ test("Reveal stays visually closed until travel begins", () => {
   assert.doesNotMatch(css, /opacity:\s*calc\(\.72/);
 });
 
-test("completed Mission owner read path is completion-gated and keeps unpublished data private", () => {
+test("completed Mission owner read path uses an auth.uid-gated RPC and keeps unpublished data private", () => {
   const repository = read("data/repositories/get-mission-experiences.ts");
   const ownPath = repository.slice(repository.indexOf("export async function getMyMissionExperience"));
-  const migration = read("supabase/migrations/20260905135417_completed_mission_owner_experience_read.sql");
-  assert.match(ownPath, /from\("mission_completions"\)/);
-  assert.match(ownPath, /eq\("user_id", user\.id\)/);
-  assert.match(ownPath, /if \(!completion\) return \[\]/);
-  assert.match(ownPath, /from\("mission_voices"\)[\s\S]*eq\("user_id", user\.id\)/);
-  assert.match(ownPath, /from\("mission_text_experiences"\)[\s\S]*eq\("user_id", user\.id\)/);
-  assert.doesNotMatch(ownPath, /is_published/);
-  assert.match(ownPath, /createSignedUrl\(voice\.storage_path/);
-  assert.match(migration, /Owners can view their own Mission text experiences/);
-  assert.match(migration, /Owners can view their own Mission voices/);
-  assert.match(migration, /Owners can read their own Mission voice objects/);
-  assert.match(migration, /voice\.user_id = \(select auth\.uid\(\)\)/);
+  const migration = read("supabase/migrations/20260905145639_fix_my_mission_experience_rpc.sql");
+  assert.match(ownPath, /rpc\("get_my_mission_experience", \{[\s\S]*p_mission_id: missionId/);
+  assert.doesNotMatch(ownPath, /\.eq\("user_id", user\.id\)/);
+  assert.doesNotMatch(ownPath, /from\("mission_voices"\)|from\("mission_text_experiences"\)/);
+  assert.match(ownPath, /experience\.kind === "text"/);
+  assert.match(ownPath, /createSignedUrl\(experience\.storage_path/);
+  assert.match(migration, /create function public\.get_my_mission_experience\(p_mission_id uuid\)/);
+  assert.match(migration, /returns table\(\s*id uuid,\s*kind text,\s*body text,\s*storage_path text,\s*created_at timestamptz\s*\)/);
+  assert.match(migration, /v_user_id uuid := auth\.uid\(\)/);
+  assert.match(migration, /completion\.user_id = v_user_id/);
+  assert.match(migration, /text_experience\.user_id = v_user_id/);
+  assert.match(migration, /voice\.user_id = v_user_id/);
+  const rpcBody = migration.slice(migration.indexOf("create function"), migration.indexOf("revoke all privileges"));
+  assert.doesNotMatch(rpcBody, /is_published/);
+  assert.doesNotMatch(migration, /p_user_id|user_id uuid\).*returns/);
+  assert.doesNotMatch(migration, /grant select[^;]*user_id/i);
+  assert.match(migration, /security definer[\s\S]*set search_path = ''/);
+  assert.match(migration, /revoke all privileges on function public\.get_my_mission_experience\(uuid\)[\s\S]*from public, anon, authenticated/);
+  assert.match(migration, /grant execute on function public\.get_my_mission_experience\(uuid\)[\s\S]*to authenticated/);
+  assert.match(migration, /bucket_id = 'mission-voices'[\s\S]*owner_id = \(select auth\.uid\(\)\)::text/);
+  assert.match(migration, /storage\.foldername\(name\)\)\[1\] = \(select auth\.uid\(\)\)::text/);
 });
 
 test("Pack and Calendar use the same Reveal with community/owner loader routing", () => {
