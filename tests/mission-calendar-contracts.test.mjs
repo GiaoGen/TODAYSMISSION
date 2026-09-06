@@ -164,7 +164,7 @@ test("completion confetti is a non-interactive viewport Portal driven by one com
 
 test("homepage passes real calendar data while preserving the existing carousel entry", () => {
   assert.match(home, /getMissionCalendar\(currentUser\)/);
+  assert.match(home, /Promise\.all\(\[/);
   assert.match(home, /calendar=\{calendar\}/);
-  assert.match(home, /Promise\.all\(\[joinedPacksPromise, calendarPromise\]\)/);
-  assert.match(home, /async function HomeUserState/);
+  assert.doesNotMatch(home, /HomeUserState|HomePublicShell|<Suspense/);
 });

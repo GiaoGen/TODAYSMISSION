@@ -10,7 +10,6 @@ import type { CarouselPlacement } from "@/features/packs/model/arc-carousel-geom
 import type { CarouselHandle } from "@/features/packs/model/carousel-handle";
 import {
   getPackCarouselReturnState,
-  claimPackReturnAnimation,
   clearPackCarouselReturnState,
   setPackCarouselReturnState,
   resolveCarouselState,
@@ -44,21 +43,13 @@ export type HomePackCarouselsProps = {
   currentUser: CurrentUser | null;
   calendar: MissionCalendarData;
   onLogout: () => Promise<void>;
-  transitionFallback?: boolean;
 };
 
 type CarouselView = HomeCarouselSelection & { phase: CarouselSwapPhase; changing: readonly CarouselPlacement[] };
 
-export function HomePackCarousels({ packs, joinedPacks, currentUser, calendar, onLogout, transitionFallback = false }: HomePackCarouselsProps) {
+export function HomePackCarousels({ packs, joinedPacks, currentUser, calendar, onLogout }: HomePackCarouselsProps) {
   const router = useRouter();
   const [returnState] = useState(getPackCarouselReturnState);
-  // The fallback is server-rendered without the client-only return state. Keep
-  // it as the shared-element destination shell, but let only the resolved Home
-  // tree claim the wheel enter animation. Otherwise both server branches emit
-  // the same enter transition before the client-side claim can suppress one.
-  const [playsReturnAnimation] = useState(() =>
-    returnState !== null && !transitionFallback && claimPackReturnAnimation(),
-  );
   const [view, setView] = useState<CarouselView>(() => {
     const settings = carouselSettingsStore.read();
     return { ...createHomeCarouselState(returnState, settings), settings, phase: "idle", changing: [] };
@@ -75,8 +66,6 @@ export function HomePackCarousels({ packs, joinedPacks, currentUser, calendar, o
   const assignments = normalizeCarouselAssignments({ top: view.topCollection, bottom: view.bottomCollection });
   const collections = { joined: joinedPacks, all: packs };
   const busy = !ready || view.phase !== "idle";
-  const suppressEntranceAnimation = transitionFallback ||
-    (returnState !== null && !playsReturnAnimation);
   const returnDate = returnState?.completedDate;
   const calendarForReturn = returnDate && !calendar.completedOn.includes(returnDate)
     ? { ...calendar, completedOn: [...calendar.completedOn, returnDate].sort() }
@@ -100,10 +89,10 @@ export function HomePackCarousels({ packs, joinedPacks, currentUser, calendar, o
       topRef.current?.resume();
       bottomRef.current?.resume();
       setReady(true);
-      if (returning && !transitionFallback) clearPackCarouselReturnState();
+      if (returning) clearPackCarouselReturnState();
     }, returning && !reducedMotion && "startViewTransition" in document ? 520 : 0);
     return () => window.clearTimeout(timer);
-  }, [playsReturnAnimation, returnState, transitionFallback]);
+  }, [returnState]);
 
   useLayoutEffect(() => {
     if (view.phase === "idle") {
@@ -231,7 +220,6 @@ export function HomePackCarousels({ packs, joinedPacks, currentUser, calendar, o
         placement="top"
         onOpenDate={openCompletedDay}
         returnDate={returnDate}
-        suppressEntranceAnimation={suppressEntranceAnimation}
         snapshot={view.snapshots.calendar}
         interactionDisabled={!ready || menuOpen}
         swappingIn={false}
@@ -247,7 +235,6 @@ export function HomePackCarousels({ packs, joinedPacks, currentUser, calendar, o
           !returnState?.completedDate ? returnState?.packId : undefined,
         )}
         interactionDisabled={busy || menuOpen}
-        suppressEntranceAnimation={suppressEntranceAnimation}
         swappingIn={view.phase === "entering" && view.changing.includes("bottom")}
         ref={bottomRef}
         onOpenPack={openPack}

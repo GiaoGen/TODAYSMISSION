@@ -19,40 +19,15 @@ export type PackCarouselReturnState = {
   carousels: Record<CarouselPlacement, CarouselSnapshot | null>;
 };
 
-type SharedReturnStateStore = {
-  returnState: PackCarouselReturnState | null;
-  returnAnimationPending: boolean;
-};
-
-// Next production builds can place this module in more than one client chunk.
-// Keep the navigation snapshot and its one-shot animation claim in a shared
-// runtime slot so fallback and resolved Home trees see the same lifecycle.
-const SHARED_STORE_PROPERTY = "__TODAYSMISSION_PACK_CAROUSEL_RETURN_STATE__";
-
-function getSharedStore(): SharedReturnStateStore {
-  const host = globalThis as typeof globalThis & {
-    [SHARED_STORE_PROPERTY]?: SharedReturnStateStore;
-  };
-  return host[SHARED_STORE_PROPERTY] ??= { returnState: null, returnAnimationPending: false };
-}
-
+let returnState: PackCarouselReturnState | null = null;
 const listeners = new Set<() => void>();
 
 export function getPackCarouselReturnState() {
-  return getSharedStore().returnState;
-}
-
-export function claimPackReturnAnimation() {
-  const store = getSharedStore();
-  if (!store.returnState || !store.returnAnimationPending) return false;
-  store.returnAnimationPending = false;
-  return true;
+  return returnState;
 }
 
 export function clearPackCarouselReturnState() {
-  const store = getSharedStore();
-  store.returnState = null;
-  store.returnAnimationPending = false;
+  returnState = null;
 }
 
 export function getServerPackCarouselReturnState() {
@@ -65,8 +40,7 @@ export function subscribePackCarouselReturnState(listener: () => void) {
 }
 
 export function setPackCarouselReturnState(state: PackCarouselReturnState) {
-  const store = getSharedStore();
-  store.returnState = {
+  returnState = {
     ...state,
     snapshots: state.snapshots ? {
       joined: state.snapshots.joined ? { ...state.snapshots.joined } : null,
@@ -78,7 +52,6 @@ export function setPackCarouselReturnState(state: PackCarouselReturnState) {
       bottom: state.carousels.bottom ? { ...state.carousels.bottom } : null,
     },
   };
-  store.returnAnimationPending = true;
   listeners.forEach((listener) => listener());
 }
 

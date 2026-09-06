@@ -22,12 +22,11 @@ type CalendarCarouselProps = {
   swappingIn: boolean;
   onOpenDate: (date: string, placement: CarouselPlacement) => void;
   returnDate?: string;
-  suppressEntranceAnimation?: boolean;
   ref?: Ref<CarouselHandle>;
 };
 type MonthDrag = { pointerId: number; startX: number; startPosition: number; lastX: number; lastTime: number; velocity: number; captured: boolean };
 
-export function CalendarCarousel({ data, placement, snapshot, interactionDisabled, swappingIn, onOpenDate, returnDate, suppressEntranceAnimation = false, ref }: CalendarCarouselProps) {
+export function CalendarCarousel({ data, placement, snapshot, interactionDisabled, swappingIn, onOpenDate, returnDate, ref }: CalendarCarouselProps) {
   const router = useRouter();
   // HomeCarouselEntry mounts this on the client. Dates must be present in the
   // navigation's FIRST render: adding them in a layout effect is too late for
@@ -275,7 +274,7 @@ export function CalendarCarousel({ data, placement, snapshot, interactionDisable
 
   return (
     <ViewTransition default="none"
-      enter={suppressEntranceAnimation ? "none" : { [PACK_CLOSE_TRANSITION_TYPE]: enterClass, default: enterClass }}
+      enter={{ [PACK_CLOSE_TRANSITION_TYPE]: enterClass, default: enterClass }}
       exit={{ [PACK_OPEN_TRANSITION_TYPE]: exitClass, default: "none" }}>
       <section ref={rootRef} className={styles.root} data-placement={placement} data-swapping-in={swappingIn}
         inert={interactionDisabled} aria-label={`${placement === "top" ? "上轮盘" : "下轮盘"}：日历（模拟数据）/ Calendar (mock)`}>

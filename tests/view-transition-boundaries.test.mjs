@@ -6,7 +6,6 @@ import ts from "typescript";
 const componentFiles = {
   RootLayout: "app/layout.tsx",
   Home: "app/page.tsx",
-  HomeUserState: "app/page.tsx",
   HomeCarouselEntry: "features/packs/components/HomeCarouselEntry.tsx",
   HomePackCarousels: "features/packs/components/HomePackCarousels.tsx",
   HomeUserMenu: "features/packs/components/HomeUserMenu.tsx",
