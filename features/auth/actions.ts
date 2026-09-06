@@ -1,6 +1,6 @@
 "use server";
 
-import { cookies, headers } from "next/headers";
+import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -64,29 +64,12 @@ function clearPendingEmail(cookieStore: Awaited<ReturnType<typeof cookies>>) {
   });
 }
 
-async function getEmailRedirectTo(next: string): Promise<string> {
-  const headerStore = await headers();
-  const origin = headerStore.get("origin");
-  const host = headerStore.get("x-forwarded-host") ?? headerStore.get("host");
-  const protocol = headerStore.get("x-forwarded-proto") ?? "http";
-  const baseUrl = origin ?? (host ? `${protocol}://${host}` : null);
-
-  if (!baseUrl) {
-    throw new Error("Unable to determine the login callback URL.");
-  }
-
-  const callbackUrl = new URL("/auth/callback", baseUrl);
-  callbackUrl.searchParams.set("next", next);
-  return callbackUrl.toString();
-}
-
-async function sendEmailOtp(email: string, emailRedirectTo?: string) {
+async function sendEmailOtp(email: string) {
   const supabase = await createClient();
   return supabase.auth.signInWithOtp({
     email,
     options: {
       shouldCreateUser: true,
-      ...(emailRedirectTo ? { emailRedirectTo } : {}),
     },
   });
 }
@@ -97,11 +80,11 @@ export async function sendLoginEmail(_previousState: AuthActionState, formData: 
   if (!EMAIL_PATTERN.test(email)) return { error: "Enter a valid email address." };
 
   const next = getSafeNextFromForm(formData);
-  const { error } = await sendEmailOtp(email, await getEmailRedirectTo(next));
+  const { error } = await sendEmailOtp(email);
   if (error) return { error: authErrorMessage(error) };
 
   setPendingEmail(await cookies(), email);
-  redirect(`/login?step=sent&next=${encodeURIComponent(next)}`);
+  redirect(`/login?step=otp&next=${encodeURIComponent(next)}`);
 }
 
 export async function resendOtp(_previousState: AuthActionState, formData: FormData): Promise<AuthActionState> {
