@@ -312,7 +312,7 @@ export function TransformArcCarousel({
   return (
     <ViewTransition
       default="none"
-      enter={suppressEntranceAnimation ? undefined : { [PACK_CLOSE_TRANSITION_TYPE]: enterClass, default: enterClass }}
+      enter={suppressEntranceAnimation ? "none" : { [PACK_CLOSE_TRANSITION_TYPE]: enterClass, default: enterClass }}
       exit={{ [PACK_OPEN_TRANSITION_TYPE]: exitClass, default: "none" }}
     >
       <section

@@ -158,8 +158,8 @@ test("returning Home keeps the original carousel enter transition", () => {
   const native = readFileSync(new URL("../features/packs/components/NativePackCarousel.tsx", import.meta.url), "utf8");
   assert.match(home, /const returning = returnState !== null/);
   assert.doesNotMatch(home, /consumePackCarouselReturnState/);
-  assert.match(arc, /enter=\{suppressEntranceAnimation \? undefined : \{ \[PACK_CLOSE_TRANSITION_TYPE\]: enterClass, default: enterClass \}\}/);
-  assert.match(native, /enter=\{suppressEntranceAnimation \? undefined : \{ \[PACK_CLOSE_TRANSITION_TYPE\]: enterClass, default: enterClass \}\}/);
+  assert.match(arc, /enter=\{suppressEntranceAnimation \? "none" : \{ \[PACK_CLOSE_TRANSITION_TYPE\]: enterClass, default: enterClass \}\}/);
+  assert.match(native, /enter=\{suppressEntranceAnimation \? "none" : \{ \[PACK_CLOSE_TRANSITION_TYPE\]: enterClass, default: enterClass \}\}/);
 });
 
 test("Home provides a non-null destination shell and restores a returning Calendar day anchor", () => {
@@ -180,7 +180,9 @@ test("only the first Home tree can play the return enter transition", () => {
   assert.match(entry, /transitionFallback\) return/);
   assert.match(home, /claimPackReturnAnimation\(\)/);
   assert.match(home, /clearPackCarouselReturnState\(\)/);
-  assert.equal((home.match(/suppressEntranceAnimation=\{returnState !== null && !playsReturnAnimation\}/g) ?? []).length, 2);
+  assert.match(home, /returnState !== null && !transitionFallback && claimPackReturnAnimation\(\)/);
+  assert.equal((home.match(/suppressEntranceAnimation=\{suppressEntranceAnimation\}/g) ?? []).length, 2);
+  assert.match(home, /const suppressEntranceAnimation = transitionFallback \|\|/);
   assert.match(home, /if \(returning && !transitionFallback\) clearPackCarouselReturnState\(\)/);
-  assert.match(calendar, /suppressEntranceAnimation \? undefined : \{/);
+  assert.match(calendar, /suppressEntranceAnimation \? "none" : \{/);
 });

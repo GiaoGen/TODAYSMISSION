@@ -275,7 +275,7 @@ export function CalendarCarousel({ data, placement, snapshot, interactionDisable
 
   return (
     <ViewTransition default="none"
-      enter={suppressEntranceAnimation ? undefined : { [PACK_CLOSE_TRANSITION_TYPE]: enterClass, default: enterClass }}
+      enter={suppressEntranceAnimation ? "none" : { [PACK_CLOSE_TRANSITION_TYPE]: enterClass, default: enterClass }}
       exit={{ [PACK_OPEN_TRANSITION_TYPE]: exitClass, default: "none" }}>
       <section ref={rootRef} className={styles.root} data-placement={placement} data-swapping-in={swappingIn}
         inert={interactionDisabled} aria-label={`${placement === "top" ? "上轮盘" : "下轮盘"}：日历（模拟数据）/ Calendar (mock)`}>
