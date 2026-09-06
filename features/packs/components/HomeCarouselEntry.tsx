@@ -16,7 +16,9 @@ const subscribe = () => () => {};
 const clientReady = () => true;
 const serverReady = () => false;
 
-export function HomeCarouselEntry(props: HomePackCarouselsProps) {
+type HomeCarouselEntryProps = HomePackCarouselsProps & { transitionFallback?: boolean };
+
+export function HomeCarouselEntry({ transitionFallback = false, ...props }: HomeCarouselEntryProps) {
   const ready = useSyncExternalStore(subscribe, clientReady, serverReady);
   const sessionSnapshot = useSyncExternalStore(
     subscribeSessionSnapshot,
@@ -31,11 +33,12 @@ export function HomeCarouselEntry(props: HomePackCarouselsProps) {
   const { currentUser, joinedPacks, calendar, packs } = safeProps;
 
   useEffect(() => {
+    if (transitionFallback) return;
     initializeSessionSnapshot(currentUser?.id ?? null, {
       joinedPackIds: joinedPacks.map((pack) => pack.id),
       completedDates: calendar.completedOn,
     });
-  }, [calendar.completedOn, currentUser?.id, joinedPacks]);
+  }, [calendar.completedOn, currentUser?.id, joinedPacks, transitionFallback]);
 
   // Only merge the in-memory hint when it belongs to the server-rendered user.
   // This prevents a previous account's snapshot from appearing during login.
@@ -58,6 +61,6 @@ export function HomeCarouselEntry(props: HomePackCarouselsProps) {
   // On client-side Pack returns, ready is already true in the navigation commit.
   return ready ? <>
     <NavigationPrefetch packs={packs} completedDates={effectiveCalendar.completedOn} />
-    <HomePackCarousels {...safeProps} calendar={effectiveCalendar} joinedPacks={effectiveJoinedPacks} />
+    <HomePackCarousels {...safeProps} calendar={effectiveCalendar} joinedPacks={effectiveJoinedPacks} transitionFallback={transitionFallback} />
   </> : null;
 }

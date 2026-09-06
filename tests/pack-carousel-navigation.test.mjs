@@ -4,6 +4,8 @@ import test from "node:test";
 
 import {
   createDirectPackReturnState,
+  claimPackReturnAnimation,
+  clearPackCarouselReturnState,
   getInitialCarouselState,
   getPackCarouselReturnState,
   getPackEntrySource,
@@ -87,6 +89,15 @@ test("direct detail entry returns to bottom and includes a Pack outside the init
   assert.equal(getServerPackCarouselReturnState(), null);
 });
 
+test("return state survives a single animation claim until the resolved Home tree takes over", () => {
+  setPackCarouselReturnState(entry("bottom"));
+  assert.equal(claimPackReturnAnimation(), true);
+  assert.equal(claimPackReturnAnimation(), false);
+  assert.equal(getPackCarouselReturnState()?.packId, "pack-4");
+  clearPackCarouselReturnState();
+  assert.equal(getPackCarouselReturnState(), null);
+});
+
 test("reordered data restores identity instead of the old numeric slot", () => {
   const reordered = [packs[4], packs[0], packs[2], packs[6], packs[8]];
   assert.deepEqual(getInitialCarouselState(reordered, 5, "top", entry()), {
@@ -145,10 +156,10 @@ test("returning Home keeps the original carousel enter transition", () => {
   const home = readFileSync(new URL("../features/packs/components/HomePackCarousels.tsx", import.meta.url), "utf8");
   const arc = readFileSync(new URL("../features/packs/components/ArcCarousel.tsx", import.meta.url), "utf8");
   const native = readFileSync(new URL("../features/packs/components/NativePackCarousel.tsx", import.meta.url), "utf8");
-  assert.match(home, /const returning = getPackCarouselReturnState\(\) !== null/);
+  assert.match(home, /const returning = returnState !== null/);
   assert.doesNotMatch(home, /consumePackCarouselReturnState/);
-  assert.match(arc, /enter=\{\{ \[PACK_CLOSE_TRANSITION_TYPE\]: enterClass, default: enterClass \}\}/);
-  assert.match(native, /enter=\{\{ \[PACK_CLOSE_TRANSITION_TYPE\]: enterClass, default: enterClass \}\}/);
+  assert.match(arc, /enter=\{suppressEntranceAnimation \? undefined : \{ \[PACK_CLOSE_TRANSITION_TYPE\]: enterClass, default: enterClass \}\}/);
+  assert.match(native, /enter=\{suppressEntranceAnimation \? undefined : \{ \[PACK_CLOSE_TRANSITION_TYPE\]: enterClass, default: enterClass \}\}/);
 });
 
 test("Home provides a non-null destination shell and restores a returning Calendar day anchor", () => {
@@ -159,4 +170,17 @@ test("Home provides a non-null destination shell and restores a returning Calend
   assert.match(home, /const calendarForReturn = returnDate && !calendar\.completedOn\.includes\(returnDate\)/);
   assert.match(home, /data=\{calendarForReturn\}/);
   assert.match(home, /returnDate=\{returnDate\}/);
+});
+
+test("only the first Home tree can play the return enter transition", () => {
+  const entry = readFileSync(new URL("../features/packs/components/HomeCarouselEntry.tsx", import.meta.url), "utf8");
+  const home = readFileSync(new URL("../features/packs/components/HomePackCarousels.tsx", import.meta.url), "utf8");
+  const calendar = readFileSync(new URL("../features/calendar/components/CalendarCarousel.tsx", import.meta.url), "utf8");
+  assert.match(entry, /transitionFallback\?: boolean/);
+  assert.match(entry, /transitionFallback\) return/);
+  assert.match(home, /claimPackReturnAnimation\(\)/);
+  assert.match(home, /clearPackCarouselReturnState\(\)/);
+  assert.equal((home.match(/suppressEntranceAnimation=\{returnState !== null && !playsReturnAnimation\}/g) ?? []).length, 2);
+  assert.match(home, /if \(returning && !transitionFallback\) clearPackCarouselReturnState\(\)/);
+  assert.match(calendar, /suppressEntranceAnimation \? undefined : \{/);
 });

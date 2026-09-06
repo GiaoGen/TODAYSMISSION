@@ -773,19 +773,6 @@ test("native Pack loop copies share the live hero fan and retain poses across an
   h.cleanup();
 });
 
-test("actual native Pack: mock counts retain the selected pack and switch safely between cyclic and finite layouts", () => {
-  const h = packHarness({ count: 6, activeIndex: 5 });
-  const decrease = () => { nodes(h.tree, node => node.props?.["aria-label"] === "减少图片 / Decrease images")[0].props.onClick(); h.render(); };
-  decrease();
-  assert.equal(h.cards().length, 5);
-  assert.equal(h.cards().findIndex(card => card.props["aria-current"] === "true"), 4);
-  for (let index = 0; index < 4; index++) decrease();
-  assert.equal(h.cards().length, 1);
-  assert.equal(h.scroller.left, 0);
-  assert.equal(nodes(h.tree, node => node.props?.["aria-label"] === "减少图片 / Decrease images")[0].props.disabled, true);
-  h.cleanup();
-});
-
 test("actual native Pack: viewport geometry and copy count wait for inertia, then preserve the selected index", () => {
   const h = packHarness();
   const rootProps = () => nodes(h.tree, node => node.type === "section")[0].props;

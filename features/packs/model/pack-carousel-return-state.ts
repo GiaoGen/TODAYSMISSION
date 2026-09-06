@@ -20,10 +20,22 @@ export type PackCarouselReturnState = {
 };
 
 let returnState: PackCarouselReturnState | null = null;
+let returnAnimationPending = false;
 const listeners = new Set<() => void>();
 
 export function getPackCarouselReturnState() {
   return returnState;
+}
+
+export function claimPackReturnAnimation() {
+  if (!returnState || !returnAnimationPending) return false;
+  returnAnimationPending = false;
+  return true;
+}
+
+export function clearPackCarouselReturnState() {
+  returnState = null;
+  returnAnimationPending = false;
 }
 
 export function getServerPackCarouselReturnState() {
@@ -48,6 +60,7 @@ export function setPackCarouselReturnState(state: PackCarouselReturnState) {
       bottom: state.carousels.bottom ? { ...state.carousels.bottom } : null,
     },
   };
+  returnAnimationPending = true;
   listeners.forEach((listener) => listener());
 }
 

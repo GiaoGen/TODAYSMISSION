@@ -10,6 +10,8 @@ import type { CarouselPlacement } from "@/features/packs/model/arc-carousel-geom
 import type { CarouselHandle } from "@/features/packs/model/carousel-handle";
 import {
   getPackCarouselReturnState,
+  claimPackReturnAnimation,
+  clearPackCarouselReturnState,
   setPackCarouselReturnState,
   resolveCarouselState,
 } from "@/features/packs/model/pack-carousel-return-state";
@@ -42,13 +44,15 @@ export type HomePackCarouselsProps = {
   currentUser: CurrentUser | null;
   calendar: MissionCalendarData;
   onLogout: () => Promise<void>;
+  transitionFallback?: boolean;
 };
 
 type CarouselView = HomeCarouselSelection & { phase: CarouselSwapPhase; changing: readonly CarouselPlacement[] };
 
-export function HomePackCarousels({ packs, joinedPacks, currentUser, calendar, onLogout }: HomePackCarouselsProps) {
+export function HomePackCarousels({ packs, joinedPacks, currentUser, calendar, onLogout, transitionFallback = false }: HomePackCarouselsProps) {
   const router = useRouter();
   const [returnState] = useState(getPackCarouselReturnState);
+  const [playsReturnAnimation] = useState(() => returnState !== null && claimPackReturnAnimation());
   const [view, setView] = useState<CarouselView>(() => {
     const settings = carouselSettingsStore.read();
     return { ...createHomeCarouselState(returnState, settings), settings, phase: "idle", changing: [] };
@@ -76,7 +80,7 @@ export function HomePackCarousels({ packs, joinedPacks, currentUser, calendar, o
 
   useLayoutEffect(() => {
     // Freeze the destination before React captures the shared-element snapshot.
-    const returning = getPackCarouselReturnState() !== null;
+    const returning = returnState !== null;
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     navigationLockRef.current = returning;
     if (returning) {
@@ -88,9 +92,10 @@ export function HomePackCarousels({ packs, joinedPacks, currentUser, calendar, o
       topRef.current?.resume();
       bottomRef.current?.resume();
       setReady(true);
+      if (returning && !transitionFallback) clearPackCarouselReturnState();
     }, returning && !reducedMotion && "startViewTransition" in document ? 520 : 0);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [playsReturnAnimation, returnState, transitionFallback]);
 
   useLayoutEffect(() => {
     if (view.phase === "idle") {
@@ -218,6 +223,7 @@ export function HomePackCarousels({ packs, joinedPacks, currentUser, calendar, o
         placement="top"
         onOpenDate={openCompletedDay}
         returnDate={returnDate}
+        suppressEntranceAnimation={returnState !== null && !playsReturnAnimation}
         snapshot={view.snapshots.calendar}
         interactionDisabled={!ready || menuOpen}
         swappingIn={false}
@@ -233,6 +239,7 @@ export function HomePackCarousels({ packs, joinedPacks, currentUser, calendar, o
           !returnState?.completedDate ? returnState?.packId : undefined,
         )}
         interactionDisabled={busy || menuOpen}
+        suppressEntranceAnimation={returnState !== null && !playsReturnAnimation}
         swappingIn={view.phase === "entering" && view.changing.includes("bottom")}
         ref={bottomRef}
         onOpenPack={openPack}

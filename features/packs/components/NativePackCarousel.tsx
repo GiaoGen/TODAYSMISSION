@@ -15,14 +15,14 @@ import { getPackTransitionName, PACK_CLOSE_TRANSITION_TYPE, PACK_OPEN_TRANSITION
 import styles from "./ArcCarousel.module.css";
 import { prefetchNavigationRoute } from "@/features/navigation/model/navigation-prefetch";
 
-export function NativePackCarousel({ packs, placement = "bottom", collection = placement === "top" ? "joined" : "all", initialCarouselState, interactionDisabled = false, swappingIn = false, onOpenPack, ref }: ArcCarouselProps) {
+export function NativePackCarousel({ packs, placement = "bottom", collection = placement === "top" ? "joined" : "all", initialCarouselState, interactionDisabled = false, suppressEntranceAnimation = false, swappingIn = false, onOpenPack, ref }: ArcCarouselProps) {
   const router = useRouter();
   const liveViewport = useDeckViewport();
   const [viewport, setViewport] = useState(liveViewport);
   const metrics = getDeckMetrics({ ...viewport, placement });
   const maximumCount = Math.min(24, packs.length);
   const [initial] = useState(() => initialCarouselState ?? getInitialCarouselState(packs, maximumCount, placement, getPackCarouselReturnState()));
-  const [count, setCount] = useState(initial.count);
+  const [count] = useState(initial.count);
   const copies = getNativeCopyCount(count, viewport.width, metrics.gap, count >= 6);
   const primaryCopy = Math.floor(copies / 2);
   const [activeIndex, setActiveIndex] = useState(initial.activeIndex);
@@ -119,14 +119,6 @@ export function NativePackCarousel({ packs, placement = "bottom", collection = p
     }
   }, [activeIndex, count, packs, router]);
 
-  const changeCount = (delta: number) => {
-    if (interactionDisabled || lockedRef.current || maximumCount === 0) return;
-    const nextCount = Math.max(1, Math.min(maximumCount, count + delta));
-    const position = controllerRef.current?.freeze() ?? activeIndex;
-    positionRef.current = Math.min(wrapNativeIndex(Math.round(position), count), nextCount - 1);
-    setCount(nextCount);
-    controllerRef.current?.resume();
-  };
   const openCard = (slot: number, index: number) => {
     const controller = controllerRef.current;
     if (interactionDisabled || lockedRef.current || !controller?.canActivate()) return;
@@ -143,7 +135,7 @@ export function NativePackCarousel({ packs, placement = "bottom", collection = p
   const exitClass = placement === "top" ? "pack-home-top-exit" : "pack-home-exit";
 
   return (
-    <ViewTransition default="none" enter={{ [PACK_CLOSE_TRANSITION_TYPE]: enterClass, default: enterClass }} exit={{ [PACK_OPEN_TRANSITION_TYPE]: exitClass, default: "none" }}>
+    <ViewTransition default="none" enter={suppressEntranceAnimation ? undefined : { [PACK_CLOSE_TRANSITION_TYPE]: enterClass, default: enterClass }} exit={{ [PACK_OPEN_TRANSITION_TYPE]: exitClass, default: "none" }}>
       <section className={styles.root} data-native-scroll="true" data-placement={placement} data-swapping-in={swappingIn} inert={interactionDisabled} ref={rootRef} style={style}
         aria-label={`${placement === "top" ? "上轮盘" : "下轮盘"}：${COLLECTION_LABELS[collection]}（模拟数据）/ ${collection === "joined" ? "Joined" : "All"} packs (mock)`}>
         <div className={styles.nativeViewport} ref={scrollRef} role="group" tabIndex={count > 0 ? 0 : -1}
@@ -172,11 +164,6 @@ export function NativePackCarousel({ packs, placement = "bottom", collection = p
             }))}
           </ol>
         </div>
-        {placement === "bottom" && <div className={styles.countControl} aria-label="当前图片数量 / Current image count">
-          <button aria-label="减少图片 / Decrease images" className={styles.countButton} disabled={count <= 1} onClick={() => changeCount(-1)} type="button"><span aria-hidden="true">−</span></button>
-          <output className={styles.countValue} aria-live="polite">{count}</output>
-          <button aria-label="增加图片 / Increase images" className={styles.countButton} disabled={count >= maximumCount} onClick={() => changeCount(1)} type="button"><span aria-hidden="true">+</span></button>
-        </div>}
         <p className={styles.srOnly} aria-live="polite">{count > 0 ? activeIndex + 1 : 0} / {count}</p>
       </section>
     </ViewTransition>

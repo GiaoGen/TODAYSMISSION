@@ -27,7 +27,6 @@ import { prefetchNavigationRoute } from "@/features/navigation/model/navigation-
 
 import styles from "./ArcCarousel.module.css";
 
-const MIN_COUNT = 1;
 const MAX_COUNT = 24;
 const DRAG_CAPTURE_THRESHOLD = 5;
 
@@ -37,6 +36,7 @@ export type ArcCarouselProps = {
   collection?: PackCollection;
   initialCarouselState?: InitialCarouselState;
   interactionDisabled?: boolean;
+  suppressEntranceAnimation?: boolean;
   swappingIn?: boolean;
   onOpenPack: (pack: PackSummary, placement: CarouselPlacement) => void;
   ref?: Ref<ArcCarouselHandle>;
@@ -74,6 +74,7 @@ export function TransformArcCarousel({
   collection = placement === "top" ? "joined" : "all",
   initialCarouselState,
   interactionDisabled = false,
+  suppressEntranceAnimation = false,
   swappingIn = false,
   onOpenPack,
   ref,
@@ -298,19 +299,6 @@ export function TransformArcCarousel({
     }
   };
 
-  const changeCount = (delta: -1 | 1) => {
-    if (navigationLockRef.current || interactionDisabled || maximumCount === 0) return;
-    const current = selectionRef.current;
-    const nextCount = Math.max(MIN_COUNT, Math.min(maximumCount, current.count + delta));
-    const nextIndex = Math.min(current.activeIndex, nextCount - 1);
-    const next = { count: nextCount, activeIndex: nextIndex, position: nextIndex };
-    cancelDrag();
-    finishMotion();
-    selectionRef.current = next;
-    positionRef.current = next.position;
-    setSelection(next);
-  };
-
   const stageStyle: DeckStageStyle = {
     "--card-width": `${metrics.cardWidth}px`,
     "--card-height": `${metrics.cardHeight}px`,
@@ -324,7 +312,7 @@ export function TransformArcCarousel({
   return (
     <ViewTransition
       default="none"
-      enter={{ [PACK_CLOSE_TRANSITION_TYPE]: enterClass, default: enterClass }}
+      enter={suppressEntranceAnimation ? undefined : { [PACK_CLOSE_TRANSITION_TYPE]: enterClass, default: enterClass }}
       exit={{ [PACK_OPEN_TRANSITION_TYPE]: exitClass, default: "none" }}
     >
       <section
@@ -387,17 +375,6 @@ export function TransformArcCarousel({
             );
           })}
         </div>
-        {placement === "bottom" && (
-          <div className={styles.countControl} aria-label="当前图片数量 / Current image count">
-            <button aria-label="减少图片 / Decrease images" className={styles.countButton} disabled={count <= MIN_COUNT} onClick={() => changeCount(-1)} type="button">
-              <span aria-hidden="true">−</span>
-            </button>
-            <output className={styles.countValue} aria-live="polite">{count}</output>
-            <button aria-label="增加图片 / Increase images" className={styles.countButton} disabled={count >= maximumCount} onClick={() => changeCount(1)} type="button">
-              <span aria-hidden="true">+</span>
-            </button>
-          </div>
-        )}
         <p className={styles.srOnly} aria-live="polite">{count > 0 ? activeIndex + 1 : 0} / {count}</p>
       </section>
     </ViewTransition>

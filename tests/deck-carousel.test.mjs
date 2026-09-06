@@ -495,36 +495,25 @@ test("reduced motion skips the internal transition lock and idle timers", () => 
   assert.match(read("features/packs/components/ArcCarousel.module.css"), /transition: none !important/);
 });
 
-test("mock count changes preserve the selected pack where possible and clamp safely at one", () => {
-  const harness = carouselHarness({ count: 6, activeIndex: 5 });
-  const decrease = () => {
-    const tree = harness.render();
-    nodes(tree, node => node.props?.["aria-label"] === "减少图片 / Decrease images")[0].props.onClick();
-  };
-  decrease();
-  assert.deepEqual(harness.selection(), { count: 5, activeIndex: 4 });
-  for (let i = 0; i < 10; i++) decrease();
-  assert.deepEqual(harness.selection(), { count: 1, activeIndex: 0 });
-  const tree = harness.render();
-  assert.equal(nodes(tree, node => node.props?.["aria-label"] === "减少图片 / Decrease images")[0].props.disabled, true);
-  nodes(tree, node => node.props?.["aria-label"] === "增加图片 / Increase images")[0].props.onClick();
-  assert.deepEqual(harness.selection(), { count: 2, activeIndex: 0 });
-  harness.cleanup();
-});
-
-test("disabled wheels reject click, keyboard, pointer and count changes while a menu or route owns input", () => {
+test("disabled wheels reject click, keyboard and pointer input while a menu or route owns input", () => {
   const harness = carouselHarness();
   const tree = harness.render({ interactionDisabled: true });
   harness.stageProps().onKeyDown({ key: "ArrowRight", preventDefault() {} });
   harness.stageProps().onPointerDown(harness.pointer(200));
   harness.stageProps().onPointerUp(harness.pointer(100));
   harness.click(0);
-  nodes(tree, node => node.props?.["aria-label"] === "减少图片 / Decrease images")[0].props.onClick();
   assert.deepEqual(harness.selection(), { count: 6, activeIndex: 0 });
   assert.equal(harness.opened.length, 0);
   assert.equal(harness.captures, 0);
   assert.equal(nodes(tree, node => node.type === "section")[0].props.inert, true);
   harness.cleanup();
+});
+
+test("Pack carousels do not render the removed manual count control", () => {
+  for (const file of ["features/packs/components/ArcCarousel.tsx", "features/packs/components/NativePackCarousel.tsx", "features/packs/components/ArcCarousel.module.css"]) {
+    const source = read(file);
+    assert.doesNotMatch(source, /countControl|countButton|countValue|changeCount/);
+  }
 });
 
 test("short drags follow immediately and return softly, rather than waiting for a 42px swipe", () => {

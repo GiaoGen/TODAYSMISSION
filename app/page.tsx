@@ -30,6 +30,7 @@ function HomePublicShell({ packs }: { packs: readonly PackSummary[] }) {
     joinedPacks={[]}
     onLogout={logout}
     packs={packs}
+    transitionFallback
   />;
 }
 
