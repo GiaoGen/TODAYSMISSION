@@ -98,6 +98,13 @@ test("return state survives a single animation claim until the resolved Home tre
   assert.equal(getPackCarouselReturnState(), null);
 });
 
+test("return state and its animation claim survive production client chunk splits", () => {
+  const source = readFileSync(new URL("../features/packs/model/pack-carousel-return-state.ts", import.meta.url), "utf8");
+  assert.match(source, /globalThis/);
+  assert.match(source, /__TODAYSMISSION_PACK_CAROUSEL_RETURN_STATE__/);
+  assert.match(source, /returnAnimationPending/);
+});
+
 test("reordered data restores identity instead of the old numeric slot", () => {
   const reordered = [packs[4], packs[0], packs[2], packs[6], packs[8]];
   assert.deepEqual(getInitialCarouselState(reordered, 5, "top", entry()), {
