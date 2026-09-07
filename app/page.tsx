@@ -1,30 +1,22 @@
+import { Suspense } from "react";
+
+import { getCurrentDateKey } from "@/data/repositories/get-current-date";
 import { getPacks } from "@/data/repositories/get-packs";
-import { getJoinedPacks } from "@/data/repositories/get-pack-memberships";
-import { getCurrentUser } from "@/data/repositories/get-current-user";
-import { getMissionCalendar } from "@/data/repositories/get-mission-calendar";
 import { logout } from "@/features/auth/actions";
 import { HomeCarouselEntry } from "@/features/packs/components/HomeCarouselEntry";
-
-export const instant = false;
+import { HomeUserStateHydrator } from "./HomeUserStateHydrator";
 
 export default async function Home() {
-  const packsPromise = getPacks();
-  const currentUser = await getCurrentUser();
-  const [packs, joinedPacks, calendar] = await Promise.all([
-    packsPromise,
-    currentUser ? getJoinedPacks() : Promise.resolve([]),
-    getMissionCalendar(currentUser),
-  ]);
+  const [packs, today] = await Promise.all([getPacks(), getCurrentDateKey()]);
 
   if (packs.length === 0) {
     return <main><p>No public mission Packs are available right now.</p></main>;
   }
 
-  return <HomeCarouselEntry
-    calendar={calendar}
-    currentUser={currentUser}
-    joinedPacks={joinedPacks}
-    onLogout={logout}
-    packs={packs}
-  />;
+  return <>
+    <HomeCarouselEntry initialRegisteredOn="1970-01-01" onLogout={logout} packs={packs} today={today} />
+    <Suspense fallback={null}>
+      <HomeUserStateHydrator packs={packs} />
+    </Suspense>
+  </>;
 }

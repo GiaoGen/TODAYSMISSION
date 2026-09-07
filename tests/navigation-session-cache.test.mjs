@@ -20,6 +20,7 @@ import {
   addMissionCompletion,
   clearSessionSnapshot,
   getSessionSnapshot,
+  hydrateSessionSnapshot,
   initializeSessionSnapshot,
   resetSessionSnapshotForTests,
 } from "../features/navigation/model/session-snapshot.ts";
@@ -127,10 +128,13 @@ test("session snapshot seeds server data and records Take Pack only after succes
   });
   assert.deepEqual(getSessionSnapshot(), {
     userId: "user-a",
+    currentUser: null,
     joinedPackIds: ["pack-a"],
     completedMissionIds: [],
     completedDates: ["2026-09-02"],
     completionCountsByPack: {},
+    activeMissionByPack: {},
+    registeredOn: null,
   });
 
   addJoinedPack("pack-b", "user-a");
@@ -159,9 +163,24 @@ test("changing Auth identity replaces the previous user's snapshot and logout cl
   clearSessionSnapshot();
   assert.deepEqual(getSessionSnapshot(), {
     userId: null,
+    currentUser: null,
     joinedPackIds: [],
     completedMissionIds: [],
     completedDates: [],
     completionCountsByPack: {},
+    activeMissionByPack: {},
+    registeredOn: null,
   });
+});
+
+test("server user hydration fills navigation state without replacing same-user local hints", () => {
+  resetSessionSnapshotForTests();
+  hydrateSessionSnapshot({
+    currentUser: { id: "user-a", email: "a@example.com", createdAt: "2026-01-02T00:00:00.000Z" },
+    joinedPackIds: ["pack-a"], completedMissionIds: ["mission-a"], completedDates: ["2026-09-05"],
+    completionCountsByPack: { "pack-a": 1 }, activeMissionByPack: { "pack-a": "mission-b" }, registeredOn: "2026-01-02",
+  });
+  assert.equal(getSessionSnapshot().currentUser?.email, "a@example.com");
+  assert.deepEqual(getSessionSnapshot().activeMissionByPack, { "pack-a": "mission-b" });
+  assert.deepEqual(getSessionSnapshot().completedMissionIds, ["mission-a"]);
 });

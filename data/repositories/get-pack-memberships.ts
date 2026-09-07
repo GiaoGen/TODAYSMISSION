@@ -1,7 +1,5 @@
 import "server-only";
 
-import { isAuthSessionMissingError } from "@supabase/supabase-js";
-
 import type { PackMembership } from "@/data/contracts/pack-membership";
 import type { CurrentUser } from "@/data/contracts/current-user";
 import type { PackSummary } from "@/data/contracts/pack-summary";
@@ -28,23 +26,18 @@ export async function getCurrentPackMembership(packId: string, currentUser?: Cur
   return data ? mapPackMembershipRow(data) : null;
 }
 
-export async function getJoinedPacks(): Promise<readonly PackSummary[]> {
+export async function getJoinedPacks(currentUser?: CurrentUser | null): Promise<readonly PackSummary[]> {
   const supabase = await createClient();
-  const { data: userData, error: authError } = await supabase.auth.getUser();
+  const user = currentUser ?? await getCurrentUser();
 
-  if (authError) {
-    if (isAuthSessionMissingError(authError)) return [];
-    throw new Error("Failed to read the current Auth user.");
-  }
-
-  if (!userData.user || userData.user.is_anonymous) return [];
+  if (!user) return [];
 
   const [packs, memberships] = await Promise.all([
     getPacks(),
     supabase
       .from("pack_memberships")
       .select("pack_id")
-      .eq("user_id", userData.user.id),
+      .eq("user_id", user.id),
   ]);
 
   if (memberships.error) throw new Error("Failed to read Pack memberships.");

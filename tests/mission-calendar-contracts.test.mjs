@@ -93,7 +93,7 @@ test("Pack progress is derived from completion state and updates without persist
   const before = { one: "completed", two: "incomplete" };
   const after = { ...before, two: "completed" };
   assert.equal(getCompletedMissionCount(after), getCompletedMissionCount(before) + 1);
-  assert.match(packDetail, /getCompletedMissionCount\(missionCompletionStatuses\)/);
+  assert.match(packDetail, /getCompletedMissionCount\(effectiveMissionCompletionStatuses\)/);
   assert.match(packDetail, /completedMissionCount=\{packJoined \? completedMissionCount : undefined\}/);
   assert.match(packDetail, /gallerySettled && currentStatus !== "completed"/);
   assert.match(read("features/packs/components/MissionGallery.tsx"), /className=\{styles\.packProgress\}/);
@@ -142,7 +142,7 @@ test("completion action placement reserves a stable auxiliary row and derives it
 
 test("proof media states lock both Gallery drivers while the pending Record state remains switchable", () => {
   assert.match(proofRecorder, /const locked = state !== "idle"/);
-  assert.match(packDetail, /interactionLocked=\{galleryInteractionLocked\}/);
+  assert.match(packDetail, /interactionLocked=\{effectiveGalleryInteractionLocked\}/);
   assert.match(gallery, /data-interaction-locked=\{interactionLocked\}/);
   assert.match(gallery, /root\.dataset\.interactionLocked === "true"/);
   assert.match(nativeGallery, /root\.dataset\.interactionLocked === "true"/);
@@ -162,9 +162,18 @@ test("completion confetti is a non-interactive viewport Portal driven by one com
   assert.doesNotMatch(packDetail, /useEffect\([\s\S]{0,240}setCompletionEventId/);
 });
 
-test("homepage passes real calendar data while preserving the existing carousel entry", () => {
-  assert.match(home, /getMissionCalendar\(currentUser\)/);
-  assert.match(home, /Promise\.all\(\[/);
-  assert.match(home, /calendar=\{calendar\}/);
-  assert.doesNotMatch(home, /HomeUserState|HomePublicShell|<Suspense/);
+test("homepage renders cached public packs with a null dynamic user-state hydrator", () => {
+  assert.match(home, /getPacks\(\)/);
+  assert.match(home, /<Suspense fallback=\{null\}>/);
+  assert.match(home, /HomeUserStateHydrator/);
+  assert.doesNotMatch(home, /export const instant = false/);
+  assert.doesNotMatch(home, /HomePublicShell/);
+});
+
+test("Pack navigation keeps one MissionGallery tree and warms Home separately", () => {
+  const page = read("app/pack/[slug]/page.tsx");
+  assert.equal((page.match(/<MissionPackDetail/g) ?? []).length, 1);
+  assert.match(page, /<Suspense fallback=\{null\}>/);
+  assert.match(page, /<RoutePrefetch href="\/" \/>/);
+  assert.doesNotMatch(page, /PackPublicShell/);
 });

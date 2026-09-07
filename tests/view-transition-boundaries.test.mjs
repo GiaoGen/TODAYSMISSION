@@ -15,6 +15,9 @@ const componentFiles = {
   CalendarCarousel: "features/calendar/components/CalendarCarousel.tsx",
   PackDetailPage: "app/pack/[slug]/page.tsx",
   PackUserState: "app/pack/[slug]/PackUserState.tsx",
+  HomeUserStateHydrator: "app/HomeUserStateHydrator.tsx",
+  SessionSnapshotHydrator: "features/navigation/components/SessionSnapshotHydrator.tsx",
+  RoutePrefetch: "app/pack/[slug]/RoutePrefetch.tsx",
   MissionPackDetail: "features/packs/components/MissionPackDetail.tsx",
   MissionGallery: "features/packs/components/MissionGallery.tsx",
   CompletedMissionGallery: "features/packs/components/CompletedMissionGallery.tsx",
@@ -23,6 +26,9 @@ const componentFiles = {
 };
 const nonTransitionSiblings = new Set(["MissionCompletionConfetti"]);
 nonTransitionSiblings.add("NavigationPrefetch");
+nonTransitionSiblings.add("HomeUserStateHydrator");
+nonTransitionSiblings.add("SessionSnapshotHydrator");
+nonTransitionSiblings.add("RoutePrefetch");
 
 function readComponent(name) {
   const file = componentFiles[name];

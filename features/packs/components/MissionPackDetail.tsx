@@ -18,6 +18,7 @@ import {
   addMissionCompletion,
   getServerSessionSnapshot,
   getSessionSnapshot,
+  setActiveMission,
   subscribeSessionSnapshot,
 } from "@/features/navigation/model/session-snapshot";
 
@@ -53,20 +54,27 @@ export function MissionPackDetail({
     getSessionSnapshot,
     getServerSessionSnapshot,
   );
-  const sameUser = currentUserId !== null && sessionSnapshot.userId === currentUserId;
-  const sessionCompletedMissionIds = sameUser ? new Set(sessionSnapshot.completedMissionIds) : new Set<string>();
+  const effectiveCurrentUserId = currentUserId ?? sessionSnapshot.currentUser?.id ?? null;
+  const sameUser = effectiveCurrentUserId !== null && sessionSnapshot.userId === effectiveCurrentUserId;
+  const sessionCompletedMissionIds = useMemo(
+    () => sameUser ? new Set(sessionSnapshot.completedMissionIds) : new Set<string>(),
+    [sameUser, sessionSnapshot.completedMissionIds],
+  );
   const initialStatuses: Record<string, MissionCompletionStatus> = Object.fromEntries(pack.missions.map((mission) => [
     mission.id,
     (initialMissionCompletionStatuses[mission.id] === "completed" || sessionCompletedMissionIds.has(mission.id)
       ? "completed"
       : "incomplete") as MissionCompletionStatus,
   ]));
-  const initialCommittedMissionId = initialPackJoined
-    && initialActiveMissionId !== null
-    && pack.missions.some((mission) => mission.id === initialActiveMissionId && initialStatuses[mission.id] !== "completed")
-    ? initialActiveMissionId
+  const sessionJoined = sameUser && sessionSnapshot.joinedPackIds.includes(pack.id);
+  const sessionActiveMissionId = sameUser ? sessionSnapshot.activeMissionByPack[pack.id] ?? null : null;
+  const requestedActiveMissionId = initialActiveMissionId ?? sessionActiveMissionId;
+  const initialCommittedMissionId = (initialPackJoined || sessionJoined)
+    && requestedActiveMissionId !== null
+    && pack.missions.some((mission) => mission.id === requestedActiveMissionId && initialStatuses[mission.id] !== "completed")
+    ? requestedActiveMissionId
     : null;
-  const [packJoined, setPackJoined] = useState(initialPackJoined || (sameUser && sessionSnapshot.joinedPackIds.includes(pack.id)));
+  const [localPackJoined, setLocalPackJoined] = useState(initialPackJoined);
   const [gallerySettled, setGallerySettled] = useState(false);
   const [missionCompletionStatuses, setMissionCompletionStatuses] = useState(initialStatuses);
   const [activeMissionId, setActiveMissionId] = useState(initialCommittedMissionId ?? pack.missions[0]?.id ?? null);
@@ -85,20 +93,37 @@ export function MissionPackDetail({
   const completionMotionRef = useRef<MissionCompletionMotionHandle | null>(null);
   const selectingNextRef = useRef(false);
   const completionEventSequenceRef = useRef(0);
-  const activeMission = pack.missions.find((mission) => mission.id === activeMissionId) ?? pack.missions[0];
+  const effectiveMissionCompletionStatuses = useMemo(() => {
+    if (!sameUser || sessionCompletedMissionIds.size === 0) return missionCompletionStatuses;
+    const next = { ...missionCompletionStatuses };
+    for (const missionId of sessionCompletedMissionIds) {
+      if (next[missionId] !== undefined) next[missionId] = "completed";
+    }
+    return next;
+  }, [missionCompletionStatuses, sameUser, sessionCompletedMissionIds]);
+  const sessionCommittedMissionId = sameUser && sessionActiveMissionId
+    && !sessionCompletedMissionIds.has(sessionActiveMissionId)
+    ? sessionActiveMissionId
+    : null;
+  const effectiveCommittedMissionId = committedMissionId ?? sessionCommittedMissionId;
+  const effectiveActiveMissionId = effectiveCommittedMissionId ?? activeMissionId;
+  const activeMission = pack.missions.find((mission) => mission.id === effectiveActiveMissionId) ?? pack.missions[0];
   const currentStatus = activeMission
-    ? missionCompletionStatuses[activeMission.id] ?? "incomplete"
+    ? effectiveMissionCompletionStatuses[activeMission.id] ?? "incomplete"
     : "incomplete";
-  const completedMissionCount = getCompletedMissionCount(missionCompletionStatuses);
+  const completedMissionCount = getCompletedMissionCount(effectiveMissionCompletionStatuses);
+  const packJoined = localPackJoined || sessionJoined;
+  const effectiveGalleryInteractionLocked = galleryInteractionLocked || Boolean(effectiveCommittedMissionId);
   const experienceScope = useMemo<MissionExperienceScope>(
-    () => currentStatus === "completed" && currentUserId
-      ? { kind: "own", userId: currentUserId }
+    () => currentStatus === "completed" && effectiveCurrentUserId
+      ? { kind: "own", userId: effectiveCurrentUserId }
       : { kind: "community" },
-    [currentStatus, currentUserId],
+    [currentStatus, effectiveCurrentUserId],
   );
+  const effectiveAuthenticated = authenticated || effectiveCurrentUserId !== null;
 
   const commitMission = useCallback((missionId: string) => {
-    if (committedMissionIdRef.current || committingMissionIdRef.current) return;
+    if (effectiveCommittedMissionId || committingMissionIdRef.current) return;
 
     const requestId = ++commitRequestIdRef.current;
     committingMissionIdRef.current = missionId;
@@ -122,6 +147,7 @@ export function MissionPackDetail({
       committedMissionIdRef.current = result.activeMissionId;
       setCommittingMissionId(null);
       setCommittedMissionId(result.activeMissionId);
+      if (effectiveCurrentUserId) setActiveMission(pack.id, result.activeMissionId, effectiveCurrentUserId);
     }).catch(() => {
       if (commitRequestIdRef.current !== requestId || committingMissionIdRef.current !== missionId) return;
       committingMissionIdRef.current = null;
@@ -130,7 +156,7 @@ export function MissionPackDetail({
       setGalleryInteractionLocked(false);
       setCommitError("We couldn't take this Mission right now. Please try again.");
     });
-  }, [pack.id]);
+  }, [effectiveCommittedMissionId, effectiveCurrentUserId, pack.id]);
 
   useEffect(() => () => {
     commitRequestIdRef.current += 1;
@@ -138,8 +164,8 @@ export function MissionPackDetail({
 
   const handleInteractionLockReady = useCallback((lock: ((locked: boolean) => void) | null) => {
     galleryInteractionLockRef.current = lock;
-    if (lock && (committedMissionIdRef.current || committingMissionIdRef.current)) lock(true);
-  }, []);
+    if (lock && (effectiveCommittedMissionId || committingMissionIdRef.current)) lock(true);
+  }, [effectiveCommittedMissionId]);
 
   const releaseMissionCommitment = useCallback(() => {
     committedMissionIdRef.current = null;
@@ -149,12 +175,12 @@ export function MissionPackDetail({
   }, []);
 
   const handleProofInteractionLockChange = useCallback((locked: boolean) => {
-    if (committedMissionIdRef.current || committingMissionIdRef.current) return;
+    if (effectiveCommittedMissionId || committingMissionIdRef.current) return;
     setGalleryInteractionLocked(locked);
-  }, []);
+  }, [effectiveCommittedMissionId]);
 
   const handleActiveMissionChange = (missionId: string) => {
-    const lockedMissionId = committedMissionIdRef.current ?? committingMissionIdRef.current;
+    const lockedMissionId = effectiveCommittedMissionId ?? committingMissionIdRef.current;
     if (lockedMissionId && missionId !== lockedMissionId) return;
     setActiveMissionId(missionId);
   };
@@ -164,8 +190,8 @@ export function MissionPackDetail({
     setMissionCompletionStatuses((current) => current[missionId] === "completed"
       ? current
       : { ...current, [missionId]: "completed" });
-    if (currentUserId) {
-      addMissionCompletion({ userId: currentUserId, missionId, packId: pack.id, completedLocalDate });
+    if (effectiveCurrentUserId) {
+      addMissionCompletion({ userId: effectiveCurrentUserId, missionId, packId: pack.id, completedLocalDate });
     }
     setCompletionRequestedMissionIds((current) => {
       if (!current.has(missionId)) return current;
@@ -193,7 +219,7 @@ export function MissionPackDetail({
     <MissionActionLayer
       key={activeMission.id}
       activeMission={activeMission}
-      committed={committedMissionId === activeMission.id}
+      committed={effectiveCommittedMissionId === activeMission.id}
       committing={committingMissionId === activeMission.id}
       commitError={commitError}
       completionRequested={completionRequestedMissionIds.has(activeMission.id)}
@@ -225,14 +251,14 @@ export function MissionPackDetail({
         completionMotionRef={completionMotionRef}
         missions={pack.missions}
         initialMissionId={initialCommittedMissionId ?? undefined}
-        missionCompletionStatuses={missionCompletionStatuses}
+        missionCompletionStatuses={effectiveMissionCompletionStatuses}
         missionAction={missionAction}
-        interactionLocked={galleryInteractionLocked}
+        interactionLocked={effectiveGalleryInteractionLocked}
         experienceMissionId={activeMission?.id}
         experienceMissionCompleted={currentStatus === "completed"}
         experienceScope={experienceScope}
         experienceRevealEnabled={Boolean(
-          authenticated
+          effectiveAuthenticated
           && packJoined
           && gallerySettled
           && activeMission
@@ -242,11 +268,11 @@ export function MissionPackDetail({
         expandMissions={packJoined}
         waitingAction={!packJoined ? (
           <PackMembershipAction
-            authenticated={authenticated}
+            authenticated={effectiveAuthenticated}
             joined={packJoined}
             onJoined={() => {
-              setPackJoined(true);
-              if (currentUserId) addJoinedPack(pack.id, currentUserId);
+              setLocalPackJoined(true);
+              if (effectiveCurrentUserId) addJoinedPack(pack.id, effectiveCurrentUserId);
             }}
             pack={pack}
           />

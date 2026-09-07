@@ -16,6 +16,7 @@ import styles from "./CalendarCarousel.module.css";
 
 type CalendarCarouselProps = {
   data: MissionCalendarData;
+  today?: string;
   placement: CarouselPlacement;
   snapshot: CarouselSnapshot | null;
   interactionDisabled: boolean;
@@ -26,12 +27,12 @@ type CalendarCarouselProps = {
 };
 type MonthDrag = { pointerId: number; startX: number; startPosition: number; lastX: number; lastTime: number; velocity: number; captured: boolean };
 
-export function CalendarCarousel({ data, placement, snapshot, interactionDisabled, swappingIn, onOpenDate, returnDate, ref }: CalendarCarouselProps) {
+export function CalendarCarousel({ data, placement, snapshot, interactionDisabled, swappingIn, onOpenDate, returnDate, today, ref }: CalendarCarouselProps) {
   const router = useRouter();
   // HomeCarouselEntry mounts this on the client. Dates must be present in the
   // navigation's FIRST render: adding them in a layout effect is too late for
   // React to pair their ViewTransition names with the departing gallery hero.
-  const [range] = useState(() => getCalendarRange(data.registeredOn, localDateKey(new Date())));
+  const range = useMemo(() => getCalendarRange(data.registeredOn, today ?? localDateKey(new Date())), [data.registeredOn, today]);
   const [initialPosition] = useState(() => range ? restoreCalendarPosition(snapshot, range) : 0);
   const [center, setCenter] = useState(Math.round(initialPosition));
   const [geometry, setGeometry] = useState<CalendarGeometry | null>(() => typeof window === "undefined" ? null

@@ -1,14 +1,24 @@
+import type { CurrentUser } from "@/data/contracts/current-user";
+
 export type SessionSnapshot = {
   userId: string | null;
+  currentUser: CurrentUser | null;
   joinedPackIds: readonly string[];
   completedMissionIds: readonly string[];
   completedDates: readonly string[];
   completionCountsByPack: Readonly<Record<string, number>>;
+  activeMissionByPack: Readonly<Record<string, string | null>>;
+  registeredOn: string | null;
 };
 
 export type InitialSessionSnapshot = {
+  currentUser?: CurrentUser | null;
   joinedPackIds?: readonly string[];
+  completedMissionIds?: readonly string[];
   completedDates?: readonly string[];
+  completionCountsByPack?: Readonly<Record<string, number>>;
+  activeMissionByPack?: Readonly<Record<string, string | null>>;
+  registeredOn?: string | null;
 };
 
 export type MissionCompletionSnapshotUpdate = {
@@ -20,10 +30,13 @@ export type MissionCompletionSnapshotUpdate = {
 
 const EMPTY_SNAPSHOT: SessionSnapshot = Object.freeze({
   userId: null,
+  currentUser: null,
   joinedPackIds: Object.freeze([]),
   completedMissionIds: Object.freeze([]),
   completedDates: Object.freeze([]),
   completionCountsByPack: Object.freeze({}),
+  activeMissionByPack: Object.freeze({}),
+  registeredOn: null,
 });
 
 let snapshot: SessionSnapshot = EMPTY_SNAPSHOT;
@@ -33,18 +46,30 @@ function unique(values: readonly string[] | undefined): string[] {
   return [...new Set((values ?? []).filter((value): value is string => typeof value === "string" && value.length > 0))];
 }
 
+function numericCounts(values: Readonly<Record<string, number>> | undefined): Record<string, number> {
+  return Object.fromEntries(Object.entries(values ?? {}).filter(([, count]) => Number.isFinite(count) && count >= 0));
+}
+
+function activeMissions(values: Readonly<Record<string, string | null>> | undefined): Record<string, string | null> {
+  return Object.fromEntries(Object.entries(values ?? {}).filter(([packId, missionId]) => Boolean(packId) && (missionId === null || typeof missionId === "string")));
+}
+
 function notify(next: SessionSnapshot) {
   snapshot = next;
   listeners.forEach((listener) => listener());
 }
 
 function replaceSnapshot(userId: string | null, initial: InitialSessionSnapshot = {}) {
+  const currentUser = initial.currentUser?.id === userId ? initial.currentUser : null;
   notify({
     userId,
+    currentUser,
     joinedPackIds: Object.freeze(unique(initial.joinedPackIds)),
-    completedMissionIds: Object.freeze([]),
+    completedMissionIds: Object.freeze(unique(initial.completedMissionIds)),
     completedDates: Object.freeze(unique(initial.completedDates)),
-    completionCountsByPack: Object.freeze({}),
+    completionCountsByPack: Object.freeze(numericCounts(initial.completionCountsByPack)),
+    activeMissionByPack: Object.freeze(activeMissions(initial.activeMissionByPack)),
+    registeredOn: initial.registeredOn ?? currentUser?.createdAt.slice(0, 10) ?? null,
   });
 }
 
@@ -73,8 +98,9 @@ export function subscribeSessionSnapshot(listener: () => void) {
  */
 export function initializeSessionSnapshot(userId: string | null, initial: InitialSessionSnapshot = {}) {
   if (userId === null) {
-    if (snapshot.userId !== null || snapshot.joinedPackIds.length > 0 || snapshot.completedMissionIds.length > 0
-      || snapshot.completedDates.length > 0 || Object.keys(snapshot.completionCountsByPack).length > 0) {
+    if (snapshot.userId !== null || snapshot.currentUser !== null || snapshot.joinedPackIds.length > 0 || snapshot.completedMissionIds.length > 0
+      || snapshot.completedDates.length > 0 || Object.keys(snapshot.completionCountsByPack).length > 0
+      || Object.keys(snapshot.activeMissionByPack).length > 0 || snapshot.registeredOn !== null) {
       replaceSnapshot(null);
     }
     return;
@@ -86,13 +112,39 @@ export function initializeSessionSnapshot(userId: string | null, initial: Initia
   }
 
   const joinedPackIds = unique([...snapshot.joinedPackIds, ...unique(initial.joinedPackIds)]);
+  const completedMissionIds = unique([...snapshot.completedMissionIds, ...unique(initial.completedMissionIds)]);
   const completedDates = unique([...snapshot.completedDates, ...unique(initial.completedDates)]);
-  if (joinedPackIds.length === snapshot.joinedPackIds.length && completedDates.length === snapshot.completedDates.length) return;
+  const completionCountsByPack = { ...snapshot.completionCountsByPack };
+  for (const [packId, count] of Object.entries(numericCounts(initial.completionCountsByPack))) {
+    completionCountsByPack[packId] = Math.max(completionCountsByPack[packId] ?? 0, count);
+  }
+  const activeMissionByPack = { ...snapshot.activeMissionByPack, ...activeMissions(initial.activeMissionByPack) };
+  const currentUser = initial.currentUser?.id === userId ? initial.currentUser : snapshot.currentUser;
+  const registeredOn = initial.registeredOn ?? snapshot.registeredOn ?? currentUser?.createdAt.slice(0, 10) ?? null;
+  if (joinedPackIds.length === snapshot.joinedPackIds.length && completedMissionIds.length === snapshot.completedMissionIds.length
+    && completedDates.length === snapshot.completedDates.length && currentUser === snapshot.currentUser
+    && registeredOn === snapshot.registeredOn && JSON.stringify(completionCountsByPack) === JSON.stringify(snapshot.completionCountsByPack)
+    && JSON.stringify(activeMissionByPack) === JSON.stringify(snapshot.activeMissionByPack)) return;
   notify({
     ...snapshot,
+    currentUser,
     joinedPackIds: Object.freeze(joinedPackIds),
     completedDates: Object.freeze(completedDates),
+    completedMissionIds: Object.freeze(completedMissionIds),
+    completionCountsByPack: Object.freeze(completionCountsByPack),
+    activeMissionByPack: Object.freeze(activeMissionByPack),
+    registeredOn,
   });
+}
+
+/** Merges server-confirmed state while preserving same-user local UI hints. */
+export function hydrateSessionSnapshot(initial: InitialSessionSnapshot & { currentUser: CurrentUser | null }) {
+  const userId = initial.currentUser?.id ?? null;
+  if (userId === null || snapshot.userId !== userId) {
+    replaceSnapshot(userId, initial);
+    return;
+  }
+  initializeSessionSnapshot(userId, initial);
 }
 
 export function addJoinedPack(packId: string, userId: string) {
@@ -102,6 +154,16 @@ export function addJoinedPack(packId: string, userId: string) {
   notify({
     ...current,
     joinedPackIds: Object.freeze([...current.joinedPackIds, packId]),
+  });
+}
+
+export function setActiveMission(packId: string, missionId: string, userId: string) {
+  if (!packId || !missionId) return;
+  const current = ensureUser(userId);
+  if (current.activeMissionByPack[packId] === missionId) return;
+  notify({
+    ...current,
+    activeMissionByPack: Object.freeze({ ...current.activeMissionByPack, [packId]: missionId }),
   });
 }
 

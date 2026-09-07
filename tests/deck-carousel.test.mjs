@@ -106,7 +106,8 @@ test("Pack membership and gallery display phases are independent", () => {
   const gallery = read("features/packs/components/MissionGallery.tsx");
   const membership = read("features/packs/components/PackMembershipAction.tsx");
   const userState = read("app/pack/[slug]/PackUserState.tsx");
-  assert.match(detail, /const \[packJoined, setPackJoined\]/);
+  const navigationState = read("data/repositories/get-navigation-user-state.ts");
+  assert.match(detail, /const \[localPackJoined, setLocalPackJoined\]/);
   assert.match(detail, /const \[gallerySettled, setGallerySettled\]/);
   assert.match(detail, /expandMissions={packJoined}/);
   assert.match(detail, /waitingAction={!packJoined \?/);
@@ -117,8 +118,10 @@ test("Pack membership and gallery display phases are independent", () => {
   assert.match(membership, /disabled={isTaking}/);
   assert.match(membership, /if \(!result\.ok\) \{\s*setError\(result\.error\);\s*return;/);
   assert.match(membership, /window\.location\.assign\(getPackLoginDestination\(pack\.slug\)\)/);
-  assert.match(userState, /getCurrentPackMembership/);
-  assert.match(userState, /initialPackJoined={Boolean\(membership\)}/);
+  assert.match(userState, /getNavigationUserState/);
+  assert.match(userState, /SessionSnapshotHydrator/);
+  assert.match(navigationState, /activeMissionByPack/);
+  assert.match(navigationState, /pack_memberships/);
 });
 
 test("Mission stream markup copies all five designs from the flat Mission contract", () => {

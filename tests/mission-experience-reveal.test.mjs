@@ -133,7 +133,8 @@ test("Pack and Calendar use the same Reveal with community/owner loader routing"
   const completedGallery = read("features/packs/components/CompletedMissionGallery.tsx");
   assert.match(pack, /experienceMissionCompleted=\{currentStatus === "completed"\}/);
   assert.match(pack, /currentStatus === "completed" \? loadMyMissionExperience : loadMissionExperiences/);
-  assert.match(userState, /loadMyMissionExperience={getMyMissionExperienceAction}/);
+  assert.match(read("app/pack/[slug]/page.tsx"), /loadMyMissionExperience={getMyMissionExperienceAction}/);
+  assert.match(userState, /SessionSnapshotHydrator/);
   assert.match(completedGallery, /MissionGallery/);
   assert.match(completedGallery, /experienceMissionCompleted/);
   assert.match(completedGallery, /onActiveMissionChange=\{setActiveMissionId\}/);

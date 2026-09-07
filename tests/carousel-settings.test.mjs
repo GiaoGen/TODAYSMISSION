@@ -258,18 +258,19 @@ test("guest identity exposes Login and no Logout", () => {
   assert.doesNotMatch(dialog, /Logout/);
 });
 
-test("server entry renders no incorrect default wheels before local settings are readable", () => {
+test("server entry renders the single public Home visual tree immediately", () => {
   const { HomeCarouselEntry } = compileComponent("features/packs/components/HomeCarouselEntry.tsx", {
-    "./HomePackCarousels": { HomePackCarousels() { throw new Error("must not render on server"); } },
+    "./HomePackCarousels": { HomePackCarousels() { return null; } },
     "@/features/navigation/components/NavigationPrefetch": { NavigationPrefetch() { return null; } },
     "@/features/navigation/model/session-snapshot": {
-      getServerSessionSnapshot: () => ({ userId: null, joinedPackIds: [], completedMissionIds: [], completedDates: [], completionCountsByPack: {} }),
-      getSessionSnapshot: () => ({ userId: null, joinedPackIds: [], completedMissionIds: [], completedDates: [], completionCountsByPack: {} }),
-      initializeSessionSnapshot() {},
+      getServerSessionSnapshot: () => ({ userId: null, currentUser: null, joinedPackIds: [], completedMissionIds: [], completedDates: [], completionCountsByPack: {}, activeMissionByPack: {}, registeredOn: null }),
+      getSessionSnapshot: () => ({ userId: null, currentUser: null, joinedPackIds: [], completedMissionIds: [], completedDates: [], completionCountsByPack: {}, activeMissionByPack: {}, registeredOn: null }),
       subscribeSessionSnapshot: () => () => {},
     },
   });
-  assert.equal(renderToStaticMarkup(createElement(HomeCarouselEntry, {})), "");
+  assert.equal(renderToStaticMarkup(createElement(HomeCarouselEntry, {
+    packs: [], initialRegisteredOn: "2026-09-07", onLogout() {}, today: "2026-09-07",
+  })), "");
 });
 
 test("theme transitions target colors only, with short reduced-motion duration", () => {

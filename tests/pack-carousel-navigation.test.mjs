@@ -162,10 +162,11 @@ test("returning Home keeps the original carousel enter transition", () => {
 test("Home renders one blocking destination tree and restores a returning Calendar day anchor", () => {
   const page = readFileSync(new URL("../app/page.tsx", import.meta.url), "utf8");
   const home = readFileSync(new URL("../features/packs/components/HomePackCarousels.tsx", import.meta.url), "utf8");
-  assert.match(page, /export const instant = false/);
-  assert.doesNotMatch(page, /HomePublicShell|<Suspense/);
+  assert.doesNotMatch(page, /export const instant = false/);
+  assert.match(page, /<Suspense fallback=\{null\}>/);
+  assert.match(page, /HomeUserStateHydrator/);
   assert.equal((page.match(/<HomeCarouselEntry/g) ?? []).length, 1);
-  assert.match(home, /const calendarForReturn = returnDate && !calendar\.completedOn\.includes\(returnDate\)/);
+  assert.match(home, /const calendarForReturn = returnDate/);
   assert.match(home, /data=\{calendarForReturn\}/);
   assert.match(home, /returnDate=\{returnDate\}/);
 });

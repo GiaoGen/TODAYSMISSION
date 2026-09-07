@@ -42,12 +42,13 @@ export type HomePackCarouselsProps = {
   joinedPacks: readonly PackSummary[];
   currentUser: CurrentUser | null;
   calendar: MissionCalendarData;
+  today: string;
   onLogout: () => Promise<void>;
 };
 
 type CarouselView = HomeCarouselSelection & { phase: CarouselSwapPhase; changing: readonly CarouselPlacement[] };
 
-export function HomePackCarousels({ packs, joinedPacks, currentUser, calendar, onLogout }: HomePackCarouselsProps) {
+export function HomePackCarousels({ packs, joinedPacks, currentUser, calendar, today, onLogout }: HomePackCarouselsProps) {
   const router = useRouter();
   const [returnState] = useState(getPackCarouselReturnState);
   const [view, setView] = useState<CarouselView>(() => {
@@ -67,8 +68,14 @@ export function HomePackCarousels({ packs, joinedPacks, currentUser, calendar, o
   const collections = { joined: joinedPacks, all: packs };
   const busy = !ready || view.phase !== "idle";
   const returnDate = returnState?.completedDate;
-  const calendarForReturn = returnDate && !calendar.completedOn.includes(returnDate)
-    ? { ...calendar, completedOn: [...calendar.completedOn, returnDate].sort() }
+  const calendarForReturn = returnDate
+    ? {
+      ...calendar,
+      registeredOn: calendar.registeredOn > returnDate ? returnDate : calendar.registeredOn,
+      completedOn: calendar.completedOn.includes(returnDate)
+        ? calendar.completedOn
+        : [...calendar.completedOn, returnDate].sort(),
+    }
     : calendar;
 
   useLayoutEffect(() => {
@@ -217,6 +224,7 @@ export function HomePackCarousels({ packs, joinedPacks, currentUser, calendar, o
       <CalendarCarousel
         key="top-calendar"
         data={calendarForReturn}
+        today={today}
         placement="top"
         onOpenDate={openCompletedDay}
         returnDate={returnDate}
