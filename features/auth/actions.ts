@@ -1,15 +1,14 @@
 "use server";
 
-import { cookies } from "next/headers";
+import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { createClient } from "@/lib/supabase/server";
 import { getSafeNextPath } from "@/features/auth/model/safe-next-path";
+import { createClient } from "@/lib/supabase/server";
 
-const PENDING_EMAIL_COOKIE = "tm_pending_email";
-const PENDING_EMAIL_MAX_AGE = 10 * 60;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MIN_PASSWORD_LENGTH = 6;
 
 export type AuthActionState = {
   error?: string;
@@ -29,93 +28,98 @@ function getSafeNextFromForm(formData: FormData) {
   return getSafeNextPath(getFormText(formData, "next"));
 }
 
-function authErrorMessage(error: { message?: string; status?: number }): string {
-  const message = error.message ?? "";
-  if (error.status === 429 || /rate|too many|retry|limit/i.test(message)) {
-    return "Please wait a moment before requesting another email.";
-  }
-  if (/invalid.*email|email.*invalid/i.test(message)) {
-    return "Enter a valid email address.";
-  }
-  return "We couldn't send a sign-in email right now. Please try again.";
-}
-
-function setPendingEmail(cookieStore: Awaited<ReturnType<typeof cookies>>, email: string) {
-  cookieStore.set({
-    name: PENDING_EMAIL_COOKIE,
-    value: email,
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/login",
-    maxAge: PENDING_EMAIL_MAX_AGE,
-  });
-}
-
-function clearPendingEmail(cookieStore: Awaited<ReturnType<typeof cookies>>) {
-  cookieStore.set({
-    name: PENDING_EMAIL_COOKIE,
-    value: "",
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/login",
-    maxAge: 0,
-  });
-}
-
-async function sendEmailOtp(email: string) {
-  const supabase = await createClient();
-  return supabase.auth.signInWithOtp({
-    email,
-    options: {
-      shouldCreateUser: true,
-    },
-  });
-}
-
-export async function sendLoginEmail(_previousState: AuthActionState, formData: FormData): Promise<AuthActionState> {
+function getCredentials(formData: FormData) {
   const rawEmail = getFormText(formData, "email");
   const email = rawEmail ? normalizeEmail(rawEmail) : "";
-  if (!EMAIL_PATTERN.test(email)) return { error: "Enter a valid email address." };
-
-  const next = getSafeNextFromForm(formData);
-  const { error } = await sendEmailOtp(email);
-  if (error) return { error: authErrorMessage(error) };
-
-  setPendingEmail(await cookies(), email);
-  redirect(`/login?step=otp&next=${encodeURIComponent(next)}`);
+  const password = getFormText(formData, "password") ?? "";
+  return { email, password };
 }
 
-export async function resendOtp(_previousState: AuthActionState, formData: FormData): Promise<AuthActionState> {
-  void _previousState;
-  void formData;
-  const cookieStore = await cookies();
-  const email = cookieStore.get(PENDING_EMAIL_COOKIE)?.value;
-  if (!email) return { error: "Your code request has expired. Start again." };
-
-  const { error } = await sendEmailOtp(email);
-  if (error) return { error: authErrorMessage(error) };
-
-  setPendingEmail(cookieStore, email);
-  return { message: "A new code was sent." };
+function validateCredentials(email: string, password: string): string | null {
+  if (!EMAIL_PATTERN.test(email)) return "Enter a valid email address.";
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    return `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`;
+  }
+  return null;
 }
 
-export async function verifyOtp(_previousState: AuthActionState, formData: FormData): Promise<AuthActionState> {
-  const cookieStore = await cookies();
-  const email = cookieStore.get(PENDING_EMAIL_COOKIE)?.value;
-  if (!email) return { error: "Your code request has expired. Start again." };
+function authErrorMessage(
+  error: { code?: string; message?: string; status?: number },
+  operation: "signin" | "signup",
+): string {
+  const message = `${error.code ?? ""} ${error.message ?? ""}`.toLowerCase();
+  if (error.status === 429 || /rate|too many|retry|limit/.test(message)) {
+    return "Please wait a moment and try again.";
+  }
+  if (operation === "signin" && /email[_ ]not[_ ]confirmed/.test(message)) {
+    return "Please confirm your email before signing in.";
+  }
+  if (operation === "signin" && /invalid login credentials|invalid_credentials/.test(message)) {
+    return "Email or password is incorrect.";
+  }
+  if (/invalid.*email|email.*invalid/.test(message)) {
+    return "Enter a valid email address.";
+  }
+  if (operation === "signup" && /already registered|user already exists/.test(message)) {
+    return "An account with this email already exists. Try signing in.";
+  }
+  if (operation === "signup" && /password/.test(message)) {
+    return "That password does not meet the account requirements.";
+  }
+  return operation === "signin"
+    ? "We couldn't sign you in right now. Please try again."
+    : "We couldn't create your account right now. Please try again.";
+}
 
-  const token = getFormText(formData, "token")?.trim() ?? "";
-  if (!/^\d{6}$/.test(token)) return { error: "Enter the six-digit code from your email." };
+async function getEmailRedirectTo(next: string): Promise<string> {
+  const headerStore = await headers();
+  const origin = headerStore.get("origin");
+  const host = headerStore.get("x-forwarded-host") ?? headerStore.get("host");
+  const protocol = headerStore.get("x-forwarded-proto") ?? "http";
+  const baseUrl = origin ?? (host ? `${protocol}://${host}` : null);
+
+  if (!baseUrl) throw new Error("Unable to determine the email confirmation URL.");
+
+  const callbackUrl = new URL("/auth/callback", baseUrl);
+  callbackUrl.searchParams.set("next", next);
+  return callbackUrl.toString();
+}
+
+export async function signUpWithPassword(
+  _previousState: AuthActionState,
+  formData: FormData,
+): Promise<AuthActionState> {
+  const { email, password } = getCredentials(formData);
+  const validationError = validateCredentials(email, password);
+  if (validationError) return { error: validationError };
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.verifyOtp({ email, token, type: "email" });
-  if (error) return { error: "That code was not accepted. Try again or request a new code." };
+  const { error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      emailRedirectTo: await getEmailRedirectTo(getSafeNextFromForm(formData)),
+    },
+  });
+  if (error) return { error: authErrorMessage(error, "signup") };
 
-  clearPendingEmail(cookieStore);
+  return { message: "Check your email to confirm your account." };
+}
+
+export async function signInWithPassword(
+  _previousState: AuthActionState,
+  formData: FormData,
+): Promise<AuthActionState> {
+  const { email, password } = getCredentials(formData);
+  const validationError = validateCredentials(email, password);
+  if (validationError) return { error: validationError };
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) return { error: authErrorMessage(error, "signin") };
+
   revalidatePath("/", "layout");
-  redirect(getSafeNextPath(getFormText(formData, "next")));
+  redirect(getSafeNextFromForm(formData));
 }
 
 export async function logout(): Promise<void> {
@@ -123,7 +127,6 @@ export async function logout(): Promise<void> {
   const { error } = await supabase.auth.signOut();
   if (error) throw new Error("Failed to sign out.");
 
-  clearPendingEmail(await cookies());
   revalidatePath("/", "layout");
   redirect("/");
 }
