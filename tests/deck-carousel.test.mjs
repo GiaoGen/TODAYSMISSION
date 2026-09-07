@@ -206,6 +206,7 @@ function carouselHarness({ count = 6, activeIndex = 0, position = activeIndex, p
   let capture = null;
   let captures = 0;
   let finished = 0;
+  let styleWrites = 0;
   let now = 100;
   const handle = { current: null };
   const stage = {
@@ -270,7 +271,17 @@ function carouselHarness({ count = 6, activeIndex = 0, position = activeIndex, p
     nodes(tree, node => node.type === "section")[0].props.ref.current = rootElement;
     nodes(tree, node => node.props?.className === "stage")[0].props.ref.current = stage;
     nodes(tree, node => node.props?.className === "card").forEach((node, index) => {
-      const element = cardElements[index] ??= { style: {}, attributes: {}, setAttribute(name, value) { this.attributes[name] = value; } };
+      const element = cardElements[index] ??= {
+        style: new Proxy({}, {
+          set(target, property, value) {
+            styleWrites += 1;
+            target[property] = value;
+            return true;
+          },
+        }),
+        attributes: {},
+        setAttribute(name, value) { this.attributes[name] = value; },
+      };
       node.props.ref(element);
     });
     layoutEffects.splice(0).forEach(effect => effect());
@@ -300,6 +311,7 @@ function carouselHarness({ count = 6, activeIndex = 0, position = activeIndex, p
       for (const [id, callback] of [...timers]) { timers.delete(id); callback(); }
     },
     cleanup() { cleanups.forEach(cleanup => cleanup()); },
+    styleWrites: () => styleWrites,
     get captures() { return captures; }, get capture() { return capture; }, get finished() { return finished; },
   };
 }
@@ -327,6 +339,7 @@ for (const placement of ["top", "bottom"]) {
     assert.equal(harness.capture, 1);
     assert.equal(harness.selection().activeIndex, 0);
     assert.ok(harness.position() > 0 && harness.position() < 1, "continuous movement before release");
+    harness.frame();
     const translatedX = Number(harness.cardElements[0].style.transform.match(/translate3d\(([^p]+)px/)[1]);
     assert.ok(Math.abs(translatedX + 52) < 1e-9, "80px finger drag moves artwork 52px");
     stage.onPointerUp(harness.pointer(120));
@@ -542,14 +555,31 @@ test("a drag can cross multiple cards before release, and an in-place React comm
   const pixels = getDeckMetrics(viewport).gap * 2.25 / DECK_DRAG_SENSITIVITY;
   stage.onPointerDown(harness.pointer(800));
   stage.onPointerMove(harness.pointer(800 - pixels, 0, 500));
-  assert.equal(harness.selection().activeIndex, 2);
+  assert.equal(harness.selection().activeIndex, 0, "dragging does not re-render React for each active card");
   assert.ok(Math.abs(harness.position() - 2.25) < 1e-9);
+  harness.frame();
   const before = harness.cardElements[2].style.transform;
   harness.render();
   assert.equal(harness.cardElements[2].style.transform, before);
   stage.onPointerUp(harness.pointer(800 - pixels, 0, 600));
   harness.settle();
   assert.equal(harness.position(), 2);
+  harness.cleanup();
+});
+
+test("pointermove batches DOM paint into one RAF and mobile paint keeps a small card window", () => {
+  const harness = carouselHarness({ count: 24 });
+  const stage = harness.stageProps();
+  const before = harness.styleWrites();
+  stage.onPointerDown(harness.pointer(800));
+  stage.onPointerMove(harness.pointer(780, 0, 116));
+  stage.onPointerMove(harness.pointer(740, 0, 132));
+  stage.onPointerMove(harness.pointer(700, 0, 148));
+  assert.equal(harness.styleWrites(), before, "pointermove only updates refs before the scheduled frame");
+  harness.frame();
+  assert.ok(harness.styleWrites() - before < 60, "mobile paint should not write every card in a frame");
+  stage.onPointerUp(harness.pointer(700, 0, 164));
+  harness.settle();
   harness.cleanup();
 });
 

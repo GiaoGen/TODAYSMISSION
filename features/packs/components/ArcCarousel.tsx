@@ -95,6 +95,9 @@ export function TransformArcCarousel({
   const dragRef = useRef<DragState | null>(null);
   const navigationLockRef = useRef(interactionDisabled);
   const frameRef = useRef<number | null>(null);
+  const paintFrameRef = useRef<number | null>(null);
+  const paintedIndicesRef = useRef<Set<number>>(new Set());
+  const domActiveIndexRef = useRef<number | null>(null);
   const movingRef = useRef(false);
   const suppressClickUntilRef = useRef(0);
   const visiblePacks = packs.slice(0, count);
@@ -106,10 +109,52 @@ export function TransformArcCarousel({
     if (stageRef.current) stageRef.current.dataset.moving = "false";
   }, []);
 
+  const updateActiveCardDom = useCallback((index: number, active: boolean) => {
+    const card = cardRefs.current[index];
+    if (!card) return;
+    if (active) card.setAttribute("aria-current", "true");
+    else if (typeof card.removeAttribute === "function") card.removeAttribute("aria-current");
+    if (typeof card.querySelectorAll === "function") {
+      card.querySelectorAll<HTMLElement>("[data-active]").forEach((element) => {
+        element.setAttribute("data-active", String(active));
+      });
+    }
+  }, []);
+
+  const getPaintIndices = useCallback((currentCount: number, activeIndex: number) => {
+    if (!coarsePointer || currentCount <= 9) {
+      return new Set(Array.from({ length: currentCount }, (_, index) => index));
+    }
+
+    const indices = new Set<number>();
+    for (let offset = -4; offset <= 4; offset += 1) {
+      indices.add(((activeIndex + offset) % currentCount + currentCount) % currentCount);
+    }
+    return indices;
+  }, [coarsePointer]);
+
   const paint = useCallback(() => {
     const current = selectionRef.current;
-    cardRefs.current.forEach((card, index) => {
+    const activeIndex = getActiveIndex(positionRef.current, current.count);
+    const paintIndices = getPaintIndices(current.count, activeIndex);
+    const indicesToUpdate = new Set([...paintedIndicesRef.current, ...paintIndices]);
+
+    if (domActiveIndexRef.current !== activeIndex) {
+      if (domActiveIndexRef.current !== null) updateActiveCardDom(domActiveIndexRef.current, false);
+      updateActiveCardDom(activeIndex, true);
+      domActiveIndexRef.current = activeIndex;
+    }
+
+    indicesToUpdate.forEach((index) => {
+      const card = cardRefs.current[index];
       if (!card || index >= current.count) return;
+      if (!paintIndices.has(index)) {
+        card.style.opacity = "0";
+        card.style.pointerEvents = "none";
+        card.setAttribute("aria-hidden", "true");
+        card.tabIndex = -1;
+        return;
+      }
       const pose = getContinuousDeckPose(getRelativeSlot(index, positionRef.current, current.count), metrics);
       card.style.transform = `translate3d(${pose.x}px, ${pose.y}px, 0) rotate(${pose.rotation}deg) scale(${pose.scale})`;
       card.style.opacity = String(pose.opacity);
@@ -118,28 +163,53 @@ export function TransformArcCarousel({
       card.setAttribute("aria-hidden", String(!pose.visible));
       card.tabIndex = pose.visible ? 0 : -1;
     });
-  }, [metrics]);
+    paintedIndicesRef.current = paintIndices;
+  }, [getPaintIndices, metrics, updateActiveCardDom]);
 
-  const moveTo = useCallback((position: number) => {
-    positionRef.current = position;
-    const current = selectionRef.current;
-    const activeIndex = getActiveIndex(position, current.count);
-    // Only a centered-card change updates React. Frames write transforms directly.
-    if (activeIndex !== current.activeIndex) {
-      const next = { ...current, activeIndex, position };
-      selectionRef.current = next;
-      setSelection(next);
-    }
+  const flushPaint = useCallback(() => {
+    paintFrameRef.current = null;
     paint();
   }, [paint]);
 
+  const schedulePaint = useCallback(() => {
+    if (paintFrameRef.current !== null) return;
+    paintFrameRef.current = requestAnimationFrame(flushPaint);
+  }, [flushPaint]);
+
+  const cancelPaint = useCallback(() => {
+    if (paintFrameRef.current !== null) cancelAnimationFrame(paintFrameRef.current);
+    paintFrameRef.current = null;
+  }, []);
+
+  const updatePosition = useCallback((position: number, commitState: boolean) => {
+    positionRef.current = position;
+    const current = selectionRef.current;
+    const activeIndex = getActiveIndex(position, current.count);
+    const next = activeIndex === current.activeIndex && position === current.position
+      ? current
+      : { ...current, activeIndex, position };
+    selectionRef.current = next;
+    if (commitState) setSelection(next);
+  }, []);
+
+  const moveTo = useCallback((position: number, commitState = false) => {
+    updatePosition(position, commitState);
+    paint();
+  }, [paint, updatePosition]);
+
+  const queueMoveTo = useCallback((position: number) => {
+    updatePosition(position, false);
+    schedulePaint();
+  }, [schedulePaint, updatePosition]);
+
   const settle = useCallback((velocity = 0, requestedTarget?: number) => {
+    cancelPaint();
     finishMotion();
     const count = selectionRef.current.count;
     const speed = Math.max(-DECK_MAX_VELOCITY, Math.min(DECK_MAX_VELOCITY, velocity));
     const target = getSnapTarget(requestedTarget ?? positionRef.current + speed * DECK_INERTIA_SECONDS, count);
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || (Math.abs(target - positionRef.current) < 0.001 && Math.abs(speed) < 0.01)) {
-      moveTo(target);
+      moveTo(target, true);
       return;
     }
     movingRef.current = true;
@@ -153,12 +223,12 @@ export function TransformArcCarousel({
       currentVelocity = next.velocity;
       moveTo(next.position);
       if (Math.abs(target - next.position) < 0.001 && Math.abs(currentVelocity) < 0.01) {
-        moveTo(target);
+        moveTo(target, true);
         finishMotion();
       } else frameRef.current = requestAnimationFrame(tick);
     };
     frameRef.current = requestAnimationFrame(tick);
-  }, [finishMotion, moveTo]);
+  }, [cancelPaint, finishMotion, moveTo]);
 
   const cancelDrag = useCallback(() => {
     const drag = dragRef.current;
@@ -173,14 +243,20 @@ export function TransformArcCarousel({
       navigationLockRef.current = true;
       cancelDrag();
       // Freeze only our RAF, never route/pair animations or the other wheel.
+      cancelPaint();
       finishMotion();
       const current = selectionRef.current;
       const pack = current.count > 0 ? packs[current.activeIndex] : null;
-      return pack ? { ...current, packId: pack.id, position: positionRef.current } : null;
+      return pack ? {
+        activeIndex: getActiveIndex(positionRef.current, current.count),
+        count: current.count,
+        packId: pack.id,
+        position: positionRef.current,
+      } : null;
     },
     resume() { navigationLockRef.current = false; settle(); },
     getElement: () => rootRef.current,
-  }), [cancelDrag, finishMotion, packs, settle]);
+  }), [cancelDrag, cancelPaint, finishMotion, packs, settle]);
 
   // React may commit a new active fan while the spring keeps moving. Reapply
   // its latest pose before paint, including fractional route-return snapshots.
@@ -190,8 +266,9 @@ export function TransformArcCarousel({
     const interrupted = () => {
       if (dragRef.current) suppressClickUntilRef.current = performance.now() + 400;
       cancelDrag();
+      cancelPaint();
       finishMotion();
-      moveTo(getSnapTarget(positionRef.current, selectionRef.current.count));
+      moveTo(getSnapTarget(positionRef.current, selectionRef.current.count), true);
     };
     window.addEventListener("blur", interrupted);
     window.addEventListener("resize", interrupted);
@@ -202,9 +279,10 @@ export function TransformArcCarousel({
       window.removeEventListener("resize", interrupted);
       document.removeEventListener("visibilitychange", visibility);
       cancelDrag();
+      cancelPaint();
       finishMotion();
     };
-  }, [cancelDrag, finishMotion, moveTo]);
+  }, [cancelDrag, cancelPaint, finishMotion, moveTo]);
 
   const selectIndex = useCallback((index: number) => {
     if (navigationLockRef.current || interactionDisabled) return;
@@ -243,6 +321,7 @@ export function TransformArcCarousel({
     if (!event.isPrimary || event.button !== 0 || navigationLockRef.current || interactionDisabled || dragRef.current) return;
     suppressClickUntilRef.current = 0;
     if (count <= 1) return;
+    cancelPaint();
     finishMotion();
     dragRef.current = {
       pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, captured: false,
@@ -268,7 +347,7 @@ export function TransformArcCarousel({
     drag.velocity = Math.max(-DECK_MAX_VELOCITY, Math.min(DECK_MAX_VELOCITY, velocity * 0.7 + drag.velocity * 0.3));
     drag.lastX = event.clientX;
     drag.lastTime = event.timeStamp;
-    moveTo(resistDeckPosition(drag.startPosition - deltaX * DECK_DRAG_SENSITIVITY / metrics.gap, count));
+    queueMoveTo(resistDeckPosition(drag.startPosition - deltaX * DECK_DRAG_SENSITIVITY / metrics.gap, count));
   };
 
   const handlePointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
