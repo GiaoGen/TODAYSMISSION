@@ -30,7 +30,7 @@ export type PackDetailRow = PackContentRow & {
   missions: readonly MissionContentRow[];
 };
 
-const PACK_DESIGN_KEYS = ["field-edition"] as const satisfies readonly PackDesignKey[];
+const PACK_DESIGN_KEYS = ["field-edition", "doing-things-alone"] as const satisfies readonly PackDesignKey[];
 const PACK_THEME_KEYS = ["go-alone", "talk-first", "get-rejected", "be-seen"] as const satisfies readonly PackThemeKey[];
 const MISSION_THEME_KEYS = ["coral", "blue", "yellow", "ink", "paper"] as const satisfies readonly MissionThemeKey[];
 const MISSION_ARTWORK_KEYS = ["circle", "square", "triangle", "diamond", "ring"] as const satisfies readonly MissionArtworkKey[];

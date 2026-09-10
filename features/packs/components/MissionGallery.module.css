@@ -25,6 +25,79 @@
 
 .root[data-single="true"] { cursor: default; }
 
+/* One approved code-native background, scoped to Doing Things Alone only. */
+.root[data-pack-slug="go-alone"] {
+  --doing-ink: #0a0a0b;
+  --doing-blue: #063f91;
+  --doing-red: #b91e1b;
+  isolation: isolate;
+  background: #ded6c5;
+}
+.root[data-pack-slug="go-alone"]::before {
+  position: fixed;
+  z-index: -2;
+  inset: 15% 4% 7%;
+  background: #eee6d5;
+  clip-path: polygon(5% 7%, 94% 0, 100% 82%, 89% 100%, 0 94%);
+  content: "";
+  pointer-events: none;
+}
+.root[data-pack-slug="go-alone"]::after {
+  position: fixed;
+  z-index: -1;
+  right: -4vw;
+  bottom: -3vh;
+  width: min(42vw, 680px);
+  height: min(19vh, 210px);
+  background: rgb(6 63 145 / 11%);
+  clip-path: polygon(0 72%, 78% 0, 100% 8%, 100% 100%, 9% 100%);
+  content: "";
+  pointer-events: none;
+}
+.doingThingsAloneBackground {
+  position: fixed;
+  z-index: -1;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.doingThingsAloneBackground i {
+  position: absolute;
+  display: block;
+}
+.doingThingsAloneBackground i:nth-child(1) {
+  top: 17%;
+  left: -10px;
+  width: 7px;
+  height: 15vh;
+  background: rgb(185 30 27 / 15%);
+  box-shadow:
+    18px 0 0 rgb(185 30 27 / 8%),
+    58px 5vh 0 rgb(185 30 27 / 12%),
+    76px 5vh 0 rgb(185 30 27 / 7%),
+    116px 10vh 0 rgb(185 30 27 / 10%),
+    134px 10vh 0 rgb(185 30 27 / 6%);
+}
+.doingThingsAloneBackground i:nth-child(2) {
+  top: -3vh;
+  right: 7vw;
+  width: min(13vw, 190px);
+  height: 29vh;
+  border-right: 1px solid rgb(10 10 11 / 10%);
+  border-bottom: 1px solid rgb(10 10 11 / 8%);
+  clip-path: polygon(58% 0, 100% 0, 65% 100%, 0 100%);
+  transform: skewX(-10deg);
+}
+.doingThingsAloneBackground i:nth-child(3) {
+  right: -2vw;
+  bottom: 11vh;
+  width: min(31vw, 500px);
+  height: min(9vh, 96px);
+  border-top: 1px solid rgb(6 63 145 / 25%);
+  border-left: 1px solid rgb(6 63 145 / 17%);
+  transform: skewX(-38deg);
+}
+
 /* One real Mission carries the date transition; no duplicate hero crossfade. */
 .root[data-kind="day"] {
   --stream-expand-delay: 520ms;
@@ -320,6 +393,17 @@
     --detail-gap: clamp(18px, 5.5vw, 24px);
   }
   .cardFaces { border-radius: calc(23 * var(--stream-mobile-unit, 1px)); }
+  .doingThingsAloneBackground i:nth-child(1) {
+    top: 20%;
+    left: -4px;
+    height: 11vh;
+    box-shadow:
+      14px 0 0 rgb(185 30 27 / 9%),
+      38px 4vh 0 rgb(185 30 27 / 12%),
+      52px 4vh 0 rgb(185 30 27 / 7%);
+  }
+  .doingThingsAloneBackground i:nth-child(2) { right: 5vw; width: 28vw; height: 20vh; }
+  .doingThingsAloneBackground i:nth-child(3) { right: -12vw; bottom: 8vh; width: 58vw; }
 }
 
 @media (min-width: 600px) and (max-width: 899px) and (orientation: portrait),

@@ -1,4 +1,5 @@
 import type { ComponentType, CSSProperties } from "react";
+import Image from "next/image";
 
 import type {
   PackDesignKey,
@@ -58,10 +59,26 @@ function FieldEditionPackDesign({ pack, active = true }: PackDesignProps) {
   );
 }
 
+function DoingThingsAlonePackDesign({ pack, active = true }: PackDesignProps) {
+  return (
+    <span className={`${styles.cover} ${styles.approvedCover}`} data-active={active}>
+      <Image
+        alt={`${pack.title} Pack cover`}
+        className={styles.approvedCoverImage}
+        fill
+        loading="eager"
+        sizes="(max-width: 640px) 220px, 300px"
+        src="/packs/doing-things-alone/cover.webp"
+      />
+    </span>
+  );
+}
+
 type PackDesignComponent = ComponentType<PackDesignProps>;
 
 export const PACK_DESIGN_REGISTRY = {
   "field-edition": FieldEditionPackDesign,
+  "doing-things-alone": DoingThingsAlonePackDesign,
 } satisfies Record<PackDesignKey, PackDesignComponent>;
 
 export function PackDesign({ pack, active = true }: PackDesignProps) {

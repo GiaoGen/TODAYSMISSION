@@ -121,7 +121,7 @@ function MissionArtwork({
     <div className={styles.cardFaces}>
       <MissionStreamCard mission={mission} number={slot + 1} />
       <div aria-hidden={!completed} className={styles.completionFace}>
-        <MissionCompletionCard mission={mission} number={slot + 1} />
+        <MissionCompletionCard eager={completed && primaryCopy} mission={mission} number={slot + 1} />
       </div>
     </div>
   );
@@ -822,6 +822,7 @@ export function MissionGallery({
         data-moving="false"
         data-phase="collapsed"
         data-kind={completedDate ? "day" : "pack"}
+        data-pack-slug={isPackSummary(hero) ? hero.slug : undefined}
         data-interaction-locked={interactionLocked}
         data-native-scroll={nativeScrolling}
         data-experience-reveal="closed"
@@ -830,6 +831,14 @@ export function MissionGallery({
         ref={rootRef}
         tabIndex={0}
       >
+        {isPackSummary(hero) && hero.slug === "go-alone" ? (
+          <div className={styles.doingThingsAloneBackground} aria-hidden="true">
+            <i />
+            <i />
+            <i />
+          </div>
+        ) : null}
+
         {!completedDate && isPackSummary(hero) && (
           <ViewTransition default="none" name={getPackTransitionName(id, source)} share="pack-card-morph">
             <div aria-hidden="true" className={styles.hero} style={heroStyle}>

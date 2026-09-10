@@ -1,4 +1,4 @@
-export type PackDesignKey = "field-edition";
+export type PackDesignKey = "field-edition" | "doing-things-alone";
 
 export type PackThemeKey =
   | "go-alone"

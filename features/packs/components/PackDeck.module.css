@@ -90,6 +90,13 @@
   background: linear-gradient(90deg, transparent 0 76%, rgba(255, 255, 255, .07) 76% 100%);
   opacity: .45;
 }
+.approvedCover::before,
+.approvedCover::after {
+  display: none;
+}
+.approvedCoverImage {
+  object-fit: cover;
+}
 .coverInner {
   position: absolute;
   inset: 0;

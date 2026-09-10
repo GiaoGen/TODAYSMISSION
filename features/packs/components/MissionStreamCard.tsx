@@ -1,4 +1,5 @@
 import { memo, type CSSProperties } from "react";
+import Image from "next/image";
 import type {
   MissionArtworkKey,
   MissionSummary,
@@ -33,11 +34,64 @@ const MISSION_ARTWORK_REGISTRY = {
   ring: "◐",
 } satisfies Record<MissionArtworkKey, string>;
 
+export type DoingThingsAloneMissionVariant = "aperture" | "field" | "pressure" | "split" | "final";
+
+type DoingThingsAloneMissionDesign = {
+  artworkSrc: string;
+  variant: DoingThingsAloneMissionVariant;
+};
+
+export const DOING_THINGS_ALONE_MISSION_DESIGNS = {
+  "stay-awhile": { variant: "field", artworkSrc: "/packs/doing-things-alone/missions/stay-awhile.webp" },
+  "eat-outside-alone": { variant: "split", artworkSrc: "/packs/doing-things-alone/missions/eat-outside-alone.webp" },
+  "lunch-for-one": { variant: "pressure", artworkSrc: "/packs/doing-things-alone/missions/lunch-for-one.webp" },
+  "browse-alone": { variant: "aperture", artworkSrc: "/packs/doing-things-alone/missions/browse-alone.webp" },
+  "go-somewhere-new": { variant: "aperture", artworkSrc: "/packs/doing-things-alone/missions/go-somewhere-new.webp" },
+  "sit-in-the-crowd": { variant: "pressure", artworkSrc: "/packs/doing-things-alone/missions/sit-in-the-crowd.webp" },
+  "coffee-for-one": { variant: "field", artworkSrc: "/packs/doing-things-alone/missions/coffee-for-one.webp" },
+  "table-for-one": { variant: "split", artworkSrc: "/packs/doing-things-alone/missions/table-for-one.webp" },
+  "movie-for-one": { variant: "final", artworkSrc: "/packs/doing-things-alone/missions/movie-for-one.webp" },
+  "see-it-for-yourself": { variant: "pressure", artworkSrc: "/packs/doing-things-alone/missions/see-it-for-yourself.webp" },
+  "play-alone": { variant: "split", artworkSrc: "/packs/doing-things-alone/missions/play-alone.webp" },
+  "go-to-something": { variant: "pressure", artworkSrc: "/packs/doing-things-alone/missions/go-to-something.webp" },
+  "show-up-alone": { variant: "field", artworkSrc: "/packs/doing-things-alone/missions/show-up-alone.webp" },
+  "be-the-only-one": { variant: "aperture", artworkSrc: "/packs/doing-things-alone/missions/be-the-only-one.webp" },
+  "one-hour-out": { variant: "aperture", artworkSrc: "/packs/doing-things-alone/missions/one-hour-out.webp" },
+  "spend-the-day-your-way": { variant: "split", artworkSrc: "/packs/doing-things-alone/missions/spend-the-day-your-way.webp" },
+} as const satisfies Record<string, DoingThingsAloneMissionDesign>;
+
+export function getDoingThingsAloneMissionDesign(slug: string): DoingThingsAloneMissionDesign | null {
+  return DOING_THINGS_ALONE_MISSION_DESIGNS[slug as keyof typeof DOING_THINGS_ALONE_MISSION_DESIGNS] ?? null;
+}
+
 // Artwork only: the gallery owns input, depth and route transitions.
 export const MissionStreamCard = memo(function MissionStreamCard({ mission, number }: {
   mission: MissionSummary;
   number: number;
 }) {
+  const approvedDesign = getDoingThingsAloneMissionDesign(mission.slug);
+  if (approvedDesign) {
+    return (
+      <article
+        className={`${styles.mission} ${styles.approvedMission}`}
+        data-mission-id={mission.id}
+        data-variant={approvedDesign.variant}
+      >
+        <div className={styles.approvedGeometry} aria-hidden="true">
+          <i className={styles.planeA} />
+          <i className={styles.planeB} />
+          <i className={styles.planeC} />
+          <i className={styles.cut} />
+        </div>
+        <div className={styles.approvedContent}>
+          <p className={styles.packName}>DOING THINGS ALONE</p>
+          <h2 className={styles.approvedTitle}>{mission.title}</h2>
+          <p className={styles.instruction}>{mission.note}</p>
+        </div>
+      </article>
+    );
+  }
+
   const theme = getMissionThemeAppearance(mission.themeKey);
   const label = String(number).padStart(2, "0");
   const style: CardStyle = { "--card-bg": theme.background, "--card-fg": theme.foreground };
@@ -61,10 +115,28 @@ export const MissionStreamCard = memo(function MissionStreamCard({ mission, numb
   );
 });
 
-export const MissionCompletionCard = memo(function MissionCompletionCard({ mission, number }: {
+export const MissionCompletionCard = memo(function MissionCompletionCard({ mission, number, eager = false }: {
   mission: MissionSummary;
   number: number;
+  eager?: boolean;
 }) {
+  const approvedDesign = getDoingThingsAloneMissionDesign(mission.slug);
+  if (approvedDesign) {
+    return (
+      <article aria-label={`${mission.title} completed`} className={`${styles.mission} ${styles.artworkMission}`}>
+        <Image
+          alt=""
+          aria-hidden="true"
+          className={styles.artworkImage}
+          fill
+          loading={eager ? "eager" : "lazy"}
+          sizes="(max-width: 599px) 320px, 440px"
+          src={approvedDesign.artworkSrc}
+        />
+      </article>
+    );
+  }
+
   const theme = getMissionThemeAppearance(mission.themeKey);
   const label = String(number).padStart(2, "0");
   const style: CardStyle = { "--card-bg": theme.background, "--card-fg": theme.foreground };
