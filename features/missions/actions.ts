@@ -61,7 +61,6 @@ export async function createMissionExperienceAudioUploadTarget(
     .from("missions")
     .select("pack_id")
     .eq("id", missionId)
-    .eq("is_published", true)
     .maybeSingle();
 
   if (missionError) return failedAudioUpload("We couldn't verify this mission. Please try again.");

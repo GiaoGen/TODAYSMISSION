@@ -59,6 +59,36 @@ test("every public Mission has one optimized static artwork and a deterministic 
   assert.doesNotMatch(component, /stop-waiting-hidden/);
 });
 
+test("STOP WAITING stays outside public content and uses the approved final card and artwork", () => {
+  const migration = read("supabase/migrations/20260913155105_hidden_stop_waiting.sql");
+  const privateGateMigration = read("supabase/migrations/20260913160450_move_stop_waiting_gate_private.sql");
+  const publicRepository = read("data/repositories/get-packs.ts");
+  const hiddenRepository = read("data/repositories/get-unlocked-final-mission.ts");
+  const packDetail = read("features/packs/components/MissionPackDetail.tsx");
+  const gallery = read("features/packs/components/MissionGallery.tsx");
+  const component = read("features/packs/components/MissionStreamCard.tsx");
+  const asset = path.join(root, "public", "packs", "doing-things-alone", "missions", "stop-waiting.webp");
+
+  assert.match(migration, /'stop-waiting'[\s\S]*?170,[\s\S]*?false/);
+  assert.match(migration, /is_stop_waiting_unlocked/);
+  assert.equal((migration.match(/and 16 = \(/g) ?? []).length, 2);
+  assert.match(migration, /to authenticated[\s\S]*?slug = 'stop-waiting'[\s\S]*?not is_published/);
+  assert.equal((migration.match(/public\.is_stop_waiting_unlocked\(mission\.pack_id\)/g) ?? []).length, 3);
+  assert.match(privateGateMigration, /create schema if not exists private/);
+  assert.match(privateGateMigration, /create or replace function private\.is_stop_waiting_unlocked/);
+  assert.match(privateGateMigration, /create or replace function public\.is_stop_waiting_unlocked[\s\S]*?security invoker/);
+  assert.match(publicRepository, /\.eq\("missions\.is_published", true\)/);
+  assert.doesNotMatch(publicRepository, /stop-waiting/);
+  assert.match(hiddenRepository, /\.eq\("slug", "stop-waiting"\)/);
+  assert.match(hiddenRepository, /\.eq\("is_published", false\)/);
+  assert.match(packDetail, /getUnlockedFinalMissionAction/);
+  assert.match(packDetail, /progressMissionCount=\{pack\.missionCount\}/);
+  assert.match(gallery, /progressTotal = progressMissionCount \?\? missionCount/);
+  assert.match(component, /"stop-waiting": \{ variant: "final", artworkSrc: "\/packs\/doing-things-alone\/missions\/stop-waiting\.webp" \}/);
+  assert.ok(existsSync(asset), "missing STOP WAITING artwork");
+  assert.ok(statSync(asset).size > 0, "empty STOP WAITING artwork");
+});
+
 test("approved cover, shared background, and existing completion motion stay connected", () => {
   const cover = path.join(root, "public", "packs", "doing-things-alone", "cover.webp");
   const registry = read("features/packs/components/PackDesignRegistry.tsx");

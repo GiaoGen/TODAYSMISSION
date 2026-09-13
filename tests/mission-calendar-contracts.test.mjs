@@ -93,8 +93,9 @@ test("Pack progress is derived from completion state and updates without persist
   const before = { one: "completed", two: "incomplete" };
   const after = { ...before, two: "completed" };
   assert.equal(getCompletedMissionCount(after), getCompletedMissionCount(before) + 1);
-  assert.match(packDetail, /getCompletedMissionCount\(effectiveMissionCompletionStatuses\)/);
+  assert.match(packDetail, /getCompletedMissionCount\(Object\.fromEntries\(pack\.missions\.map/);
   assert.match(packDetail, /completedMissionCount=\{packJoined \? completedMissionCount : undefined\}/);
+  assert.match(packDetail, /progressMissionCount=\{pack\.missionCount\}/);
   assert.match(packDetail, /gallerySettled && currentStatus !== "completed"/);
   assert.match(read("features/packs/components/MissionGallery.tsx"), /className=\{styles\.packProgress\}/);
   assert.doesNotMatch(packDetail, /pack_progress|progress_table|fetch\(/i);

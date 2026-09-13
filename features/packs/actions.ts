@@ -3,6 +3,8 @@
 import { isAuthSessionMissingError } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 
+import type { MissionSummary } from "@/data/contracts/pack-summary";
+import { getUnlockedFinalMission } from "@/data/repositories/get-unlocked-final-mission";
 import { createClient } from "@/lib/supabase/server";
 
 export type TakePackActionResult =
@@ -13,6 +15,10 @@ export type TakeMissionActionResult =
   | { ok: true; status: "committed" | "already_committed"; activeMissionId: string }
   | { ok: false; error: string };
 
+export type GetUnlockedFinalMissionActionResult =
+  | { ok: true; mission: MissionSummary | null }
+  | { ok: false; error: string };
+
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function failedTake(message: string): TakePackActionResult {
@@ -21,6 +27,28 @@ function failedTake(message: string): TakePackActionResult {
 
 function failedTakeMission(message: string): TakeMissionActionResult {
   return { ok: false, error: message };
+}
+
+function failedFinalMission(message: string): GetUnlockedFinalMissionActionResult {
+  return { ok: false, error: message };
+}
+
+export async function getUnlockedFinalMissionAction(
+  packId: string,
+): Promise<GetUnlockedFinalMissionActionResult> {
+  if (!UUID_PATTERN.test(packId)) return failedFinalMission("That Pack is unavailable.");
+
+  const supabase = await createClient();
+  const { data: userData, error: authError } = await supabase.auth.getUser();
+  if (authError || !userData.user || userData.user.is_anonymous) {
+    return failedFinalMission("Please log in to unlock the final Mission.");
+  }
+
+  try {
+    return { ok: true, mission: await getUnlockedFinalMission(packId) };
+  } catch {
+    return failedFinalMission("We couldn't load the final Mission right now. Please try again.");
+  }
 }
 
 export async function takePackAction(packId: string): Promise<TakePackActionResult> {

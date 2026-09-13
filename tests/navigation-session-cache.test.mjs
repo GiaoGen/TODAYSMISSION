@@ -23,6 +23,7 @@ import {
   hydrateSessionSnapshot,
   initializeSessionSnapshot,
   resetSessionSnapshotForTests,
+  setUnlockedFinalMission,
 } from "../features/navigation/model/session-snapshot.ts";
 
 test("Pack detail routes are generated once per published slug", () => {
@@ -134,6 +135,7 @@ test("session snapshot seeds server data and records Take Pack only after succes
     completedDates: ["2026-09-02"],
     completionCountsByPack: {},
     activeMissionByPack: {},
+    unlockedFinalMissionsByPack: {},
     registeredOn: null,
   });
 
@@ -152,6 +154,32 @@ test("successful Mission completion updates date and Pack count exactly once", (
   assert.deepEqual(getSessionSnapshot().completedMissionIds, ["mission-a"]);
   assert.deepEqual(getSessionSnapshot().completedDates, ["2026-09-02", "2026-09-03"]);
   assert.deepEqual(getSessionSnapshot().completionCountsByPack, { "pack-a": 1 });
+
+  addMissionCompletion({
+    userId: "user-a", missionId: "mission-final", packId: "pack-a", completedLocalDate: "2026-09-03",
+    countsTowardPackProgress: false,
+  });
+  assert.deepEqual(getSessionSnapshot().completedMissionIds, ["mission-a", "mission-final"]);
+  assert.deepEqual(getSessionSnapshot().completionCountsByPack, { "pack-a": 1 });
+});
+
+test("unlocked final Mission is retained for the same authenticated user", () => {
+  const mission = {
+    id: "mission-final",
+    slug: "stop-waiting",
+    title: "STOP WAITING",
+    note: "Stop waiting. Go do it.",
+    tag: "DOING THINGS ALONE",
+    code: "FINAL",
+    themeKey: "paper",
+    artworkKey: "circle",
+  };
+  setUnlockedFinalMission("pack-a", mission, "user-a");
+  hydrateSessionSnapshot({
+    currentUser: { id: "user-a", email: "a@example.com", createdAt: "2026-01-02T00:00:00.000Z" },
+    unlockedFinalMissionsByPack: {},
+  });
+  assert.deepEqual(getSessionSnapshot().unlockedFinalMissionsByPack, { "pack-a": mission });
 });
 
 test("changing Auth identity replaces the previous user's snapshot and logout clears it", () => {
@@ -169,6 +197,7 @@ test("changing Auth identity replaces the previous user's snapshot and logout cl
     completedDates: [],
     completionCountsByPack: {},
     activeMissionByPack: {},
+    unlockedFinalMissionsByPack: {},
     registeredOn: null,
   });
 });

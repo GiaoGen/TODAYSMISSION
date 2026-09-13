@@ -67,6 +67,7 @@ type MissionGalleryProps = {
   expandMissions?: boolean;
   interactionLocked?: boolean;
   completedMissionCount?: number;
+  progressMissionCount?: number;
   completionMotionRef?: RefObject<MissionCompletionMotionHandle | null>;
   missionCompletionStatuses?: Readonly<Record<string, MissionCompletionStatus>>;
   missionAction?: ReactNode;
@@ -156,6 +157,7 @@ export function MissionGallery({
   expandMissions = true,
   interactionLocked = false,
   completedMissionCount,
+  progressMissionCount,
   completionMotionRef,
   missionCompletionStatuses,
   missionAction,
@@ -178,6 +180,7 @@ export function MissionGallery({
   const scrollRef = useRef<HTMLDivElement>(null);
   const missionRefs = useRef<Array<HTMLLIElement | null>>([]);
   const missionCount = missions.length;
+  const progressTotal = progressMissionCount ?? missionCount;
   const looping = completedDate === undefined;
   const initialMissionIndex = initialMissionId
     ? Math.max(0, missions.findIndex((mission) => mission.id === initialMissionId))
@@ -218,10 +221,11 @@ export function MissionGallery({
   const requestExpansionRef = useRef<(() => void) | null>(null);
   useLayoutEffect(() => {
     missionIdsRef.current = missions.map((mission) => mission.id);
+    initialMissionIndexRef.current = initialMissionIndex;
     onActiveMissionChangeRef.current = onActiveMissionChange;
     onExpansionSettledRef.current = onExpansionSettled;
     onSelectNextReadyRef.current = onSelectNextReady;
-  }, [missions, onActiveMissionChange, onExpansionSettled, onSelectNextReady]);
+  }, [initialMissionIndex, missions, onActiveMissionChange, onExpansionSettled, onSelectNextReady]);
 
   useLayoutEffect(() => {
     expansionRequestedRef.current = expandMissions;
@@ -855,10 +859,10 @@ export function MissionGallery({
 
         {!completedDate && completedMissionCount !== undefined ? (
           <p
-            aria-label={`${completedMissionCount} of ${missionCount} missions completed`}
+            aria-label={`${completedMissionCount} of ${progressTotal} missions completed`}
             className={styles.packProgress}
           >
-            {completedMissionCount}/{missionCount}
+            {completedMissionCount}/{progressTotal}
           </p>
         ) : null}
 

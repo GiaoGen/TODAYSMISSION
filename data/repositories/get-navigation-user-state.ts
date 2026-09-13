@@ -28,6 +28,7 @@ export type NavigationUserState = Pick<
   | "completedDates"
   | "completionCountsByPack"
   | "activeMissionByPack"
+  | "unlockedFinalMissionsByPack"
   | "registeredOn"
 >;
 
@@ -44,6 +45,7 @@ export async function getNavigationUserState(
       completedDates: [],
       completionCountsByPack: {},
       activeMissionByPack: {},
+      unlockedFinalMissionsByPack: {},
       registeredOn,
     };
   }
@@ -80,6 +82,7 @@ export async function getNavigationUserState(
     completedDates: [...new Set(completions.map((completion) => completion.completed_local_date))].sort(),
     completionCountsByPack,
     activeMissionByPack: Object.fromEntries(Object.values(memberships).map((membership) => [membership.packId, membership.activeMissionId])),
+    unlockedFinalMissionsByPack: {},
     registeredOn,
   };
 }

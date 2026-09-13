@@ -21,8 +21,9 @@ const membershipRepository = read("data/repositories/get-pack-memberships.ts");
 const migration = read("supabase/migrations/20260904100746_persist_active_mission_commitment.sql");
 const indexMigration = read("supabase/migrations/20260904100913_add_active_mission_commitment_index.sql");
 
-test("Pack Detail keeps the original Pack Mission order and removes browsing boundaries", () => {
-  assert.match(packDetail, /missions=\{pack\.missions\}/);
+test("Pack Detail keeps the original public order and only appends the unlocked final Mission", () => {
+  assert.match(packDetail, /\? \[\.\.\.pack\.missions, unlockedFinalMission\][\s\S]*?: pack\.missions/);
+  assert.match(packDetail, /missions=\{missions\}/);
   assert.doesNotMatch(packDetail, /getPackMissionView|getMissionBrowsingPermission|manualBrowsing|mission-selection/);
   assert.doesNotMatch(gallery, /manualBrowsing|selectionMissionIds|missionNumbers|getNextIncomplete/);
   assert.doesNotMatch(nativeGallery, /manualBrowsing|selectionMissionIds|getNextIncomplete/);

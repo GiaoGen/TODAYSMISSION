@@ -58,6 +58,7 @@ export const DOING_THINGS_ALONE_MISSION_DESIGNS = {
   "be-the-only-one": { variant: "aperture", artworkSrc: "/packs/doing-things-alone/missions/be-the-only-one.webp" },
   "one-hour-out": { variant: "aperture", artworkSrc: "/packs/doing-things-alone/missions/one-hour-out.webp" },
   "spend-the-day-your-way": { variant: "split", artworkSrc: "/packs/doing-things-alone/missions/spend-the-day-your-way.webp" },
+  "stop-waiting": { variant: "final", artworkSrc: "/packs/doing-things-alone/missions/stop-waiting.webp" },
 } as const satisfies Record<string, DoingThingsAloneMissionDesign>;
 
 export function getDoingThingsAloneMissionDesign(slug: string): DoingThingsAloneMissionDesign | null {
