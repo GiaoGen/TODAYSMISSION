@@ -1,0 +1,15 @@
+{
+  "system": "TODAYSMISSION Character System",
+  "version": "1.0",
+  "locked_date": "2026-09-14",
+  "style_master": "01-dinosaur",
+  "characters": [
+    {"id":"01","slug":"dinosaur","name":"Dinosaur","status":"LOCKED","canonical":"characters/01-dinosaur/canonical-model.png","stress_test":"characters/01-dinosaur/acting-stress-test.png","lock":"characters/01-dinosaur/character-lock.md","prompt_fragment":"characters/01-dinosaur/prompt-fragment.md"},
+    {"id":"02","slug":"sheep","name":"Sheep","status":"LOCKED","canonical":"characters/02-sheep/canonical-model.png","stress_test":"characters/02-sheep/acting-stress-test.png","lock":"characters/02-sheep/character-lock.md","prompt_fragment":"characters/02-sheep/prompt-fragment.md"},
+    {"id":"03","slug":"owl","name":"Owl","status":"LOCKED","canonical":"characters/03-owl/canonical-model.png","stress_test":"characters/03-owl/acting-stress-test.png","lock":"characters/03-owl/character-lock.md","prompt_fragment":"characters/03-owl/prompt-fragment.md"},
+    {"id":"04","slug":"red-panda","name":"Red Panda","status":"LOCKED","canonical":"characters/04-red-panda/canonical-model.png","stress_test":"characters/04-red-panda/acting-stress-test.png","lock":"characters/04-red-panda/character-lock.md","prompt_fragment":"characters/04-red-panda/prompt-fragment.md"},
+    {"id":"05","slug":"otter","name":"Otter","status":"LOCKED","canonical":"characters/05-otter/canonical-model.png","stress_test":"characters/05-otter/acting-stress-test.png","lock":"characters/05-otter/character-lock.md","prompt_fragment":"characters/05-otter/prompt-fragment.md"},
+    {"id":"06","slug":"rabbit","name":"Rabbit","status":"LOCKED","canonical":"characters/06-rabbit/canonical-model.png","stress_test":"characters/06-rabbit/acting-stress-test.png","lock":"characters/06-rabbit/character-lock.md","prompt_fragment":"characters/06-rabbit/prompt-fragment.md"},
+    {"id":"07","slug":"penguin","name":"Penguin","status":"LOCKED","canonical":"characters/07-penguin/canonical-model.png","stress_test":"characters/07-penguin/acting-stress-test.png","lock":"characters/07-penguin/character-lock.md","prompt_fragment":"characters/07-penguin/prompt-fragment.md"}
+  ]
+}

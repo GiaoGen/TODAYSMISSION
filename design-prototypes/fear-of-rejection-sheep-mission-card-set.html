@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fear of Rejection — Mission Card Set</title>
+  <style>
+    :root {
+      color-scheme: light;
+
+      /* Provisional shared type tokens. One family and one value per role. */
+      --type-family: Arial, sans-serif;
+      --type-label-size: 11px;
+      --type-label-weight: 700;
+      --type-label-leading: 1.1;
+      --type-title-size: 46px;
+      --type-title-weight: 800;
+      --type-title-leading: .91;
+      --type-body-size: 15px;
+      --type-body-weight: 400;
+      --type-body-leading: 1.42;
+
+      /* One Pack palette. */
+      --page: #ebe4dc;
+      --page-ink: #342b30;
+      --card-base-top: #df8a75;
+      --card-base-bottom: #c86d61;
+      --card-stage: #4a3341;
+      --card-ink: #fff4df;
+      --card-accent: #f1cf76;
+      --card-border: rgb(255 244 223 / 26%);
+      --card-shadow: rgb(71 42 48 / 25%);
+    }
+
+    * { box-sizing: border-box; }
+
+    html { min-width: 320px; }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      padding: clamp(28px, 5vw, 72px) 24px;
+      color: var(--page-ink);
+      background:
+        radial-gradient(circle at 50% 0%, rgb(255 255 255 / 58%), transparent 42%),
+        var(--page);
+      font-family: var(--type-family);
+    }
+
+    .page-header {
+      width: min(100%, 1370px);
+      margin: 0 auto clamp(24px, 3vw, 42px);
+    }
+
+    .page-header p,
+    .page-header h1 { margin: 0; }
+
+    .page-header p {
+      margin-bottom: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+
+    .page-header h1 {
+      font-size: clamp(26px, 4vw, 48px);
+      font-weight: 800;
+      letter-spacing: -.05em;
+      line-height: .95;
+    }
+
+    .card-set {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 420px));
+      gap: clamp(20px, 2.6vw, 38px);
+      justify-content: center;
+      width: min(100%, 1370px);
+      margin: 0 auto;
+    }
+
+    .card {
+      --stage-x: 82%;
+      --stage-y: 77%;
+      --stage-width: 78%;
+      --stage-height: 58%;
+      position: relative;
+      isolation: isolate;
+      width: 100%;
+      aspect-ratio: 2 / 3;
+      overflow: hidden;
+      border: 1px solid var(--card-border);
+      border-radius: 28px;
+      color: var(--card-ink);
+      background:
+        radial-gradient(
+          ellipse var(--stage-width) var(--stage-height) at var(--stage-x) var(--stage-y),
+          rgb(74 51 65 / 90%) 0%,
+          rgb(74 51 65 / 68%) 38%,
+          rgb(74 51 65 / 20%) 67%,
+          transparent 82%
+        ),
+        radial-gradient(
+          ellipse 88% 54% at 8% 0%,
+          rgb(255 229 202 / 22%) 0%,
+          transparent 70%
+        ),
+        linear-gradient(158deg, var(--card-base-top), var(--card-base-bottom));
+      box-shadow:
+        0 28px 58px var(--card-shadow),
+        0 5px 14px rgb(71 42 48 / 13%);
+      container-type: inline-size;
+    }
+
+    .card--left-stage {
+      --stage-x: 25%;
+      --stage-y: 84%;
+      --stage-width: 82%;
+      --stage-height: 54%;
+    }
+
+    .card--wide-stage {
+      --stage-x: 80%;
+      --stage-y: 82%;
+      --stage-width: 98%;
+      --stage-height: 61%;
+    }
+
+    .card::before {
+      position: absolute;
+      z-index: 4;
+      inset: 9px;
+      border: 1px solid rgb(255 244 223 / 19%);
+      border-radius: 20px;
+      content: "";
+      pointer-events: none;
+    }
+
+    .card::after {
+      position: absolute;
+      z-index: 1;
+      inset: 0;
+      background:
+        repeating-linear-gradient(
+          97deg,
+          rgb(255 255 255 / 0%) 0,
+          rgb(255 255 255 / 0%) 3px,
+          rgb(255 243 222 / 3.5%) 4px
+        ),
+        repeating-linear-gradient(
+          7deg,
+          rgb(69 38 46 / 0%) 0,
+          rgb(69 38 46 / 0%) 5px,
+          rgb(69 38 46 / 2.5%) 6px
+        );
+      mix-blend-mode: soft-light;
+      content: "";
+      pointer-events: none;
+    }
+
+    .character {
+      position: absolute;
+      z-index: 2;
+      inset: 0;
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    .copy {
+      position: relative;
+      z-index: 3;
+      width: 63%;
+      padding: 10.5% 0 0 10%;
+    }
+
+    .copy--top-wide {
+      width: 83%;
+    }
+
+    .copy--pair {
+      width: 61%;
+    }
+
+    .meta,
+    .title,
+    .instruction { margin: 0; }
+
+    .meta {
+      display: flex;
+      gap: 9px;
+      align-items: center;
+      color: var(--card-accent);
+      font-size: var(--type-label-size);
+      font-weight: var(--type-label-weight);
+      letter-spacing: .14em;
+      line-height: var(--type-label-leading);
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .meta-number::after {
+      display: inline-block;
+      width: 19px;
+      height: 1px;
+      margin-left: 9px;
+      vertical-align: middle;
+      background: currentColor;
+      content: "";
+      opacity: .72;
+    }
+
+    .title {
+      margin-top: 25px;
+      color: var(--card-ink);
+      font-size: var(--type-title-size);
+      font-weight: var(--type-title-weight);
+      letter-spacing: -.055em;
+      line-height: var(--type-title-leading);
+      text-wrap: balance;
+    }
+
+    .instruction {
+      margin-top: 23px;
+      color: rgb(255 244 223 / 86%);
+      font-size: var(--type-body-size);
+      font-weight: var(--type-body-weight);
+      letter-spacing: -.012em;
+      line-height: var(--type-body-leading);
+      text-wrap: pretty;
+    }
+
+    .copy--top-wide .title {
+      max-width: 8.6ch;
+    }
+
+    .copy--top-wide .instruction {
+      max-width: 25ch;
+    }
+
+    .copy--pair .instruction {
+      max-width: 24ch;
+    }
+
+    @media (max-width: 1060px) {
+      .card-set {
+        grid-template-columns: repeat(2, minmax(0, 420px));
+      }
+    }
+
+    @media (max-width: 720px) {
+      body { padding-inline: 0; }
+
+      .page-header {
+        width: calc(100% - 36px);
+      }
+
+      .card-set {
+        grid-template-columns: none;
+        grid-auto-flow: column;
+        grid-auto-columns: min(84vw, 390px);
+        justify-content: start;
+        gap: 16px;
+        width: 100%;
+        overflow-x: auto;
+        padding: 0 18px 36px;
+        scroll-padding-inline: 18px;
+        scroll-snap-type: x mandatory;
+        scrollbar-width: none;
+      }
+
+      .card-set::-webkit-scrollbar { display: none; }
+
+      .card {
+        border-radius: 24px;
+        scroll-snap-align: start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="page-header">
+    <p>Fear of Rejection · Mission Card Study</p>
+    <h1>One Pack. One type system. Three character-aware layouts.</h1>
+  </header>
+
+  <main class="card-set" aria-label="Fear of Rejection mission card concepts">
+    <article class="card" aria-labelledby="mission-01-title">
+      <img
+        class="character"
+        src="../docs/design/mission-card-character-templates/sheep/concepts/01-peek-from-right.png"
+        alt="A curious sheep peeking in from the right"
+      >
+      <div class="copy">
+        <p class="meta"><span class="meta-number">01 / 13</span> Fear of Rejection</p>
+        <h2 class="title" id="mission-01-title">One Small Ask</h2>
+        <p class="instruction">Ask an appropriate person for one small, specific, optional thing that would genuinely make your day easier. Make it easy for them to answer yes or no.</p>
+      </div>
+    </article>
+
+    <article class="card card--left-stage" aria-labelledby="mission-02-title">
+      <img
+        class="character"
+        src="../docs/design/mission-card-character-templates/sheep/concepts/02-balance-run-single.png"
+        alt="A sheep rushing into the card and trying to keep its balance"
+      >
+      <div class="copy copy--top-wide">
+        <p class="meta"><span class="meta-number">02 / 13</span> Fear of Rejection</p>
+        <h2 class="title" id="mission-02-title">Put Your Preference on the Table</h2>
+        <p class="instruction">During a real shared choice, state the option you genuinely prefer and ask whether the other person or group is willing to choose it.</p>
+      </div>
+    </article>
+
+    <article class="card card--wide-stage" aria-labelledby="mission-13-title">
+      <img
+        class="character"
+        src="../docs/design/mission-card-character-templates/sheep/concepts/03-comforting-pair.png"
+        alt="Two sheep, one nervous and one offering reassurance"
+      >
+      <div class="copy copy--pair">
+        <p class="meta"><span class="meta-number">13 / 13</span> Fear of Rejection</p>
+        <h2 class="title" id="mission-13-title">Ask for Real Support</h2>
+        <p class="instruction">Ask a trusted person for one specific form of support you genuinely need, and allow them to say what they can or cannot offer.</p>
+      </div>
+    </article>
+  </main>
+</body>
+</html>

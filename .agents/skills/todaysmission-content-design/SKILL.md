@@ -1,6 +1,11 @@
+---
+name: todaysmission-content-design
+description: Design and review TODAYSMISSION behavioral Packs and Missions using the project's required problem definition, training-space, executability, safety, overlap, and content-quality workflow, and prepare structured semantic handoffs for downstream artwork production without generating art.
+---
+
 # TODAYSMISSION Content Design Skill
 
-## Pack & Mission Creation Workflow v1.0
+## Pack & Mission Creation Workflow v1.1
 
 ## Purpose
 
@@ -124,9 +129,23 @@ Prefer:
 
 ## Mission Generation Test
 
-Can we create 15--25 genuinely different Missions?
+Can we create enough genuinely different Missions to form a balanced
+training space?
 
-If not, the Pack is probably too narrow.
+There is no fixed or minimum Mission count.
+
+The number must come from the Pack's actual behavioral training space,
+after overlap, repetition, executability, and safety review.
+
+Every Pack must contain fewer than 25 Missions in total, including any
+hidden Final Mission.
+
+Never keep, split, or invent Missions just to reach a preferred count.
+
+If only a smaller number of Missions have distinct learning value, use
+the smaller number. If that smaller pool cannot form a meaningful and
+balanced training space, redefine or reject the Pack instead of filling
+the gap with weak Missions.
 
 ## Overlap Test
 
@@ -288,6 +307,26 @@ A good Pack should not be:
 
 It should be a balanced space.
 
+## Mission Count
+
+Mission count is an output of the design process, not an input.
+
+First map the Pack's training dimensions. Then generate, review, merge,
+and reject candidates. Set the final count only after every remaining
+Mission has a distinct learning objective and the pool has adequate
+difficulty coverage.
+
+Rules:
+
+-   No fixed count.
+-   No minimum count.
+-   Fewer than 25 Missions per Pack in total, including any hidden Final
+    Mission.
+-   Do not copy the Mission count of another Pack.
+-   Do not split one behavior across locations, objects, audiences, or
+    wording merely to increase the count.
+-   A smaller strong pool is preferable to a larger repetitive pool.
+
 Required coverage:
 
 ## Low Barrier
@@ -324,21 +363,30 @@ Create transformation moments.
 
 TODAYSMISSION uses:
 
-## Free Pick + Commitment
+## Pack Membership + Free Pick
+
+Users join the entire Pack, not individual Missions.
 
 Flow:
 
-    Browse
-     ↓
-    Choose
-     ↓
-    Take this Mission
-     ↓
-    Locked
-     ↓
-    Complete
-     ↓
-    Choose again
+    Browse public Pack content
+             ↓
+    Join the Pack
+             ↓
+    Freely choose or switch Missions
+             ↓
+    Complete a Mission through the real completion flow
+             ↓
+    Pack progress updates
+
+Do NOT reintroduce a per-Mission Take or Lock step.
+
+Switching the currently viewed Mission does not:
+
+-   join the Pack
+-   complete a Mission
+-   change completion records
+-   force a sequence
 
 Do NOT force:
 
@@ -346,7 +394,8 @@ Mission 1 → Mission 2 → Mission 3
 
 Reason:
 
-Users have different fear structures.
+Users have different fear structures and different real-world conditions
+on a given day.
 
 However:
 
@@ -473,7 +522,38 @@ A smaller set of strong Missions is better.
 
 ------------------------------------------------------------------------
 
-# Part 8 --- Final Standard
+# Part 8 --- Artwork Production Handoff
+
+When the deliverable is a final or approved Pack specification intended
+to supply downstream artwork production, append the structured handoff
+defined in [references/artwork-handoff-schema.md](references/artwork-handoff-schema.md).
+
+The handoff supplies behavioral truth and a flexible semantic vocabulary.
+It must not turn each Mission into a prescribed literal scene. Record the
+exact action, learning objective, usable action/prop/environment/relationship/
+symbolic anchors, confusion risks, safety exclusions, and whether direct,
+associative, or free treatment is semantically safe.
+
+Mission Artwork is a post-completion collectible reward. Do not frame it as
+the user's pre-task fear, and do not require it to reenact the Mission. The
+downstream artwork system owns semantic-distance planning, expression,
+acting, camera, palette, composition, character casting, and collection
+diversity.
+
+For Pack Cover, provide Pack-level experience clusters and a grounded pool of
+content tokens drawn from actual Missions. Describe semantic range, not a
+single scene. The artwork system selects and integrates a limited set and
+generates the Cover after Mission art establishes the collection vocabulary.
+Frontend text is not part of the artwork.
+
+The handoff does not authorize image generation, publishing, code changes,
+or asset replacement.
+
+Do not add the handoff to early ideation unless the user requests it.
+
+------------------------------------------------------------------------
+
+# Part 9 --- Final Standard
 
 A high-quality TODAYSMISSION Pack should achieve:
 

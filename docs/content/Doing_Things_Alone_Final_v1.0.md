@@ -99,23 +99,22 @@ TODAYSMISSION 要改变的不是用户的性格，而是这个行为循环。
 
 后台可以维护大致强度数据，用于内容设计、审核与未来推荐。
 
-## 2.3 Take This Mission
+## 2.3 Pack Membership + Free Switching
+
+用户加入的是整个 Pack，而不是逐张 Take Mission。
 
 Mission 的核心循环：
 
-> **Browse freely → Choose deliberately → Take → Lock → Complete → Choose again**
+> **Join Pack → Browse freely → Choose for today → Complete through the real completion flow → Choose again**
 
-用户点击：
+加入 Pack 后：
 
-**Take this mission**
+- 用户可以在未完成的公开 Mission 之间自由切换
+- 切换不等于加入、锁定或完成 Mission
+- 只有真实完成提交流程成功后，Mission 才被标记为 completed
+- 不设置逐张 Mission 的 Take 或 Lock 步骤
 
-之后：
-
-- 当前 Mission 被锁定
-- 完成前不可切换到另一 Mission
-- 完成后才能重新选择
-
-因此每张 Mission 在 Take 前必须尽量让用户判断：
+因此每张 Mission 必须尽量让用户判断：
 
 - 需要去哪里
 - 是否需要特定设施
@@ -754,11 +753,7 @@ Join Pack
     ↓
 Browse all public Missions
     ↓
-Pick any Mission
-    ↓
-Take this mission
-    ↓
-Mission locked
+Choose or switch to any available Mission
     ↓
 Complete + Record
     ↓
@@ -938,3 +933,755 @@ Doing Things Alone 不应该告诉用户：
 最终目标不是让用户变成“更喜欢独处的人”，而是：
 
 > **当用户真的想做一件事情时，“有没有人陪”不再拥有决定权。**
+
+---
+
+# 11. Artwork Production Handoff
+
+## Pack-wide Visual Semantics
+
+- **Behavior shift:** 从“没人陪就推迟或取消”转变为“即使独自一人，也继续去做自己真正想做的事”。
+- **Training space:** 公共场所中的独自停留、饮食、浏览、文化与休闲参与、探索新地点、较长时间的自主出行，以及把能力迁移到个人真正拖延的事情。
+- **Experience clusters:** 日常公共独处；餐饮与 table-for-one；浏览、电影、文化、娱乐与活动；新地点、长时间外出与个人计划。
+- **Content-token families:** 咖啡或杯子、单人餐位、电影票根、书或日记、活动票或节目单、地图或路线提示。它们是候选语汇，不是每张图的必备清单。
+- **Must not imply:** 孤独悲伤、被排斥、反关系宣言、危险独行、消费门槛，或所有卡片都只是同一种坐着独处。
+- **Safety and privacy:** 不美化偏僻、越界或危险地点；不把消费、旅行或特定设施画成完成 Pack 的必要条件。
+- **Cover semantic range:** 呈现“一个人也能主动拥有丰富公共生活”的整体可能性；信息可比 Mission Artwork 更丰富，但不是场景拼贴。
+- **Reward context:** Mission Artwork 在任务完成后获得，可在直接、关联转化和少量自由角色艺术之间变化；不要求复刻任务，也不默认表现任务前的害羞、尴尬、恐惧或不适。
+```json
+{
+  "schemaVersion": "2.0",
+  "pack": {
+    "slug": "doing-things-alone",
+    "title": "Doing Things Alone",
+    "promise": "Do the things you want to do — even when no one comes with you.",
+    "publicMissionCount": 16,
+    "behaviorShift": "The user stops cancelling wanted activities when no companion is available and acts independently in real public life.",
+    "trainingSpaceSummary": "Public solo presence, ordinary solo routines, leisure and cultural participation, unfamiliar places, sustained independent outings, and transfer into a personally delayed experience.",
+    "experienceClusters": [
+      "visible solo presence in everyday public life",
+      "food, drink, and table-for-one routines",
+      "browsing, cinema, culture, play, and events",
+      "new places, longer outings, and self-directed plans"
+    ],
+    "contentTokenFamilies": [
+      "coffee or cup",
+      "single place setting or meal cue",
+      "cinema ticket or ticket stub",
+      "book, journal, or browsing object",
+      "activity program or admission token",
+      "map, route, or destination cue"
+    ],
+    "mustNotImply": [
+      "sad isolation or social rejection",
+      "an anti-relationship or self-sufficiency message",
+      "a montage of individual Mission venues",
+      "private self-care as a substitute for public action",
+      "pre-task fear as the default emotional story",
+      "all cards depicting the same seated solo scene"
+    ],
+    "safetyPrivacyBoundaries": [
+      "Do not idealize isolated, trespassed, remote, or visibly unsafe solo activity.",
+      "Do not imply that spending money, travel, or a specific city facility is required.",
+      "Do not portray other people as rejecting, mocking, or abandoning the protagonist."
+    ],
+    "cover": {
+      "semanticRange": "One person actively inhabits a varied public life on their own terms; the cover should suggest several real experience families without becoming a loneliness portrait or a Mission checklist.",
+      "contentCandidates": [
+        "cinema ticket or stub",
+        "coffee or cup",
+        "journal or book",
+        "activity ticket or program",
+        "dining cue",
+        "map or route cue"
+      ],
+      "selectionNotes": "Select roughly four to six candidates across dining, culture, activity, and movement clusters; integrate them compositionally rather than scattering one icon per Mission."
+    }
+  },
+  "missions": [
+    {
+      "number": 1,
+      "slug": "stay-awhile",
+      "visibility": "public",
+      "title": "Stay Awhile",
+      "action": "Spend 15 minutes alone in a public place.",
+      "learningObjective": "Remain visibly alone in public without immediately leaving or pretending to be busy.",
+      "semanticAnchors": {
+        "action": [
+          "one person stationary in a legitimate public place",
+          "other people or public activity present but not interacting",
+          "no visual cue that the user is waiting for someone"
+        ],
+        "props": [],
+        "environment": [
+          "park or plaza",
+          "campus or public seating",
+          "waterfront or lobby"
+        ],
+        "peopleRelationship": [
+          "The user is alone among loosely distributed members of the public."
+        ],
+        "symbolicPossibilities": [
+          "A metaphor, trace, or aftermath grounded in this learning objective: Remain visibly alone in public without immediately leaving or pretending to be busy."
+        ]
+      },
+      "confusionRisks": [
+        "Sit in the Crowd",
+        "Coffee for One"
+      ],
+      "safetyExclusions": [
+        "isolated or unsafe location",
+        "depicting phone use as a social shield"
+      ],
+      "treatmentSuitability": {
+        "direct": true,
+        "associative": true,
+        "free": false,
+        "notes": "Preserve at least one approved action, relationship, environment, or learning-objective anchor; literal reenactment is not required."
+      },
+      "completionRewardContext": "Post-completion collectible; do not default to pre-task anxiety or require literal reenactment."
+    },
+    {
+      "number": 2,
+      "slug": "eat-outside-alone",
+      "visibility": "public",
+      "title": "Eat Outside Alone",
+      "action": "Take something to eat or drink and have it alone in an open public place.",
+      "learningObjective": "Do an ordinary eating or drinking activity alone while remaining visible in an open public environment.",
+      "semanticAnchors": {
+        "action": [
+          "food or drink actively being consumed",
+          "open-air or clearly open public setting",
+          "one unaccompanied user"
+        ],
+        "props": [],
+        "environment": [
+          "park bench",
+          "public square",
+          "campus lawn or waterfront"
+        ],
+        "peopleRelationship": [
+          "The user eats alone while other people are incidental background occupants."
+        ],
+        "symbolicPossibilities": [
+          "A metaphor, trace, or aftermath grounded in this learning objective: Do an ordinary eating or drinking activity alone while remaining visible in an open public environment."
+        ]
+      },
+      "confusionRisks": [
+        "Lunch for One",
+        "Table for One"
+      ],
+      "safetyExclusions": [
+        "unsafe roadside or prohibited eating area"
+      ],
+      "treatmentSuitability": {
+        "direct": true,
+        "associative": true,
+        "free": false,
+        "notes": "Preserve at least one approved action, relationship, environment, or learning-objective anchor; literal reenactment is not required."
+      },
+      "completionRewardContext": "Post-completion collectible; do not default to pre-task anxiety or require literal reenactment."
+    },
+    {
+      "number": 3,
+      "slug": "lunch-for-one",
+      "visibility": "public",
+      "title": "Lunch for One",
+      "action": "Have a full meal somewhere by yourself.",
+      "learningObjective": "Be visibly identifiable as a solo diner without explaining or hiding it.",
+      "semanticAnchors": {
+        "action": [
+          "a complete meal",
+          "shared indoor or covered public seating",
+          "the user seated alone for the meal"
+        ],
+        "props": [],
+        "environment": [
+          "cafeteria",
+          "food court",
+          "canteen or casual public dining area"
+        ],
+        "peopleRelationship": [
+          "The user occupies one place alone among other diners."
+        ],
+        "symbolicPossibilities": [
+          "A metaphor, trace, or aftermath grounded in this learning objective: Be visibly identifiable as a solo diner without explaining or hiding it."
+        ]
+      },
+      "confusionRisks": [
+        "Eat Outside Alone",
+        "Table for One"
+      ],
+      "safetyExclusions": [],
+      "treatmentSuitability": {
+        "direct": true,
+        "associative": true,
+        "free": false,
+        "notes": "Preserve at least one approved action, relationship, environment, or learning-objective anchor; literal reenactment is not required."
+      },
+      "completionRewardContext": "Post-completion collectible; do not default to pre-task anxiety or require literal reenactment."
+    },
+    {
+      "number": 4,
+      "slug": "browse-alone",
+      "visibility": "public",
+      "title": "Browse Alone",
+      "action": "Go somewhere you can browse at your own pace and stay for at least 30 minutes.",
+      "learningObjective": "Follow personal curiosity and remain at an unhurried pace without a companion.",
+      "semanticAnchors": {
+        "action": [
+          "active browsing or examining",
+          "multiple choices or items",
+          "unhurried solo presence"
+        ],
+        "props": [],
+        "environment": [
+          "bookstore or library",
+          "market or shopping area",
+          "record, hobby, or similar browsing space"
+        ],
+        "peopleRelationship": [
+          "The user browses independently; other visitors are optional and incidental."
+        ],
+        "symbolicPossibilities": [
+          "A metaphor, trace, or aftermath grounded in this learning objective: Follow personal curiosity and remain at an unhurried pace without a companion."
+        ]
+      },
+      "confusionRisks": [
+        "Go Somewhere New",
+        "See It for Yourself"
+      ],
+      "safetyExclusions": [],
+      "treatmentSuitability": {
+        "direct": true,
+        "associative": true,
+        "free": true,
+        "notes": "Broad enough to support deliberately free character art when Pack-level connection and collection coverage remain intact."
+      },
+      "completionRewardContext": "Post-completion collectible; do not default to pre-task anxiety or require literal reenactment."
+    },
+    {
+      "number": 5,
+      "slug": "go-somewhere-new",
+      "visibility": "public",
+      "title": "Go Somewhere New",
+      "action": "Visit a nearby public place you've never gone to alone before.",
+      "learningObjective": "Enter an unfamiliar environment without relying on a familiar companion.",
+      "semanticAnchors": {
+        "action": [
+          "a readable threshold or first arrival",
+          "curious orientation toward an unfamiliar place",
+          "the user entering alone"
+        ],
+        "props": [],
+        "environment": [
+          "unfamiliar neighborhood public space",
+          "local venue or community place",
+          "new route or nearby destination"
+        ],
+        "peopleRelationship": [
+          "The user arrives alone; other people may establish that the place is public."
+        ],
+        "symbolicPossibilities": [
+          "A metaphor, trace, or aftermath grounded in this learning objective: Enter an unfamiliar environment without relying on a familiar companion."
+        ]
+      },
+      "confusionRisks": [
+        "Browse Alone",
+        "See It for Yourself"
+      ],
+      "safetyExclusions": [
+        "remote, trespassed, or visibly unsafe place"
+      ],
+      "treatmentSuitability": {
+        "direct": true,
+        "associative": true,
+        "free": true,
+        "notes": "Broad enough to support deliberately free character art when Pack-level connection and collection coverage remain intact."
+      },
+      "completionRewardContext": "Post-completion collectible; do not default to pre-task anxiety or require literal reenactment."
+    },
+    {
+      "number": 6,
+      "slug": "sit-in-the-crowd",
+      "visibility": "public",
+      "title": "Sit in the Crowd",
+      "action": "Spend 20 minutes alone somewhere busy.",
+      "learningObjective": "Tolerate high public visibility while alone in a dense, busy environment.",
+      "semanticAnchors": {
+        "action": [
+          "high surrounding people density or movement",
+          "one stationary unaccompanied user",
+          "a legitimate place to remain"
+        ],
+        "props": [],
+        "environment": [
+          "busy plaza",
+          "transit concourse seating",
+          "active campus or public hall"
+        ],
+        "peopleRelationship": [
+          "Many people pass or gather around one user who remains alone."
+        ],
+        "symbolicPossibilities": [
+          "A metaphor, trace, or aftermath grounded in this learning objective: Tolerate high public visibility while alone in a dense, busy environment."
+        ]
+      },
+      "confusionRisks": [
+        "Stay Awhile",
+        "Be the Only One"
+      ],
+      "safetyExclusions": [
+        "blocking circulation",
+        "crowd danger or emergency conditions"
+      ],
+      "treatmentSuitability": {
+        "direct": true,
+        "associative": true,
+        "free": false,
+        "notes": "Preserve at least one approved action, relationship, environment, or learning-objective anchor; literal reenactment is not required."
+      },
+      "completionRewardContext": "Post-completion collectible; do not default to pre-task anxiety or require literal reenactment."
+    },
+    {
+      "number": 7,
+      "slug": "coffee-for-one",
+      "visibility": "public",
+      "title": "Coffee for One",
+      "action": "Go to a café alone and stay for at least 30 minutes.",
+      "learningObjective": "Occupy a socially coded café space alone without needing a companion as justification.",
+      "semanticAnchors": {
+        "action": [
+          "recognizable café setting",
+          "one drink and one occupied place",
+          "continued seated presence"
+        ],
+        "props": [],
+        "environment": [
+          "independent café",
+          "casual coffee shop",
+          "shared café seating"
+        ],
+        "peopleRelationship": [
+          "The user sits alone while other customers may be paired or grouped."
+        ],
+        "symbolicPossibilities": [
+          "A metaphor, trace, or aftermath grounded in this learning objective: Occupy a socially coded café space alone without needing a companion as justification."
+        ]
+      },
+      "confusionRisks": [
+        "Stay Awhile",
+        "Lunch for One"
+      ],
+      "safetyExclusions": [],
+      "treatmentSuitability": {
+        "direct": true,
+        "associative": true,
+        "free": false,
+        "notes": "Preserve at least one approved action, relationship, environment, or learning-objective anchor; literal reenactment is not required."
+      },
+      "completionRewardContext": "Post-completion collectible; do not default to pre-task anxiety or require literal reenactment."
+    },
+    {
+      "number": 8,
+      "slug": "table-for-one",
+      "visibility": "public",
+      "title": "Table for One",
+      "action": "Have a sit-down meal at a restaurant by yourself.",
+      "learningObjective": "Openly claim a solo dining identity through the complete restaurant experience.",
+      "semanticAnchors": {
+        "action": [
+          "restaurant table service context",
+          "one place setting or explicit table-for-one arrangement",
+          "the user dining alone"
+        ],
+        "props": [],
+        "environment": [
+          "casual restaurant",
+          "table-service dining room"
+        ],
+        "peopleRelationship": [
+          "The user occupies a table for one among other restaurant patrons."
+        ],
+        "symbolicPossibilities": [
+          "A metaphor, trace, or aftermath grounded in this learning objective: Openly claim a solo dining identity through the complete restaurant experience."
+        ]
+      },
+      "confusionRisks": [
+        "Lunch for One",
+        "Eat Outside Alone"
+      ],
+      "safetyExclusions": [],
+      "treatmentSuitability": {
+        "direct": true,
+        "associative": true,
+        "free": false,
+        "notes": "Preserve at least one approved action, relationship, environment, or learning-objective anchor; literal reenactment is not required."
+      },
+      "completionRewardContext": "Post-completion collectible; do not default to pre-task anxiety or require literal reenactment."
+    },
+    {
+      "number": 9,
+      "slug": "movie-for-one",
+      "visibility": "public",
+      "title": "Movie for One",
+      "action": "Go watch a movie by yourself.",
+      "learningObjective": "Attend a leisure experience with strong companion expectations without cancelling for lack of company.",
+      "semanticAnchors": {
+        "action": [
+          "cinema screen or unmistakable theater seating",
+          "one occupied solo seat",
+          "the viewing experience has begun"
+        ],
+        "props": [],
+        "environment": [
+          "cinema auditorium"
+        ],
+        "peopleRelationship": [
+          "The user watches alone while other viewers may sit in pairs or groups."
+        ],
+        "symbolicPossibilities": [
+          "A metaphor, trace, or aftermath grounded in this learning objective: Attend a leisure experience with strong companion expectations without cancelling for lack of company."
+        ]
+      },
+      "confusionRisks": [
+        "See It for Yourself",
+        "Play Alone"
+      ],
+      "safetyExclusions": [],
+      "treatmentSuitability": {
+        "direct": true,
+        "associative": true,
+        "free": false,
+        "notes": "Preserve at least one approved action, relationship, environment, or learning-objective anchor; literal reenactment is not required."
+      },
+      "completionRewardContext": "Post-completion collectible; do not default to pre-task anxiety or require literal reenactment."
+    },
+    {
+      "number": 10,
+      "slug": "see-it-for-yourself",
+      "visibility": "public",
+      "title": "See It for Yourself",
+      "action": "Go somewhere people visit mainly for the experience — by yourself.",
+      "learningObjective": "Pursue an experience at a personal pace without needing a companion to legitimize being there.",
+      "semanticAnchors": {
+        "action": [
+          "an experience-focused destination",
+          "active looking, listening, or exploring",
+          "independent pace and attention"
+        ],
+        "props": [],
+        "environment": [
+          "museum or gallery",
+          "garden or viewpoint",
+          "exhibition or public attraction"
+        ],
+        "peopleRelationship": [
+          "The user explores alone; other visitors are optional context."
+        ],
+        "symbolicPossibilities": [
+          "A metaphor, trace, or aftermath grounded in this learning objective: Pursue an experience at a personal pace without needing a companion to legitimize being there."
+        ]
+      },
+      "confusionRisks": [
+        "Browse Alone",
+        "Go Somewhere New",
+        "Movie for One"
+      ],
+      "safetyExclusions": [],
+      "treatmentSuitability": {
+        "direct": true,
+        "associative": true,
+        "free": false,
+        "notes": "Preserve at least one approved action, relationship, environment, or learning-objective anchor; literal reenactment is not required."
+      },
+      "completionRewardContext": "Post-completion collectible; do not default to pre-task anxiety or require literal reenactment."
+    },
+    {
+      "number": 11,
+      "slug": "play-alone",
+      "visibility": "public",
+      "title": "Play Alone",
+      "action": "Do a recreational activity people often do with friends — by yourself.",
+      "learningObjective": "Take part in a socially coded recreational activity because the user wants to do it, even without friends present.",
+      "semanticAnchors": {
+        "action": [
+          "active recreational participation",
+          "an activity commonly associated with companions",
+          "one independent participant"
+        ],
+        "props": [],
+        "environment": [
+          "game or activity venue",
+          "recreational facility",
+          "public leisure activity"
+        ],
+        "peopleRelationship": [
+          "The user participates alone while other participants may be paired or grouped."
+        ],
+        "symbolicPossibilities": [
+          "A metaphor, trace, or aftermath grounded in this learning objective: Take part in a socially coded recreational activity because the user wants to do it, even without friends present."
+        ]
+      },
+      "confusionRisks": [
+        "Movie for One",
+        "See It for Yourself"
+      ],
+      "safetyExclusions": [
+        "activity that requires a partner for physical safety"
+      ],
+      "treatmentSuitability": {
+        "direct": true,
+        "associative": true,
+        "free": true,
+        "notes": "Broad enough to support deliberately free character art when Pack-level connection and collection coverage remain intact."
+      },
+      "completionRewardContext": "Post-completion collectible; do not default to pre-task anxiety or require literal reenactment."
+    },
+    {
+      "number": 12,
+      "slug": "go-to-something",
+      "visibility": "public",
+      "title": "Go to Something",
+      "action": "Go by yourself to a place where people have gathered for something happening.",
+      "learningObjective": "Enter an event-like gathering alone even when other attendees appear to have companions.",
+      "semanticAnchors": {
+        "action": [
+          "a shared event or happening",
+          "a gathered audience or participants",
+          "the user present alone within the gathering"
+        ],
+        "props": [],
+        "environment": [
+          "community event",
+          "talk or performance",
+          "public gathering around an activity"
+        ],
+        "peopleRelationship": [
+          "The user attends alone among people gathered for the same event."
+        ],
+        "symbolicPossibilities": [
+          "A metaphor, trace, or aftermath grounded in this learning objective: Enter an event-like gathering alone even when other attendees appear to have companions."
+        ]
+      },
+      "confusionRisks": [
+        "Show Up Alone",
+        "Be the Only One"
+      ],
+      "safetyExclusions": [
+        "unsafe crowd conditions"
+      ],
+      "treatmentSuitability": {
+        "direct": true,
+        "associative": true,
+        "free": false,
+        "notes": "Preserve at least one approved action, relationship, environment, or learning-objective anchor; literal reenactment is not required."
+      },
+      "completionRewardContext": "Post-completion collectible; do not default to pre-task anxiety or require literal reenactment."
+    },
+    {
+      "number": 13,
+      "slug": "show-up-alone",
+      "visibility": "public",
+      "title": "Show Up Alone",
+      "action": "Attend a class, workshop, club session, or organized activity without bringing anyone with you.",
+      "learningObjective": "Enter an already structured group environment without bringing a familiar companion.",
+      "semanticAnchors": {
+        "action": [
+          "organized group structure",
+          "shared materials, instruction, or coordinated activity",
+          "the user participating without a companion"
+        ],
+        "props": [],
+        "environment": [
+          "class",
+          "workshop",
+          "club session or organized activity"
+        ],
+        "peopleRelationship": [
+          "The user enters alone and participates alongside an established group."
+        ],
+        "symbolicPossibilities": [
+          "A metaphor, trace, or aftermath grounded in this learning objective: Enter an already structured group environment without bringing a familiar companion."
+        ]
+      },
+      "confusionRisks": [
+        "Go to Something",
+        "Be the Only One"
+      ],
+      "safetyExclusions": [],
+      "treatmentSuitability": {
+        "direct": true,
+        "associative": true,
+        "free": false,
+        "notes": "Preserve at least one approved action, relationship, environment, or learning-objective anchor; literal reenactment is not required."
+      },
+      "completionRewardContext": "Post-completion collectible; do not default to pre-task anxiety or require literal reenactment."
+    },
+    {
+      "number": 14,
+      "slug": "be-the-only-one",
+      "visibility": "public",
+      "title": "Be the Only One",
+      "action": "Go somewhere alone where you expect most people to arrive with someone else.",
+      "learningObjective": "Continue the chosen activity when the user is visibly the only unaccompanied person in a high-companion-expectation setting.",
+      "semanticAnchors": {
+        "action": [
+          "a strong repeated pattern of pairs or groups",
+          "one unaccompanied user",
+          "the user continuing an activity rather than being excluded"
+        ],
+        "props": [],
+        "environment": [
+          "social leisure venue",
+          "event or attraction",
+          "public experience with strong companion expectations"
+        ],
+        "peopleRelationship": [
+          "The user is the only visibly unaccompanied participant among pairs or groups."
+        ],
+        "symbolicPossibilities": [
+          "A metaphor, trace, or aftermath grounded in this learning objective: Continue the chosen activity when the user is visibly the only unaccompanied person in a high-companion-expectation setting."
+        ]
+      },
+      "confusionRisks": [
+        "Sit in the Crowd",
+        "Go to Something",
+        "Show Up Alone"
+      ],
+      "safetyExclusions": [
+        "depicting ridicule, rejection, or deliberate exclusion"
+      ],
+      "treatmentSuitability": {
+        "direct": true,
+        "associative": true,
+        "free": false,
+        "notes": "Preserve at least one approved action, relationship, environment, or learning-objective anchor; literal reenactment is not required."
+      },
+      "completionRewardContext": "Post-completion collectible; do not default to pre-task anxiety or require literal reenactment."
+    },
+    {
+      "number": 15,
+      "slug": "one-hour-out",
+      "visibility": "public",
+      "title": "One Hour Out",
+      "action": "Plan one hour out by yourself — and don't make it just an errand.",
+      "learningObjective": "Organize a short piece of self-directed public life rather than completing one isolated task.",
+      "semanticAnchors": {
+        "action": [
+          "more than one chosen activity or destination cue",
+          "a coherent personal route or sequence",
+          "no companion directing the plan"
+        ],
+        "props": [],
+        "environment": [
+          "walk plus a place to stop",
+          "small local outing",
+          "sequence of free public activities"
+        ],
+        "peopleRelationship": [
+          "The user moves independently through ordinary public life."
+        ],
+        "symbolicPossibilities": [
+          "A metaphor, trace, or aftermath grounded in this learning objective: Organize a short piece of self-directed public life rather than completing one isolated task."
+        ]
+      },
+      "confusionRisks": [
+        "Spend the Day Your Way",
+        "Go Somewhere New"
+      ],
+      "safetyExclusions": [
+        "framing shopping chores or obligations as the whole outing"
+      ],
+      "treatmentSuitability": {
+        "direct": true,
+        "associative": true,
+        "free": false,
+        "notes": "Preserve at least one approved action, relationship, environment, or learning-objective anchor; literal reenactment is not required."
+      },
+      "completionRewardContext": "Post-completion collectible; do not default to pre-task anxiety or require literal reenactment."
+    },
+    {
+      "number": 16,
+      "slug": "spend-the-day-your-way",
+      "visibility": "public",
+      "title": "Spend the Day Your Way",
+      "action": "Plan half a day for yourself and spend it out alone.",
+      "learningObjective": "Sustain an extended piece of life whose direction does not depend on whether anyone joins.",
+      "semanticAnchors": {
+        "action": [
+          "extended passage of time",
+          "multiple self-chosen experiences",
+          "continuity of independent action"
+        ],
+        "props": [],
+        "environment": [
+          "several nearby public spaces",
+          "a half-day local itinerary",
+          "mixed leisure, cultural, or outdoor experiences"
+        ],
+        "peopleRelationship": [
+          "The user remains the decision-maker across changing public contexts."
+        ],
+        "symbolicPossibilities": [
+          "A metaphor, trace, or aftermath grounded in this learning objective: Sustain an extended piece of life whose direction does not depend on whether anyone joins."
+        ]
+      },
+      "confusionRisks": [
+        "One Hour Out",
+        "STOP WAITING"
+      ],
+      "safetyExclusions": [
+        "implying expensive travel is required"
+      ],
+      "treatmentSuitability": {
+        "direct": true,
+        "associative": true,
+        "free": true,
+        "notes": "Broad enough to support deliberately free character art when Pack-level connection and collection coverage remain intact."
+      },
+      "completionRewardContext": "Post-completion collectible; do not default to pre-task anxiety or require literal reenactment."
+    },
+    {
+      "number": 17,
+      "slug": "stop-waiting",
+      "visibility": "hidden-final",
+      "title": "STOP WAITING",
+      "action": "What have you been waiting for someone else to do with you? Something you actually want. Something you've kept putting off because no one would come with you. Stop waiting. Go do it.",
+      "learningObjective": "Transfer the trained ability into one personally meaningful real-life action the user has genuinely postponed for lack of company.",
+      "semanticAnchors": {
+        "action": [
+          "personal importance",
+          "a clear act of finally beginning",
+          "independent action without a predefined venue"
+        ],
+        "props": [],
+        "environment": [
+          "the user's own meaningful destination or activity"
+        ],
+        "peopleRelationship": [
+          "Determined by the user's real goal; the user does not wait for a companion before acting."
+        ],
+        "symbolicPossibilities": [
+          "A metaphor, trace, or aftermath grounded in this learning objective: Transfer the trained ability into one personally meaningful real-life action the user has genuinely postponed for lack of company."
+        ]
+      },
+      "confusionRisks": [
+        "Spend the Day Your Way",
+        "a generic inspirational ending"
+      ],
+      "safetyExclusions": [
+        "unsafe solo travel or activity",
+        "a generic victory celebration without the meaningful action"
+      ],
+      "treatmentSuitability": {
+        "direct": true,
+        "associative": true,
+        "free": false,
+        "notes": "Preserve at least one approved action, relationship, environment, or learning-objective anchor; literal reenactment is not required."
+      },
+      "completionRewardContext": "Post-completion collectible; do not default to pre-task anxiety or require literal reenactment."
+    }
+  ]
+}
+```

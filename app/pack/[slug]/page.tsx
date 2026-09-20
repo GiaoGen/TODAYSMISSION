@@ -3,7 +3,12 @@ import { Suspense } from "react";
 
 import { getPackBySlug, getPacks } from "@/data/repositories/get-packs";
 import { getMissionExperiencesAction, getMyMissionExperienceAction } from "@/features/missions/actions";
+import { ExplorePackPreview } from "@/features/packs/components/ExplorePackPreview";
 import { MissionPackDetail } from "@/features/packs/components/MissionPackDetail";
+import {
+  EXPLORE_PACK_SUMMARIES,
+  getExplorePackPreview,
+} from "@/features/packs/model/explore-pack-content";
 import { getInitialMissionCompletionStatuses } from "@/features/missions/model/mission-action-state";
 import { RoutePrefetch } from "./RoutePrefetch";
 import { PackUserState } from "./PackUserState";
@@ -14,11 +19,21 @@ type PackDetailPageProps = {
 
 export async function generateStaticParams() {
   const packs = await getPacks();
-  return packs.map((pack) => ({ slug: pack.slug }));
+  const slugs = new Set([
+    ...packs.map((pack) => pack.slug),
+    ...EXPLORE_PACK_SUMMARIES.map((pack) => pack.slug),
+  ]);
+  return Array.from(slugs, (slug) => ({ slug }));
 }
 
 export default async function PackDetailPage({ params }: PackDetailPageProps) {
   const { slug } = await params;
+  const previewPack = getExplorePackPreview(slug);
+
+  if (previewPack) {
+    return <ExplorePackPreview pack={previewPack} />;
+  }
+
   const pack = await getPackBySlug(slug);
 
   if (!pack) {

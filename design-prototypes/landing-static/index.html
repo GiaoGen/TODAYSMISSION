@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f7f3ec">
+  <meta name="description" content="TODAYSMISSION turns the things you avoid into real-world missions you can complete.">
+  <title>TODAYSMISSION — Do the thing for real</title>
+  <style>
+    :root {
+      --paper:#f7f3ec; --white:#fffdf8; --ink:#252722; --muted:#656960; --line:#d9d7cf;
+      --yellow:#f4c84a; --blue:#4f78e8; --sky:#dcecff; --mint:#dcefdc; --green:#72a578;
+      --coral:#ef775f; --blush:#f7d9d3; --violet:#8176ca; --lavender:#e5e1f6;
+      --page-x:clamp(24px,5vw,76px); --header-h:76px; --radius:clamp(32px,4vw,58px);
+    }
+    *{box-sizing:border-box}
+    html{background:var(--paper);color:var(--ink);scroll-snap-type:y proximity;scroll-behavior:auto;scrollbar-width:thin;scrollbar-color:var(--ink) transparent}
+    body{margin:0;overflow-x:hidden;background:var(--paper);color:var(--ink);font-family:ui-rounded,"Avenir Next","Nunito Sans","Segoe UI",Arial,sans-serif;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased}
+    body.modal-open{overflow:hidden}
+    button,a,input{font:inherit} button,a{-webkit-tap-highlight-color:transparent} a{color:inherit;text-decoration:none} button{color:inherit} img{display:block;max-width:100%}
+    .skip{position:fixed;z-index:999;top:10px;left:10px;padding:10px 14px;border-radius:12px;background:var(--ink);color:white;transform:translateY(-180%)} .skip:focus{transform:none}
+
+    .site-header{position:fixed;z-index:100;top:0;left:0;width:100%;padding:14px var(--page-x) 0;pointer-events:none}
+    .header-inner{display:flex;align-items:center;width:min(1450px,100%);height:58px;margin:auto;padding:0 10px 0 16px;border:1px solid rgba(37,39,34,.11);border-radius:20px;background:rgba(255,253,248,.93);pointer-events:auto}
+    .brand{display:flex;align-items:center;gap:10px;flex:none;font-size:16px;font-weight:900;letter-spacing:-.035em}
+    .brand-mark{display:grid;grid-template-columns:repeat(2,8px);gap:3px;width:19px;transform:rotate(-3deg)} .brand-mark i{width:8px;height:8px;border-radius:3px}
+    .brand-mark i:nth-child(1){background:var(--coral)}.brand-mark i:nth-child(2){background:var(--yellow)}.brand-mark i:nth-child(3){background:var(--blue)}.brand-mark i:nth-child(4){background:var(--green)}
+    .header-nav{display:flex;gap:26px;margin-left:auto;margin-right:28px}.header-nav a{position:relative;color:#50544d;font-size:13px;font-weight:750}
+    .header-nav a:after{position:absolute;right:0;bottom:-7px;left:0;height:2px;background:var(--coral);content:"";transform:scaleX(0);transform-origin:left;transition:transform .2s ease}.header-nav a:hover:after,.header-nav a:focus-visible:after{transform:scaleX(1)}
+    .header-actions{display:flex;align-items:center;gap:8px}.btn{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:0 16px;border:0;border-radius:13px;cursor:pointer;font-size:13px;font-weight:850;transition:transform .2s ease}.btn:hover{transform:translateY(-2px)}
+    .btn-plain{background:transparent}.btn-outline{border:1px solid var(--ink);background:transparent}.btn-dark{background:var(--ink);color:white}.btn-yellow{background:var(--yellow);color:var(--ink)}
+    .section-nav{position:fixed;z-index:80;top:50%;right:22px;display:grid;gap:12px;transform:translateY(-50%)}
+    .section-dot{position:relative;width:12px;height:12px;padding:0;border:0;border-radius:50%;background:rgba(37,39,34,.2);cursor:pointer;transition:.2s ease}.section-dot.is-active{background:var(--ink);transform:scale(1.35)}
+    .section-dot:before{position:absolute;top:50%;right:20px;padding:6px 9px;border-radius:9px;background:var(--ink);color:white;content:attr(data-label);font-size:10px;font-weight:800;opacity:0;transform:translate(6px,-50%);white-space:nowrap;transition:.2s ease}.section-dot:hover:before,.section-dot:focus-visible:before{opacity:1;transform:translate(0,-50%)}
+
+    .chapter{position:relative;min-height:100svh;overflow:clip;scroll-snap-align:start;scroll-snap-stop:always;isolation:isolate}
+    .chapter-shell{position:relative;z-index:2;display:grid;align-items:center;width:min(1450px,100%);min-height:100svh;margin:auto;padding:calc(var(--header-h) + 42px) var(--page-x) 48px}
+    .chapter-no{position:absolute;z-index:8;right:var(--page-x);bottom:24px;color:rgba(37,39,34,.44);font-size:11px;font-weight:900;letter-spacing:.16em}
+    .eyebrow{display:flex;align-items:center;gap:10px;margin:0 0 18px;color:#555a52;font-size:11px;font-weight:900;letter-spacing:.15em;text-transform:uppercase}.eyebrow:before{width:28px;height:5px;border-radius:5px;background:var(--coral);content:""}
+    h1,h2,h3,p{margin-top:0}h1,h2,h3{text-wrap:balance}
+    h1{max-width:780px;margin-bottom:26px;font-size:clamp(58px,min(6.2vw,9.2vh),96px);font-weight:850;letter-spacing:-.065em;line-height:.98}
+    h1 span{position:relative;z-index:1;display:inline-block}h1 span:after{position:absolute;z-index:-1;right:-.04em;bottom:.04em;left:-.04em;height:.18em;border-radius:20px;background:var(--coral);content:""}
+    h2{margin-bottom:22px;font-size:clamp(45px,min(4.6vw,7.2vh),72px);font-weight:850;letter-spacing:-.055em;line-height:1.02}
+    h3{margin-bottom:9px;font-size:clamp(18px,1.5vw,24px);font-weight:850;letter-spacing:-.025em;line-height:1.14}
+    .lede{max-width:630px;margin-bottom:0;color:var(--muted);font-size:clamp(17px,1.35vw,21px);font-weight:520;line-height:1.55}
+    .actions{display:flex;align-items:center;gap:12px;margin-top:30px;flex-wrap:wrap}.cta,.text-cta{display:inline-flex;align-items:center;justify-content:center;gap:12px;min-height:54px;border:0;border-radius:17px;font-size:14px;font-weight:900}.cta{padding:0 22px;background:var(--ink);color:white}.text-cta{padding:0 8px;background:transparent;cursor:pointer}.arrow{font-size:19px;transition:transform .2s ease}.cta:hover .arrow,.text-cta:hover .arrow{transform:translate(3px,-3px)}
+    .reveal{opacity:0;transform:translateY(22px);transition:opacity .65s ease,transform .75s cubic-bezier(.16,1,.3,1)}.is-active .reveal{opacity:1;transform:none}.is-active .reveal:nth-child(2){transition-delay:.06s}.is-active .reveal:nth-child(3){transition-delay:.12s}.is-active .reveal:nth-child(4){transition-delay:.18s}
+    .character{position:absolute;z-index:3;pointer-events:none;user-select:none;opacity:0;transform:translate(var(--enter-x,0),var(--enter-y,28px)) rotate(var(--enter-r,0deg));transform-origin:center bottom;transition:opacity .55s ease .1s,transform .85s cubic-bezier(.16,1,.3,1) .1s}.is-active .character{opacity:1;transform:translate(0,0) rotate(var(--rest-r,0deg))}.character img{width:100%;height:auto}
+
+    /* 01 — two characters, one visual stage */
+    .hero{background:var(--paper)}
+    .hero:before{position:absolute;z-index:0;top:14%;right:-8%;width:min(49vw,760px);aspect-ratio:1.12;border-radius:48% 24% 42% 30%;background:var(--sky);content:"";transform:rotate(-4deg)}
+    .hero:after{position:absolute;z-index:0;top:21%;right:7%;width:clamp(100px,11vw,176px);aspect-ratio:1;border-radius:50%;background:var(--yellow);content:""}
+    .hero .chapter-shell{grid-template-columns:minmax(0,.96fr) minmax(440px,1.04fr);gap:clamp(24px,4vw,70px)}.hero-copy{position:relative;z-index:5;padding-top:16px}.hero-copy .lede+.lede{margin-top:10px;font-size:clamp(15px,1.15vw,18px)}
+    .hero-proof{display:flex;align-items:center;gap:14px;max-width:520px;margin-top:26px;padding-top:18px;border-top:1px solid var(--line);color:#575b54;font-size:12px;font-weight:750;line-height:1.4}.proof-mark{display:grid;place-items:center;width:38px;height:38px;flex:none;border-radius:50%;background:var(--mint);color:#315d38;font-size:18px;font-weight:900}
+    .hero-stage{position:relative;align-self:center;width:100%;height:min(68vh,650px);min-height:470px}.hero-stage:before{position:absolute;right:4%;bottom:3%;width:78%;height:17%;border-radius:50%;background:rgba(79,120,232,.16);content:""}
+    .hero-dino{--enter-x:34%;--enter-y:9%;--enter-r:6deg;--rest-r:-2deg;right:-2%;bottom:-5%;width:min(84%,590px)}
+    .hero-panda{--enter-x:-30%;--enter-y:-10%;--enter-r:-8deg;--rest-r:-3deg;top:2%;left:-4%;width:min(48%,330px)}
+    .stage-note{position:absolute;z-index:5;right:0;bottom:7%;width:min(245px,42%);padding:15px 17px;border-radius:17px;background:white;font-size:12px;font-weight:800;line-height:1.35}.stage-note strong{display:block;margin-bottom:3px;color:var(--coral);font-size:10px;letter-spacing:.1em;text-transform:uppercase}
+
+    /* 02 — structured path, two different characters */
+    .path{background:var(--white)}.path:before{position:absolute;top:0;left:0;width:11px;height:100%;background:var(--green);content:""}.path .eyebrow:before{background:var(--green)}
+    .path .chapter-shell{grid-template-columns:minmax(320px,.72fr) minmax(540px,1.28fr);gap:clamp(46px,7vw,110px)}.path-copy{position:relative;z-index:7}
+    .quiet-note{max-width:520px;margin:26px 0 0;padding:18px 20px;border-left:6px solid var(--yellow);border-radius:0 16px 16px 0;background:#fbf3cf;color:#555447;font-size:13px;font-weight:720;line-height:1.5}
+    .path-board{position:relative;width:100%;min-height:min(68vh,640px);padding:clamp(74px,8vh,98px) clamp(34px,4vw,58px) clamp(92px,11vh,122px);border-radius:var(--radius);background:var(--mint)}
+    .path-steps{position:relative;z-index:6;display:grid;gap:12px;width:min(100%,590px);margin-left:auto}.path-step{display:grid;grid-template-columns:52px 1fr auto;align-items:center;gap:16px;min-height:104px;padding:17px 20px;border:1px solid rgba(37,39,34,.08);border-radius:22px;background:rgba(255,255,255,.92)}
+    .step-no{display:grid;place-items:center;width:44px;height:44px;border-radius:15px;background:var(--step-color);font-size:12px;font-weight:950}.path-step p{margin:0;color:var(--muted);font-size:13px;line-height:1.45}.flow-arrow{color:#7a8076;font-size:22px;font-weight:900}.path-step:nth-child(1){--step-color:var(--blush)}.path-step:nth-child(2){--step-color:var(--yellow)}.path-step:nth-child(3){--step-color:var(--sky)}
+    .path-owl{--enter-y:-38%;--enter-r:-5deg;--rest-r:2deg;z-index:4;top:-13%;left:-8%;width:min(39%,310px)}.path-rabbit{--enter-x:35%;--enter-y:18%;--enter-r:7deg;--rest-r:-2deg;z-index:5;right:-7%;bottom:-15%;width:min(41%,330px)}
+
+    /* 03 — lived experience, two more characters */
+    .voices{background:#f5f3f9}.voices:before{position:absolute;top:12%;left:-7%;width:36vw;height:44vh;border-radius:0 80px 80px 0;background:var(--lavender);content:""}.voices .eyebrow:before{background:var(--violet)}
+    .voices .chapter-shell{grid-template-columns:minmax(370px,.86fr) minmax(520px,1.14fr);gap:clamp(42px,6vw,90px)}.voices-copy{position:relative;z-index:8}
+    .quote-card{max-width:610px;margin-top:28px;padding:24px 26px;border-radius:24px;background:white}.quote-card blockquote{margin:0;color:#353833;font-size:clamp(17px,1.35vw,21px);font-weight:720;letter-spacing:-.02em;line-height:1.45}.quote-meta{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:18px;padding-top:15px;border-top:1px solid #e8e6e1;color:#747870;font-size:11px;font-weight:800}.listen-pill{display:inline-flex;align-items:center;gap:8px;padding:8px 11px;border-radius:99px;background:var(--sky);color:#314d89}.listen-pill i{width:8px;height:8px;border-radius:50%;background:var(--blue)}
+    .voices-stage{position:relative;width:100%;min-height:min(68vh,640px);border-radius:var(--radius);background:var(--blush)}.voices-stage:before{position:absolute;top:9%;right:8%;width:42%;aspect-ratio:1;border-radius:50%;background:var(--yellow);content:""}
+    .voice-player{position:absolute;z-index:7;top:33%;left:12%;width:70%;padding:20px;border-radius:24px;background:white}.player-top{display:flex;align-items:center;gap:12px}.play-button{display:grid;place-items:center;width:44px;height:44px;flex:none;border:0;border-radius:50%;background:var(--blue);color:white;cursor:pointer}.player-title{min-width:0}.player-title strong{display:block;overflow:hidden;font-size:13px;text-overflow:ellipsis;white-space:nowrap}.player-title span{color:var(--muted);font-size:11px}
+    .waveform{display:flex;align-items:center;gap:4px;height:34px;margin-top:15px}.waveform i{width:4px;height:var(--wave);border-radius:8px;background:var(--violet);opacity:.72}
+    .loop-strip{position:absolute;z-index:7;right:9%;bottom:11%;left:9%;display:flex;align-items:center;justify-content:center;gap:7px;flex-wrap:wrap}.loop-strip span{padding:8px 11px;border-radius:99px;background:rgba(255,255,255,.86);color:#54574f;font-size:10px;font-weight:900}.loop-strip b{color:rgba(37,39,34,.46);font-size:12px}
+    .voices-otter{--enter-x:-34%;--enter-y:16%;--enter-r:-8deg;--rest-r:2deg;z-index:5;left:-12%;bottom:-15%;width:min(52%,390px)}.voices-sheep{--enter-y:-34%;--enter-r:174deg;--rest-r:180deg;z-index:5;top:-16%;right:-5%;width:min(43%,330px);transform-origin:center}
+
+    /* 04 — commitment, final character */
+    .commit{background:#f8f5e9}.commit:before{position:absolute;top:-20%;right:-9%;width:40vw;aspect-ratio:1;border-radius:50%;background:var(--coral);content:""}.commit .eyebrow:before{background:var(--yellow)}
+    .commit .chapter-shell{grid-template-columns:minmax(360px,.84fr) minmax(550px,1.16fr);gap:clamp(42px,6vw,92px)}.commit-copy{position:relative;z-index:7}.commit-fine{max-width:570px;margin:24px 0 0;color:#6b6d64;font-size:12px;font-weight:680;line-height:1.55}
+    .commit-board{position:relative;width:100%;min-height:min(68vh,640px);padding:clamp(46px,6vh,68px) clamp(34px,4vw,58px);border-radius:var(--radius);background:var(--yellow)}.commit-board-title{position:relative;z-index:6;max-width:72%;margin-bottom:28px;font-size:clamp(20px,1.8vw,28px);font-weight:900;letter-spacing:-.035em;line-height:1.15}
+    .commit-steps{position:relative;z-index:6;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;width:78%}.commit-step{min-height:118px;padding:18px;border-radius:21px;background:rgba(255,255,255,.9)}.commit-step:nth-child(2){background:var(--sky)}.commit-step:nth-child(3){background:var(--blush)}.commit-step:nth-child(4){background:var(--lavender)}
+    .mini-no{display:block;margin-bottom:16px;color:#686b63;font-size:10px;font-weight:950;letter-spacing:.12em}.commit-step strong{display:block;font-size:clamp(14px,1.2vw,18px);line-height:1.15}.commit-step span:last-child{display:block;margin-top:5px;color:#666961;font-size:11px;line-height:1.35}
+    .commit-penguin{--enter-x:35%;--enter-y:15%;--enter-r:7deg;--rest-r:-3deg;z-index:5;right:-10%;bottom:-15%;width:min(47%,360px)}.commit-tag{position:absolute;z-index:8;right:5%;bottom:9%;width:min(200px,34%);padding:13px 15px;border-radius:15px;background:var(--ink);color:white;font-size:10px;font-weight:800;line-height:1.4;transform:rotate(2deg)}
+
+    .modal{position:fixed;z-index:500;inset:0;display:grid;place-items:center;padding:22px;background:rgba(37,39,34,.58);opacity:0;pointer-events:none;transition:opacity .2s ease}.modal.is-open{opacity:1;pointer-events:auto}.login-card{position:relative;width:min(440px,100%);padding:34px;border-radius:30px;background:var(--white);transform:translateY(14px) scale(.98);transition:transform .3s cubic-bezier(.16,1,.3,1)}.modal.is-open .login-card{transform:none}.modal-close{position:absolute;top:16px;right:16px;display:grid;place-items:center;width:36px;height:36px;border:0;border-radius:50%;background:#eceae4;cursor:pointer;font-size:20px}.login-card h2{max-width:320px;margin-bottom:12px;font-size:38px}.login-card>p{color:var(--muted);line-height:1.5}.login-form{display:grid;gap:11px;margin-top:24px}.login-form label{color:#54574f;font-size:11px;font-weight:850}.login-form input{width:100%;height:50px;padding:0 15px;border:1px solid #d2d0c9;border-radius:14px;outline:none;background:white}.login-form input:focus{border-color:var(--blue)}.login-form button{min-height:50px;margin-top:4px}.form-status{min-height:18px;margin:2px 0 0;color:#55715a;font-size:11px;font-weight:750}
+
+    @media(max-width:1080px){.header-nav{display:none}.header-actions{margin-left:auto}.hero .chapter-shell,.path .chapter-shell,.voices .chapter-shell,.commit .chapter-shell{grid-template-columns:minmax(0,.9fr) minmax(420px,1.1fr);gap:28px}.path-board,.voices-stage,.commit-board{min-height:min(66vh,590px)}}
+    @media(max-width:820px){
+      :root{--header-h:68px;--page-x:22px}html{scroll-snap-type:y mandatory}.site-header{padding-top:10px}.header-inner{height:54px;border-radius:18px}.header-actions .btn-yellow{display:none}.section-nav{display:none}
+      .chapter-shell,.hero .chapter-shell,.path .chapter-shell,.voices .chapter-shell,.commit .chapter-shell{grid-template-columns:1fr;align-content:start;gap:28px;min-height:100svh;padding-top:calc(var(--header-h) + 38px);padding-bottom:58px}
+      h1{font-size:clamp(49px,11vw,72px)}h2{font-size:clamp(42px,9.5vw,60px)}.hero-stage{justify-self:center;width:min(650px,100%);height:44vh;min-height:370px}.hero:before{top:auto;right:-16%;bottom:-4%;width:78vw}.hero:after{top:auto;right:9%;bottom:30%}
+      .path-board,.voices-stage,.commit-board{justify-self:center;width:min(680px,100%);min-height:510px}.voices:before{width:62vw}.commit:before{width:62vw}
+    }
+    @media(max-width:580px){
+      :root{--page-x:18px}.header-inner{padding-left:12px}.brand{gap:7px;font-size:13px}.brand-mark{transform:scale(.86) rotate(-3deg)}.btn{min-height:38px;padding:0 12px;font-size:12px}
+      .chapter-shell,.hero .chapter-shell,.path .chapter-shell,.voices .chapter-shell,.commit .chapter-shell{gap:24px;padding-top:96px;padding-bottom:54px}.chapter-no{right:18px;bottom:16px}.eyebrow{margin-bottom:13px;font-size:9px}
+      h1{margin-bottom:18px;font-size:clamp(44px,13vw,58px)}h2{margin-bottom:16px;font-size:clamp(39px,11.2vw,50px)}.lede{font-size:16px;line-height:1.48}.actions{margin-top:22px}.cta,.text-cta{min-height:48px;font-size:12px}
+      .hero-proof{margin-top:18px;padding-top:14px}.hero-stage{height:330px;min-height:0;margin-top:-8px}.hero-dino{right:-10%;bottom:-10%;width:78%}.hero-panda{top:1%;left:-10%;width:48%}.stage-note{right:0;bottom:0;width:47%;padding:11px 12px;font-size:10px}
+      .quiet-note{margin-top:17px;padding:13px 14px;font-size:11px}.path-board{min-height:500px;padding:72px 16px 94px;border-radius:34px}.path-steps{gap:9px}.path-step{grid-template-columns:42px 1fr 14px;gap:10px;min-height:86px;padding:13px;border-radius:18px}.step-no{width:38px;height:38px;border-radius:13px}.path-step h3{margin-bottom:4px;font-size:16px}.path-step p{font-size:10px}.path-owl{top:-11%;left:-9%;width:46%}.path-rabbit{right:-12%;bottom:-13%;width:48%}
+      .voices-stage{min-height:455px;border-radius:34px}.quote-card{margin-top:19px;padding:18px}.quote-card blockquote{font-size:15px}.quote-meta{align-items:flex-start;font-size:9px}.voice-player{top:31%;left:10%;width:78%;padding:15px}.voices-otter{left:-17%;bottom:-10%;width:58%}.voices-sheep{top:-12%;right:-10%;width:48%}.loop-strip{right:6%;bottom:8%;left:37%;justify-content:flex-end}.loop-strip span{padding:6px 8px;font-size:8px}
+      .commit-board{min-height:490px;padding:34px 18px;border-radius:34px}.commit-board-title{max-width:76%;margin-bottom:18px;font-size:20px}.commit-steps{width:84%;gap:8px}.commit-step{min-height:100px;padding:13px;border-radius:17px}.mini-no{margin-bottom:10px}.commit-step strong{font-size:13px}.commit-step span:last-child{font-size:9px}.commit-penguin{right:-15%;bottom:-10%;width:54%}.commit-tag{right:4%;bottom:6%;width:40%;padding:10px;font-size:8px}.login-card{padding:30px 22px 24px}
+    }
+    @media(min-width:821px) and (max-height:760px){.chapter-shell{padding-top:92px;padding-bottom:34px}h1{font-size:clamp(54px,7.7vh,74px)}h2{font-size:clamp(42px,6.6vh,60px)}.lede{font-size:16px}.hero-stage,.path-board,.voices-stage,.commit-board{min-height:470px;height:62vh}.actions{margin-top:21px}.hero-proof,.quote-card{margin-top:18px}}
+    html[lang="zh-CN"] body{font-family:"Noto Sans SC","Microsoft YaHei","PingFang SC",system-ui,sans-serif}html[lang="zh-CN"] h1,html[lang="zh-CN"] h2,html[lang="zh-CN"] h3{letter-spacing:-.04em;text-wrap:pretty}html[lang="zh-CN"] h1{font-size:clamp(54px,min(5.4vw,8.2vh),86px);line-height:1.04}html[lang="zh-CN"] h2{font-size:clamp(42px,min(4.2vw,6.4vh),66px);line-height:1.1}html[lang="zh-CN"] .lede{line-height:1.72}
+    @media(max-width:580px){html[lang="zh-CN"] h1{font-size:clamp(40px,12vw,52px);line-height:1.08}html[lang="zh-CN"] h2{font-size:clamp(36px,10.5vw,46px);line-height:1.12}html[lang="zh-CN"] .lede{font-size:15px;line-height:1.65}}
+    @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}.reveal,.character{opacity:1;transform:none!important}}
+  </style>
+</head>
+<body>
+  <a class="skip" href="#hero">Skip to content</a>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="#hero" data-jump="hero" aria-label="TODAYSMISSION home"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span>TODAYSMISSION</span></a>
+      <nav class="header-nav" aria-label="Introduction"><a href="#path" data-jump="path" data-i18n="navHow">How it works</a><a href="#voices" data-jump="voices" data-i18n="navVoices">Real voices</a><a href="#commit" data-jump="commit" data-i18n="navCommit">Commit mode</a></nav>
+      <div class="header-actions"><button class="btn btn-plain" id="languageToggle" type="button" aria-label="Switch language">中文</button><button class="btn btn-outline" id="loginOpen" type="button" data-i18n="login">Log in</button><a class="btn btn-yellow" href="/explore" data-i18n="exploreShort">Explore</a></div>
+    </div>
+  </header>
+
+  <nav class="section-nav" aria-label="Page sections">
+    <button class="section-dot is-active" data-jump="hero" data-label="Start" aria-label="Go to Start"></button><button class="section-dot" data-jump="path" data-label="The path" aria-label="Go to The path"></button><button class="section-dot" data-jump="voices" data-label="Real voices" aria-label="Go to Real voices"></button><button class="section-dot" data-jump="commit" data-label="Commit" aria-label="Go to Commit"></button>
+  </nav>
+
+  <main>
+    <section class="chapter hero is-active" id="hero" aria-labelledby="hero-title">
+      <div class="chapter-shell">
+        <div class="hero-copy">
+          <p class="eyebrow reveal" data-i18n="heroEyebrow">Real life, not just advice</p>
+          <h1 class="reveal" id="hero-title" data-i18n-html="heroTitle">Make the hard thing<br><span>doable.</span></h1>
+          <p class="lede reveal" data-i18n="heroLead">TODAYSMISSION turns the thing you keep avoiding into one real-world mission you can actually complete.</p>
+          <p class="lede reveal" data-i18n="heroBody">Pick one action. Hear from someone who has done it. Then go make it part of your own story.</p>
+          <div class="actions reveal"><a class="cta" href="/explore"><span data-i18n="heroCta">Find your first mission</span><span class="arrow">↗</span></a><button class="text-cta" data-jump="path"><span data-i18n="heroSecondary">See the path</span><span class="arrow">↓</span></button></div>
+          <div class="hero-proof reveal"><span class="proof-mark">✓</span><span data-i18n="heroProof">Not a streak to protect. One honest attempt in the real world.</span></div>
+        </div>
+        <div class="hero-stage" aria-hidden="true">
+          <div class="character hero-panda"><img src="assets/characters/red-panda.png" alt="" width="1024" height="1536" fetchpriority="high"></div>
+          <div class="character hero-dino"><img src="assets/characters/dinosaur.png" alt="" width="1024" height="1536" fetchpriority="high"></div>
+          <div class="stage-note reveal"><strong data-i18n="missionLabel">Today’s mission</strong><span data-i18n="missionExample">Go to the cinema by yourself.</span></div>
+        </div>
+      </div><span class="chapter-no">01 / 04</span>
+    </section>
+
+    <section class="chapter path" id="path" aria-labelledby="path-title">
+      <div class="chapter-shell">
+        <div class="path-copy">
+          <p class="eyebrow reveal" data-i18n="pathEyebrow">From a fear to a path</p><h2 class="reveal" id="path-title" data-i18n-html="pathTitle">A problem becomes<br>a path.</h2>
+          <p class="lede reveal" data-i18n="pathLead">A Pack holds one problem. Its Missions turn that problem into different situations and levels of challenge—so you can choose what fits your real life today.</p>
+          <p class="quiet-note reveal" data-i18n="pathNote">You choose the Mission. Once you accept it, the next step is finishing it—not collecting another task.</p>
+        </div>
+        <div class="path-board">
+          <div class="character path-owl" aria-hidden="true"><img src="assets/characters/owl.png" alt="" width="1256" height="1256" loading="lazy"></div>
+          <div class="path-steps">
+            <article class="path-step reveal"><span class="step-no">01</span><div><h3 data-i18n="stepOneTitle">Name the friction</h3><p data-i18n="stepOneText">“I want to do things alone, but I keep backing out.”</p></div><span class="flow-arrow">↓</span></article>
+            <article class="path-step reveal"><span class="step-no">02</span><div><h3 data-i18n="stepTwoTitle">Join a focused Pack</h3><p data-i18n="stepTwoText">One direction, thoughtfully designed situations.</p></div><span class="flow-arrow">↓</span></article>
+            <article class="path-step reveal"><span class="step-no">03</span><div><h3 data-i18n="stepThreeTitle">Pick one Mission</h3><p data-i18n="stepThreeText">A clear action you can take into the real world.</p></div><span class="flow-arrow">↗</span></article>
+          </div>
+          <div class="character path-rabbit" aria-hidden="true"><img src="assets/characters/rabbit.png" alt="" width="1024" height="1536" loading="lazy"></div>
+        </div>
+      </div><span class="chapter-no">02 / 04</span>
+    </section>
+
+    <section class="chapter voices" id="voices" aria-labelledby="voices-title">
+      <div class="chapter-shell">
+        <div class="voices-copy">
+          <p class="eyebrow reveal" data-i18n="voicesEyebrow">Courage can be borrowed</p><h2 class="reveal" id="voices-title" data-i18n-html="voicesTitle">Hear what happened<br>after the nerves showed up.</h2>
+          <p class="lede reveal" data-i18n="voicesLead">Before you go, listen to someone who completed the exact same Mission. Not generic motivation—one honest account of what it actually felt like.</p>
+          <article class="quote-card reveal"><blockquote data-i18n="quote">“I thought everyone would notice me. Five minutes after I sat down, I realized nobody cared—and that felt freeing.”</blockquote><div class="quote-meta"><span data-i18n="quoteMeta">Completed · Go to the cinema alone</span><span class="listen-pill"><i></i><span data-i18n="listen">Listen · 0:28</span></span></div></article>
+        </div>
+        <div class="voices-stage">
+          <div class="character voices-sheep" aria-hidden="true"><img src="assets/characters/sheep.png" alt="" width="1256" height="1256" loading="lazy"></div>
+          <div class="voice-player reveal"><div class="player-top"><button class="play-button" type="button" aria-label="Play example experience">▶</button><div class="player-title"><strong data-i18n="playerTitle">A real note from someone who did it</strong><span data-i18n="playerMeta">Same Mission · shared after completion</span></div></div><div class="waveform" aria-hidden="true"><i style="--wave:10px"></i><i style="--wave:19px"></i><i style="--wave:28px"></i><i style="--wave:15px"></i><i style="--wave:24px"></i><i style="--wave:31px"></i><i style="--wave:17px"></i><i style="--wave:11px"></i><i style="--wave:26px"></i><i style="--wave:20px"></i><i style="--wave:32px"></i><i style="--wave:16px"></i><i style="--wave:25px"></i><i style="--wave:12px"></i><i style="--wave:21px"></i><i style="--wave:29px"></i></div></div>
+          <div class="loop-strip"><span data-i18n="loopHear">Hear</span><b>→</b><span data-i18n="loopDo">Do it</span><b>→</b><span data-i18n="loopRecord">Record</span><b>→</b><span data-i18n="loopHelp">Help the next person</span></div>
+          <div class="character voices-otter" aria-hidden="true"><img src="assets/characters/otter.png" alt="" width="1256" height="1256" loading="lazy"></div>
+        </div>
+      </div><span class="chapter-no">03 / 04</span>
+    </section>
+
+    <section class="chapter commit" id="commit" aria-labelledby="commit-title">
+      <div class="chapter-shell">
+        <div class="commit-copy">
+          <p class="eyebrow reveal" data-i18n="commitEyebrow">Optional commit mode</p><h2 class="reveal" id="commit-title" data-i18n-html="commitTitle">Put something behind<br>the promise.</h2>
+          <p class="lede reveal" data-i18n="commitLead">If you want stronger momentum, commit an amount when you begin a Pack. Finish the Pack and it unlocks as TODAYSMISSION Credits.</p>
+          <div class="actions reveal"><a class="cta" href="/explore"><span data-i18n="commitCta">Explore Mission Packs</span><span class="arrow">↗</span></a></div>
+          <p class="commit-fine reveal" data-i18n="commitFine">Credits are not withdrawable. They are made for TODAYSMISSION products: physical cards, digital Packs, personalized Packs and future releases.</p>
+        </div>
+        <div class="commit-board">
+          <p class="commit-board-title reveal" data-i18n="commitBoardTitle">A promise that comes back as something you can keep.</p>
+          <div class="commit-steps">
+            <article class="commit-step reveal"><span class="mini-no">01</span><strong data-i18n="commitStepOne">Commit</strong><span data-i18n="commitStepOneSub">Choose an amount</span></article><article class="commit-step reveal"><span class="mini-no">02</span><strong data-i18n="commitStepTwo">Complete</strong><span data-i18n="commitStepTwoSub">Finish the Pack</span></article><article class="commit-step reveal"><span class="mini-no">03</span><strong data-i18n="commitStepThree">Unlock Credits</strong><span data-i18n="commitStepThreeSub">Turn effort into value</span></article><article class="commit-step reveal"><span class="mini-no">04</span><strong data-i18n="commitStepFour">Collect</strong><span data-i18n="commitStepFourSub">Choose what stays with you</span></article>
+          </div>
+          <div class="character commit-penguin" aria-hidden="true"><img src="assets/characters/penguin.png" alt="" width="1024" height="1536" loading="lazy"></div><div class="commit-tag reveal" data-i18n="commitTag">Commit Mode is optional. The Missions are still the heart of the product.</div>
+        </div>
+      </div><span class="chapter-no">04 / 04</span>
+    </section>
+  </main>
+
+  <div class="modal" id="loginModal" role="dialog" aria-modal="true" aria-labelledby="loginTitle" aria-hidden="true">
+    <div class="login-card"><button class="modal-close" id="loginClose" type="button" aria-label="Close login">×</button><p class="eyebrow" data-i18n="loginEyebrow">Welcome back</p><h2 id="loginTitle" data-i18n="loginTitle">Continue your Mission.</h2><p data-i18n="loginBody">Sign in to see your active Pack and the next Mission waiting for you.</p><form class="login-form" id="loginForm"><label for="email" data-i18n="emailLabel">Email</label><input id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required><button class="btn btn-dark" type="submit" data-i18n="loginContinue">Continue</button><p class="form-status" id="formStatus" aria-live="polite"></p></form></div>
+  </div>
+
+  <script>
+    (()=>{
+      const chapters=[...document.querySelectorAll('.chapter')],dots=[...document.querySelectorAll('.section-dot')],jumps=[...document.querySelectorAll('[data-jump]')];
+      const reduced=matchMedia('(prefers-reduced-motion: reduce)'),mobile=matchMedia('(max-width: 820px)');
+      let active=0,frame=0,timer=0,snapping=false,touching=false,lastY=scrollY;
+      const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+      function setActive(i){active=clamp(i,0,chapters.length-1);chapters.forEach((s,n)=>s.classList.toggle('is-active',n===active));dots.forEach((d,n)=>{d.classList.toggle('is-active',n===active);d.setAttribute('aria-current',n===active?'true':'false')})}
+      function nearest(){const mid=scrollY+innerHeight*.5;let found=0,best=Infinity;chapters.forEach((s,i)=>{const center=s.offsetTop+Math.min(s.offsetHeight,innerHeight)*.5,dist=Math.abs(center-mid);if(dist<best){best=dist;found=i}});return found}
+      function cancel(){cancelAnimationFrame(frame);snapping=false}
+      function animateTo(y,index){cancel();clearTimeout(timer);if(reduced.matches){scrollTo(0,y);setActive(index);return}const start=scrollY,distance=y-start;if(Math.abs(distance)<2){setActive(index);return}const duration=clamp(500+Math.abs(distance)*.18,520,860),begin=performance.now();snapping=true;function tick(now){const p=clamp((now-begin)/duration,0,1),ease=1-Math.pow(1-p,5);scrollTo(0,start+distance*ease);if(p<1&&snapping)frame=requestAnimationFrame(tick);else{snapping=false;scrollTo(0,y);setActive(index)}}frame=requestAnimationFrame(tick)}
+      function go(i){i=clamp(i,0,chapters.length-1);animateTo(chapters[i].offsetTop,i)}
+      function schedule(){clearTimeout(timer);if(touching||snapping||document.body.classList.contains('modal-open'))return;timer=setTimeout(()=>{const i=nearest(),distance=chapters[i].offsetTop-scrollY,threshold=Math.max(24,innerHeight*.035);if(Math.abs(distance)>threshold&&!mobile.matches)animateTo(chapters[i].offsetTop,i);else setActive(i)},mobile.matches?90:125)}
+      addEventListener('scroll',()=>{lastY=scrollY;const i=nearest();if(i!==active)setActive(i);if(!snapping)schedule()},{passive:true});addEventListener('wheel',()=>{clearTimeout(timer);if(snapping)cancel()},{passive:true});addEventListener('touchstart',()=>{touching=true;clearTimeout(timer);if(snapping)cancel()},{passive:true});addEventListener('touchend',()=>{touching=false;schedule()},{passive:true});
+      jumps.forEach(control=>control.addEventListener('click',e=>{const i=chapters.findIndex(s=>s.id===control.dataset.jump);if(i<0)return;e.preventDefault();go(i)}));
+      const observer=new IntersectionObserver(entries=>entries.forEach(entry=>{if(entry.isIntersecting&&entry.intersectionRatio>.46){const i=chapters.indexOf(entry.target);if(i>=0)setActive(i)}}),{threshold:[.2,.46,.72]});chapters.forEach(s=>observer.observe(s));
+
+      const copy={
+        en:{navHow:'How it works',navVoices:'Real voices',navCommit:'Commit mode',login:'Log in',exploreShort:'Explore',heroEyebrow:'Real life, not just advice',heroTitle:'Make the hard thing<br><span>doable.</span>',heroLead:'TODAYSMISSION turns the thing you keep avoiding into one real-world mission you can actually complete.',heroBody:'Pick one action. Hear from someone who has done it. Then go make it part of your own story.',heroCta:'Find your first mission',heroSecondary:'See the path',heroProof:'Not a streak to protect. One honest attempt in the real world.',missionLabel:'Today’s mission',missionExample:'Go to the cinema by yourself.',pathEyebrow:'From a fear to a path',pathTitle:'A problem becomes<br>a path.',pathLead:'A Pack holds one problem. Its Missions turn that problem into different situations and levels of challenge—so you can choose what fits your real life today.',pathNote:'You choose the Mission. Once you accept it, the next step is finishing it—not collecting another task.',stepOneTitle:'Name the friction',stepOneText:'“I want to do things alone, but I keep backing out.”',stepTwoTitle:'Join a focused Pack',stepTwoText:'One direction, thoughtfully designed situations.',stepThreeTitle:'Pick one Mission',stepThreeText:'A clear action you can take into the real world.',voicesEyebrow:'Courage can be borrowed',voicesTitle:'Hear what happened<br>after the nerves showed up.',voicesLead:'Before you go, listen to someone who completed the exact same Mission. Not generic motivation—one honest account of what it actually felt like.',quote:'“I thought everyone would notice me. Five minutes after I sat down, I realized nobody cared—and that felt freeing.”',quoteMeta:'Completed · Go to the cinema alone',listen:'Listen · 0:28',playerTitle:'A real note from someone who did it',playerMeta:'Same Mission · shared after completion',loopHear:'Hear',loopDo:'Do it',loopRecord:'Record',loopHelp:'Help the next person',commitEyebrow:'Optional commit mode',commitTitle:'Put something behind<br>the promise.',commitLead:'If you want stronger momentum, commit an amount when you begin a Pack. Finish the Pack and it unlocks as TODAYSMISSION Credits.',commitCta:'Explore Mission Packs',commitFine:'Credits are not withdrawable. They are made for TODAYSMISSION products: physical cards, digital Packs, personalized Packs and future releases.',commitBoardTitle:'A promise that comes back as something you can keep.',commitStepOne:'Commit',commitStepOneSub:'Choose an amount',commitStepTwo:'Complete',commitStepTwoSub:'Finish the Pack',commitStepThree:'Unlock Credits',commitStepThreeSub:'Turn effort into value',commitStepFour:'Collect',commitStepFourSub:'Choose what stays with you',commitTag:'Commit Mode is optional. The Missions are still the heart of the product.',loginEyebrow:'Welcome back',loginTitle:'Continue your Mission.',loginBody:'Sign in to see your active Pack and the next Mission waiting for you.',emailLabel:'Email',loginContinue:'Continue',formMessage:'Static prototype — authentication will be connected during integration.'},
+        zh:{navHow:'如何运作',navVoices:'真实经历',navCommit:'承诺模式',login:'登录',exploreShort:'探索',heroEyebrow:'不是建议，而是现实行动',heroTitle:'把“不敢做”<br><span>变成“我做过”。</span>',heroLead:'TODAYSMISSION 把你一直回避的事情，变成一项真正可以在现实世界完成的 Mission。',heroBody:'选择一个行动，听听完成过它的人怎么说，然后亲自把它变成自己的经历。',heroCta:'找到第一项 Mission',heroSecondary:'了解行动路径',heroProof:'不是需要维护的连续打卡，而是一次诚实的现实尝试。',missionLabel:'今天的 Mission',missionExample:'一个人去电影院。',pathEyebrow:'从害怕，到一条可走的路',pathTitle:'一个问题，<br>变成一条行动路径。',pathLead:'一个 Pack 聚焦一个问题。它把问题拆成不同情境、不同难度的 Missions，让你按照今天的现实状况做选择。',pathNote:'Mission 由你选择；但一旦接下，下一步是去完成，而不是继续收集更多任务。',stepOneTitle:'说清真正的阻力',stepOneText:'“我想一个人做些事情，却总在最后退缩。”',stepTwoTitle:'加入一个聚焦的 Pack',stepTwoText:'一个明确方向，一组经过设计的现实情境。',stepThreeTitle:'选定一个 Mission',stepThreeText:'一件可以真正带进现实世界的具体行动。',voicesEyebrow:'勇气可以从别人那里借一点',voicesTitle:'听听紧张出现以后，<br>真实发生了什么。',voicesLead:'出发之前，听一位完成过同一项 Mission 的用户讲述经历。不是泛泛鼓励，而是那一刻真实的感受。',quote:'“我以为所有人都会注意我。坐下五分钟后，我发现根本没人在意，那一刻反而很自由。”',quoteMeta:'已完成 · 一个人去电影院',listen:'听取 · 0:28',playerTitle:'一段来自完成者的真实记录',playerMeta:'同一项 Mission · 完成后分享',loopHear:'听经历',loopDo:'去完成',loopRecord:'留下记录',loopHelp:'帮助下一个人',commitEyebrow:'可选的 Commit Mode',commitTitle:'让这次承诺，<br>真正有一点分量。',commitLead:'如果你需要更强的推动力，可以在开始 Pack 时主动投入一笔金额。完成整个 Pack 后，它会解锁为 TODAYSMISSION Credits。',commitCta:'探索 Mission Packs',commitFine:'Credits 不支持提现，可用于 TODAYSMISSION 的实体卡片、数字 Pack、个性化 Pack 与未来产品。',commitBoardTitle:'把一次承诺，变成一件最终可以留下的东西。',commitStepOne:'做出承诺',commitStepOneSub:'选择投入金额',commitStepTwo:'完成 Pack',commitStepTwoSub:'完成整组 Missions',commitStepThree:'解锁 Credits',commitStepThreeSub:'让行动产生价值',commitStepFour:'选择收藏',commitStepFourSub:'换成真正想留下的产品',commitTag:'Commit Mode 是可选项，Missions 才始终是产品的核心。',loginEyebrow:'欢迎回来',loginTitle:'继续你的 Mission。',loginBody:'登录后查看正在进行的 Pack，以及下一项等待完成的 Mission。',emailLabel:'邮箱',loginContinue:'继续',formMessage:'这是静态设计稿，正式集成时再接入现有登录功能。'}
+      };
+      let lang='en';const languageToggle=document.getElementById('languageToggle');function applyLanguage(next){lang=next;const d=copy[lang];document.documentElement.lang=lang==='zh'?'zh-CN':'en';document.querySelectorAll('[data-i18n]').forEach(el=>{if(d[el.dataset.i18n]!==undefined)el.textContent=d[el.dataset.i18n]});document.querySelectorAll('[data-i18n-html]').forEach(el=>{if(d[el.dataset.i18nHtml]!==undefined)el.innerHTML=d[el.dataset.i18nHtml]});languageToggle.textContent=lang==='en'?'中文':'EN';document.title=lang==='en'?'TODAYSMISSION — Do the thing for real':'TODAYSMISSION — 真的去完成一次'}languageToggle.addEventListener('click',()=>applyLanguage(lang==='en'?'zh':'en'));
+      const modal=document.getElementById('loginModal'),open=document.getElementById('loginOpen'),close=document.getElementById('loginClose'),email=document.getElementById('email'),form=document.getElementById('loginForm'),status=document.getElementById('formStatus');function openModal(){modal.classList.add('is-open');modal.setAttribute('aria-hidden','false');document.body.classList.add('modal-open');setTimeout(()=>email.focus(),80)}function closeModal(){modal.classList.remove('is-open');modal.setAttribute('aria-hidden','true');document.body.classList.remove('modal-open');open.focus()}open.addEventListener('click',openModal);close.addEventListener('click',closeModal);modal.addEventListener('click',e=>{if(e.target===modal)closeModal()});document.addEventListener('keydown',e=>{if(e.key==='Escape'&&modal.classList.contains('is-open'))closeModal()});form.addEventListener('submit',e=>{e.preventDefault();status.textContent=copy[lang].formMessage});
+      document.querySelector('.play-button').addEventListener('click',e=>{const b=e.currentTarget,playing=b.textContent==='Ⅱ';b.textContent=playing?'▶':'Ⅱ';b.setAttribute('aria-label',playing?'Play example experience':'Pause example experience')});setActive(nearest());addEventListener('resize',()=>setActive(nearest()),{passive:true});
+    })();
+  </script>
+</body>
+</html>
