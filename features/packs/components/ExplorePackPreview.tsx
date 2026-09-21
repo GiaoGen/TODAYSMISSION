@@ -87,7 +87,14 @@ type TakeActionPhase =
   | "mission"
   | "mission-closing"
   | "hidden";
-type MissionCompletionPhase = "idle" | "flipping" | "slider" | "choice" | "audio" | "text";
+type MissionCompletionPhase =
+  | "idle"
+  | "flipping"
+  | "slider"
+  | "choice"
+  | "audio"
+  | "text"
+  | "completing";
 type MissionProofMode = "audio" | "text";
 
 const COPY_COUNT = 3;
@@ -104,12 +111,13 @@ function wrapIndex(value: number, count: number) {
   return ((value % count) + count) % count;
 }
 
-function MissionVisual({ accessible, eager, mission, mode, onProofChoice }: {
+function MissionVisual({ accessible, eager, mission, mode, onProofChoice, prepareCompletionArtwork }: {
   accessible: boolean;
   eager: boolean;
   mission: ExploreMissionArtwork;
   mode: GalleryMode;
   onProofChoice?: (mode: MissionProofMode) => void;
+  prepareCompletionArtwork?: boolean;
 }) {
   const imageArtwork = mode === "artwork" ? mission.previewArtwork : undefined;
   if (imageArtwork || !mission.card) {
@@ -164,6 +172,18 @@ function MissionVisual({ accessible, eager, mission, mode, onProofChoice }: {
         className={styles.missionCardBack}
         role={accessible ? "img" : undefined}
       >
+        {prepareCompletionArtwork && mission.previewArtwork ? (
+          <Image
+            alt=""
+            aria-hidden="true"
+            className={styles.missionCompletionArtwork}
+            draggable={false}
+            fill
+            loading="eager"
+            sizes="(max-width: 640px) 74vw, 300px"
+            src={mission.previewArtwork}
+          />
+        ) : null}
         <span aria-hidden="true" className={styles.missionCardBackTitle}>
           {mission.card.titleLines.map((line, index) => (
             <span key={`${mission.id}-back-${index}`}>{line}</span>
@@ -221,7 +241,7 @@ function GalleryCard({ choiceRevealed, copyIndex, flipped, mission, mode, onProo
   mission: ExploreMissionArtwork;
   mode: GalleryMode;
   onProofChoice?: (mode: MissionProofMode) => void;
-  proofMode?: MissionProofMode;
+  proofMode?: MissionProofMode | "completing";
   setRef: (element: HTMLLIElement | null) => void;
 }) {
   return (
@@ -229,6 +249,7 @@ function GalleryCard({ choiceRevealed, copyIndex, flipped, mission, mode, onProo
       aria-hidden={copyIndex !== PRIMARY_COPY}
       className={styles.galleryCard}
       data-completion-choice={choiceRevealed || undefined}
+      data-completing={proofMode === "completing" || undefined}
       data-flipped={flipped || undefined}
       data-mission-card={mode === "mission-card" ? mission.id : undefined}
       data-preview-card
@@ -242,6 +263,7 @@ function GalleryCard({ choiceRevealed, copyIndex, flipped, mission, mode, onProo
           mission={mission}
           mode={mode}
           onProofChoice={onProofChoice}
+          prepareCompletionArtwork={flipped}
         />
       </span>
     </li>
@@ -280,6 +302,8 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
   const rootRef = useRef<HTMLElement>(null);
   const trackRef = useRef<HTMLOListElement>(null);
   const missionBackgroundRef = useRef<HTMLSpanElement>(null);
+  const missionBackgroundOpacityRef = useRef(0);
+  const pendingBackgroundMissionIdRef = useRef<string | null>(null);
   const galleryCardRefs = useRef<Array<HTMLLIElement | null>>([]);
   const proxyCardRefs = useRef<Array<HTMLLIElement | null>>([]);
   const positionRef = useRef(0);
@@ -296,18 +320,21 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
   const [galleryMode, setGalleryMode] = useState<GalleryMode>(supportsTakeTransition ? "artwork" : "mission-card");
   const [takeActionPhase, setTakeActionPhase] = useState<TakeActionPhase>("pack");
   const [activeMissionIndex, setActiveMissionIndex] = useState(0);
+  const [backgroundMissionId, setBackgroundMissionId] = useState<string | null>(null);
+  const [completedMissionIds, setCompletedMissionIds] = useState<ReadonlySet<string>>(() => new Set());
   const [flippedMissionId, setFlippedMissionId] = useState<string | null>(null);
   const [missionCompletionPhase, setMissionCompletionPhase] = useState<MissionCompletionPhase>("idle");
+  const [selectedProofMode, setSelectedProofMode] = useState<MissionProofMode | null>(null);
   const activeMission = pack.missions[activeMissionIndex] ?? pack.missions[0];
+  const activeMissionCompleted = activeMission ? completedMissionIds.has(activeMission.id) : false;
+  const backgroundMission = backgroundMissionId
+    ? pack.missions.find((mission) => mission.id === backgroundMissionId)
+    : undefined;
   const activeCardTheme = activeMission?.card;
   const lockedMission = flippedMissionId
     ? pack.missions.find((mission) => mission.id === flippedMissionId)
     : undefined;
   const lockedCardTheme = lockedMission?.card;
-  const selectedProofMode: MissionProofMode | undefined =
-    missionCompletionPhase === "audio" || missionCompletionPhase === "text"
-      ? missionCompletionPhase
-      : undefined;
   const style: PreviewStyle = {
     "--preview-background": pack.background,
     "--preview-foreground": pack.foreground,
@@ -328,6 +355,14 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
   const setPhase = useCallback((next: PreviewPhase) => {
     phaseRef.current = next;
     setPhaseState(next);
+  }, []);
+
+  const paintMissionBackground = useCallback((opacity: number) => {
+    const bounded = clamp(opacity, 0, 1);
+    missionBackgroundOpacityRef.current = bounded;
+    if (missionBackgroundRef.current) {
+      missionBackgroundRef.current.style.opacity = String(bounded);
+    }
   }, []);
 
   const paint = useCallback(() => {
@@ -505,6 +540,34 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
     );
     return () => window.clearTimeout(timer);
   }, [missionCompletionPhase]);
+
+  useEffect(() => {
+    if (flippedMissionId) return;
+    const targetMissionId = activeMissionCompleted ? activeMission?.id ?? null : null;
+    if (!targetMissionId) {
+      pendingBackgroundMissionIdRef.current = null;
+      paintMissionBackground(0);
+      return;
+    }
+    if (targetMissionId === backgroundMissionId) {
+      pendingBackgroundMissionIdRef.current = null;
+      const frame = window.requestAnimationFrame(() => paintMissionBackground(1));
+      return () => window.cancelAnimationFrame(frame);
+    }
+    if (missionBackgroundOpacityRef.current > 0.001) {
+      pendingBackgroundMissionIdRef.current = targetMissionId;
+      paintMissionBackground(0);
+      return;
+    }
+    pendingBackgroundMissionIdRef.current = null;
+    setBackgroundMissionId(targetMissionId);
+  }, [
+    activeMission?.id,
+    activeMissionCompleted,
+    backgroundMissionId,
+    flippedMissionId,
+    paintMissionBackground,
+  ]);
 
   useEffect(() => {
     if (phase !== "take-collapse-ready" && phase !== "take-swap-ready") return;
@@ -688,11 +751,16 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
     const stride = Math.max(1, strideRef.current);
     const steps = Math.round((originRef.current - positionRef.current) / stride);
     const mission = pack.missions[wrapIndex(steps, pack.missions.length)];
+    if (completedMissionIds.has(mission.id)) return;
     positionRef.current = originRef.current - steps * stride;
     normalizePosition();
     paint();
     setActiveMissionIndex(wrapIndex(steps, pack.missions.length));
+    pendingBackgroundMissionIdRef.current = null;
+    paintMissionBackground(0);
+    setBackgroundMissionId(mission.id);
     setFlippedMissionId(mission.id);
+    setSelectedProofMode(null);
     setMissionCompletionPhase("flipping");
     setTakeActionPhase("mission-closing");
   };
@@ -702,15 +770,51 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
     const bounded = clamp(progress, 0, 1);
     const recordY = -100 + bounded * 50;
     const textY = 100 - bounded * 50;
-    if (missionBackgroundRef.current) {
-      missionBackgroundRef.current.style.opacity = String(bounded);
-    }
+    paintMissionBackground(bounded);
     galleryCardRefs.current.forEach((card) => {
       if (!card || card.dataset.missionCard !== flippedMissionId) return;
       card.style.setProperty("--mission-record-y", `${recordY}%`);
       card.style.setProperty("--mission-text-y", `${textY}%`);
     });
-  }, [flippedMissionId]);
+  }, [flippedMissionId, paintMissionBackground]);
+
+  const completeMission = () => {
+    if (
+      !flippedMissionId ||
+      !selectedProofMode ||
+      (missionCompletionPhase !== "audio" && missionCompletionPhase !== "text")
+    ) return;
+    setMissionCompletionPhase("completing");
+  };
+
+  useEffect(() => {
+    if (missionCompletionPhase !== "completing" || !flippedMissionId) return;
+    const completedMissionId = flippedMissionId;
+    let cancelled = false;
+    let settleFrame = 0;
+    const exitFrame = window.requestAnimationFrame(() => {
+      settleFrame = window.requestAnimationFrame(() => {
+        const animations = rootRef.current?.getAnimations({ subtree: true }) ?? [];
+        void Promise.allSettled(animations.map((animation) => animation.finished)).then(() => {
+          if (cancelled) return;
+          setCompletedMissionIds((current) => {
+            const next = new Set(current);
+            next.add(completedMissionId);
+            return next;
+          });
+          setFlippedMissionId(null);
+          setSelectedProofMode(null);
+          setMissionCompletionPhase("idle");
+          setTakeActionPhase("mission");
+        });
+      });
+    });
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(exitFrame);
+      window.cancelAnimationFrame(settleFrame);
+    };
+  }, [flippedMissionId, missionCompletionPhase]);
 
   const closePreview = (target: EventTarget | null) => {
     if (
@@ -740,6 +844,7 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
     <section
       aria-label={`${pack.title} Mission artwork preview`}
       className={styles.root}
+      data-mission-completion={missionCompletionPhase}
       data-mission-locked={flippedMissionId ? "true" : undefined}
       data-moving="false"
       data-phase={phase}
@@ -763,15 +868,30 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
       style={style}
       tabIndex={0}
     >
-      {lockedMission ? (
-        <span aria-hidden="true" className={styles.missionArtworkBackground} ref={missionBackgroundRef}>
+      {backgroundMission ? (
+        <span
+          aria-hidden="true"
+          className={styles.missionArtworkBackground}
+          onTransitionEnd={(event) => {
+            if (
+              event.currentTarget !== event.target ||
+              event.propertyName !== "opacity" ||
+              missionBackgroundOpacityRef.current > 0.001
+            ) return;
+            const pendingMissionId = pendingBackgroundMissionIdRef.current;
+            if (!pendingMissionId) return;
+            pendingBackgroundMissionIdRef.current = null;
+            setBackgroundMissionId(pendingMissionId);
+          }}
+          ref={missionBackgroundRef}
+        >
           <Image
             alt=""
             className={styles.missionArtworkBackgroundImage}
             draggable={false}
             fill
             sizes="60vw"
-            src={lockedMission.previewArtwork ?? lockedMission.artwork}
+            src={backgroundMission.previewArtwork ?? backgroundMission.artwork}
           />
         </span>
       ) : null}
@@ -783,6 +903,9 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
         {Array.from({ length: COPY_COUNT }, (_, copyIndex) =>
           pack.missions.map((mission, slot) => {
             const refIndex = copyIndex * pack.missions.length + slot;
+            const missionMode = galleryMode === "mission-card" && completedMissionIds.has(mission.id)
+              ? "artwork"
+              : galleryMode;
             return (
               <GalleryCard
                 copyIndex={copyIndex}
@@ -793,14 +916,19 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
                 flipped={flippedMissionId === mission.id}
                 key={`${copyIndex}-${mission.id}`}
                 mission={mission}
-                mode={galleryMode}
+                mode={missionMode}
                 onProofChoice={
                   ["choice", "audio", "text"].includes(missionCompletionPhase) &&
                   flippedMissionId === mission.id
-                    ? (mode) => setMissionCompletionPhase(mode)
+                    ? (mode) => {
+                        setSelectedProofMode(mode);
+                        setMissionCompletionPhase(mode);
+                      }
                     : undefined
                 }
-                proofMode={flippedMissionId === mission.id ? selectedProofMode : undefined}
+                proofMode={flippedMissionId === mission.id
+                  ? missionCompletionPhase === "completing" ? "completing" : selectedProofMode ?? undefined
+                  : undefined}
                 setRef={(element) => { galleryCardRefs.current[refIndex] = element; }}
               />
             );
@@ -812,13 +940,17 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
           <DistributionCard
             key={offset}
             mission={proxyMissions[index]}
-            mode={galleryMode}
+            mode={galleryMode === "mission-card" && completedMissionIds.has(proxyMissions[index].id)
+              ? "artwork"
+              : galleryMode}
             offset={offset}
             setRef={(element) => { proxyCardRefs.current[index] = element; }}
           />
         ))}
       </ol>
-      {supportsTakeTransition && takeActionPhase !== "hidden" ? (
+      {supportsTakeTransition &&
+      takeActionPhase !== "hidden" &&
+      !(takeActionPhase === "mission" && activeMissionCompleted) ? (
         <div
           className={styles.takeControl}
           data-preview-control
@@ -847,6 +979,7 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
         "choice",
         "audio",
         "text",
+        "completing",
       ].includes(missionCompletionPhase) && lockedCardTheme ? (
         <div
           className={styles.completionControl}
@@ -867,10 +1000,11 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
             />
           </div>
           <button
-            aria-disabled="true"
             className={styles.completionUpload}
+            data-exiting={missionCompletionPhase === "completing"}
             data-visible={Boolean(selectedProofMode)}
-            disabled
+            disabled={!selectedProofMode || missionCompletionPhase === "completing"}
+            onClick={completeMission}
             type="button"
           >
             upload
