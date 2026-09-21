@@ -24,7 +24,7 @@ export function createNativeScrollController(viewport: HTMLElement, options: Nat
   let disposed = false;
   let moving = false;
   let touching = false;
-  let pointerStart: { x: number; y: number } | null = null;
+  let pointerStart: { x: number; y: number; revision: number } | null = null;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let revision = 0;
   let lastScrollTime = 0;
@@ -137,16 +137,27 @@ export function createNativeScrollController(viewport: HTMLElement, options: Nat
   };
   const onPointerDown = (event: PointerEvent) => {
     if (disposed || locked) return;
-    pointerStart = { x: event.clientX, y: event.clientY };
     if (!moving) suppressClickUntil = 0;
     calibrated = false;
     silentOffset = null;
     revision++;
+    pointerStart = { x: event.clientX, y: event.clientY, revision };
     clearTimer();
   };
   const onPointerUp = (event: PointerEvent) => {
-    if (pointerStart && Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y) > 5) {
-      suppressClickUntil = performance.now() + 240;
+    if (pointerStart) {
+      const travelled = Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y);
+      if (travelled > 5) {
+        suppressClickUntil = performance.now() + 240;
+      } else if (pointerStart.revision === revision) {
+        // Some Chromium builds expose scrollend but occasionally omit it after
+        // native snap. A fresh stationary tap proves that prior momentum is no
+        // longer moving and must not leave unrelated controls permanently gated.
+        clearTimer();
+        markMoving(false);
+        suppressClickUntil = 0;
+        flushIdleWork();
+      }
     }
     pointerStart = null;
     if (moving) scheduleQuietCheck();

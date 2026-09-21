@@ -243,7 +243,7 @@ function MissionVisual({ accessible, eager, interactive, mission, mode, onProofC
   );
 }
 
-function GalleryCard({ choiceRevealed, copyIndex, eager, flipped, mission, mode, onProofChoice, proofMode, setRef }: {
+function GalleryCard({ choiceRevealed, copyIndex, eager, flipped, mission, mode, onProofChoice, prepared, proofMode, setRef }: {
   choiceRevealed: boolean;
   copyIndex: number;
   eager: boolean;
@@ -251,6 +251,7 @@ function GalleryCard({ choiceRevealed, copyIndex, eager, flipped, mission, mode,
   mission: ExploreMissionArtwork;
   mode: GalleryMode;
   onProofChoice?: (mode: MissionProofMode) => void;
+  prepared: boolean;
   proofMode?: MissionProofMode | "completing";
   setRef: (element: HTMLLIElement | null) => void;
 }) {
@@ -266,11 +267,11 @@ function GalleryCard({ choiceRevealed, copyIndex, eager, flipped, mission, mode,
       data-proof-mode={proofMode}
       ref={setRef}
     >
-      <span className={styles.cardSurface} data-flip-shell={flipped || undefined}>
+      <span className={styles.cardSurface} data-flip-shell={prepared || undefined}>
         <MissionVisual
           accessible={copyIndex === PRIMARY_COPY}
           eager={eager}
-          interactive={flipped}
+          interactive={prepared}
           mission={mission}
           mode={mode}
           onProofChoice={onProofChoice}
@@ -823,7 +824,6 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
     }
 
     const nativeController = nativeScrollControllerRef.current;
-    if (nativeController && !nativeController.canActivate()) return;
     if (nativeController) {
       const logicalPosition = nativeController.freeze();
       positionRef.current = originRef.current - logicalPosition * strideRef.current;
@@ -850,7 +850,6 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
     }
 
     const nativeController = nativeScrollControllerRef.current;
-    if (nativeController && !nativeController.canActivate()) return;
     if (nativeController) {
       const logicalPosition = nativeController.freeze();
       positionRef.current = originRef.current - logicalPosition * strideRef.current;
@@ -935,7 +934,7 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
     }
 
     const nativeController = nativeScrollControllerRef.current;
-    if (nativeController && !nativeController.canActivate()) return;
+    if (nativeController && !flippedMissionId && !nativeController.canActivate()) return;
     if (nativeController) {
       const logicalPosition = nativeController.freeze();
       positionRef.current = originRef.current - logicalPosition * strideRef.current;
@@ -1060,6 +1059,7 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
                         }
                       : undefined
                   }
+                  prepared={galleryMode === "mission-card" && mission.id === activeMission?.id}
                   proofMode={flippedMissionId === mission.id
                     ? missionCompletionPhase === "completing" ? "completing" : selectedProofMode ?? undefined
                     : undefined}

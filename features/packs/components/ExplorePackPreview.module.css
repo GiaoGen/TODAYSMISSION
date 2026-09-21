@@ -155,7 +155,7 @@
   color: var(--mission-card-foreground);
 }
 
-.galleryCard[data-flipped="true"] .missionCardVisual {
+.cardSurface[data-flip-shell] .missionCardVisual {
   transform-style: preserve-3d;
   -webkit-transform-style: preserve-3d;
 }

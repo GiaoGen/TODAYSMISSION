@@ -292,6 +292,19 @@ test("release clicks are suppressed but a new stationary tap and keyboard naviga
   h.controller.destroy();
 });
 
+test("a stationary tap recovers when Chromium omits a supported scrollend event", () => {
+  const h = controllerHarness();
+  h.viewport.nativeScroll(700);
+  assert.equal(h.controller.isMoving(), true);
+  h.viewport.emit("touchstart");
+  h.viewport.emit("pointerdown", { clientX: 100 });
+  h.viewport.emit("pointerup", { clientX: 100 });
+  h.viewport.emit("touchend");
+  assert.equal(h.controller.isMoving(), false);
+  assert.equal(h.controller.canActivate(), true);
+  h.controller.destroy();
+});
+
 test("finite lists clamp, reduced motion uses one instant action, and empty/single lists stay valid", () => {
   for (const count of [0, 1, 2, 5]) {
     const h = controllerHarness({ count, copies: 1, reducedMotion: true });
