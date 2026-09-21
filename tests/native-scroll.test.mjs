@@ -320,6 +320,9 @@ test("Pack preview clears the SSR transform and keeps Safari scroll compositing 
   assert.match(css, /data-flip-stage="swap"[\s\S]*?rotateX\(-90deg\)/);
   assert.match(css, /data-back-visible="true"[\s\S]*?missionCardBack/);
   assert.doesNotMatch(css, /rotateX\(-?180deg\)/);
+  const settledProxyRule = css.match(/\.root\[data-phase="settled"\] \.proxyLayer\s*\{([^}]+)\}/)?.[1] ?? "";
+  assert.match(settledProxyRule, /visibility:\s*hidden/);
+  assert.match(settledProxyRule, /opacity:\s*0/);
   const lockedRule = css.match(/\.root\[data-native-scroll="true"\]:not\(\[data-phase="settled"\]\)[\s\S]*?\{([\s\S]*?)\}/)?.[1] ?? "";
   assert.match(lockedRule, /touch-action:\s*none/);
   assert.doesNotMatch(lockedRule, /overflow-x:\s*hidden/);

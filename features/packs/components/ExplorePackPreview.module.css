@@ -520,7 +520,10 @@
   transform: scale(1);
 }
 
-.root[data-phase="settled"] .proxyLayer { visibility: hidden; }
+.root[data-phase="settled"] .proxyLayer {
+  visibility: hidden;
+  opacity: 0;
+}
 
 .root[data-phase="settled"] .coverHero,
 .root[data-phase="take-collapse-ready"] .coverHero,
