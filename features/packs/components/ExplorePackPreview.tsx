@@ -15,10 +15,16 @@ import type {
 } from "@/features/packs/model/explore-pack-content";
 import { advanceCarouselSpring } from "@/features/packs/model/carousel-spring";
 import {
+  createNativeScrollController,
+  type NativeScrollController,
+  type NativeScrollSelection,
+} from "@/features/packs/model/native-scroll-controller";
+import {
   getPackTransitionName,
   PACK_CLOSE_TRANSITION_TYPE,
 } from "@/features/packs/model/pack-transition";
 import { setExplorePackReturnSlug } from "@/features/packs/model/explore-pack-transition-state";
+import { useDeckViewport } from "@/features/packs/model/use-deck-viewport";
 
 import styles from "./ExplorePackPreview.module.css";
 
@@ -111,9 +117,10 @@ function wrapIndex(value: number, count: number) {
   return ((value % count) + count) % count;
 }
 
-function MissionVisual({ accessible, eager, mission, mode, onProofChoice, prepareCompletionArtwork }: {
+function MissionVisual({ accessible, eager, interactive, mission, mode, onProofChoice, prepareCompletionArtwork }: {
   accessible: boolean;
   eager: boolean;
+  interactive?: boolean;
   mission: ExploreMissionArtwork;
   mode: GalleryMode;
   onProofChoice?: (mode: MissionProofMode) => void;
@@ -147,7 +154,7 @@ function MissionVisual({ accessible, eager, mission, mode, onProofChoice, prepar
 
   return (
     <span className={styles.missionCardVisual} style={style}>
-      <span aria-hidden="true" className={styles.missionCardThickness} />
+      {interactive ? <span aria-hidden="true" className={styles.missionCardThickness} /> : null}
       <span className={styles.missionCardFront}>
         <Image
           alt=""
@@ -167,76 +174,79 @@ function MissionVisual({ accessible, eager, mission, mode, onProofChoice, prepar
           ))}
         </span>
       </span>
-      <span
-        aria-label={accessible ? `${mission.title}. ${mission.card.description}` : undefined}
-        className={styles.missionCardBack}
-        role={accessible ? "img" : undefined}
-      >
-        {prepareCompletionArtwork && mission.previewArtwork ? (
-          <Image
-            alt=""
-            aria-hidden="true"
-            className={styles.missionCompletionArtwork}
-            draggable={false}
-            fill
-            loading="eager"
-            sizes="(max-width: 640px) 74vw, 300px"
-            src={mission.previewArtwork}
-          />
-        ) : null}
-        <span aria-hidden="true" className={styles.missionCardBackTitle}>
-          {mission.card.titleLines.map((line, index) => (
-            <span key={`${mission.id}-back-${index}`}>{line}</span>
-          ))}
+      {interactive ? (
+        <span
+          aria-label={accessible ? `${mission.title}. ${mission.card.description}` : undefined}
+          className={styles.missionCardBack}
+          role={accessible ? "img" : undefined}
+        >
+          {prepareCompletionArtwork && mission.previewArtwork ? (
+            <Image
+              alt=""
+              aria-hidden="true"
+              className={styles.missionCompletionArtwork}
+              draggable={false}
+              fill
+              loading="eager"
+              sizes="(max-width: 640px) 74vw, 300px"
+              src={mission.previewArtwork}
+            />
+          ) : null}
+          <span aria-hidden="true" className={styles.missionCardBackTitle}>
+            {mission.card.titleLines.map((line, index) => (
+              <span key={`${mission.id}-back-${index}`}>{line}</span>
+            ))}
+          </span>
+          <span className={styles.missionCardDescription}>{mission.card.description}</span>
+          <button
+            aria-label="Record mission completion"
+            className={`${styles.missionChoiceCard} ${styles.missionChoiceRecord}`}
+            disabled={!onProofChoice}
+            onClick={(event) => {
+              event.stopPropagation();
+              onProofChoice?.("audio");
+            }}
+            tabIndex={accessible ? 0 : -1}
+            type="button"
+          >
+            <span className={styles.missionChoiceContent}>
+              <svg aria-hidden="true" className={styles.missionChoiceIcon} fill="none" viewBox="0 0 64 64">
+                <circle cx="32" cy="32" r="25" />
+                <circle className={styles.missionRecordDot} cx="32" cy="32" r="11" />
+              </svg>
+              <span>RECORD</span>
+            </span>
+          </button>
+          <button
+            aria-label="Type mission completion"
+            className={`${styles.missionChoiceCard} ${styles.missionChoiceText}`}
+            disabled={!onProofChoice}
+            onClick={(event) => {
+              event.stopPropagation();
+              onProofChoice?.("text");
+            }}
+            tabIndex={accessible ? 0 : -1}
+            type="button"
+          >
+            <span className={styles.missionChoiceContent}>
+              <svg aria-hidden="true" className={styles.missionChoiceIcon} fill="none" viewBox="0 0 64 64">
+                <path d="M15 48h34" />
+                <path d="M18 39 42.5 14.5a5 5 0 0 1 7 7L25 46l-10 2 3-9Z" />
+                <path d="m39 18 7 7" />
+              </svg>
+              <span>TYPE</span>
+            </span>
+          </button>
         </span>
-        <span className={styles.missionCardDescription}>{mission.card.description}</span>
-        <button
-          aria-label="Record mission completion"
-          className={`${styles.missionChoiceCard} ${styles.missionChoiceRecord}`}
-          disabled={!onProofChoice}
-          onClick={(event) => {
-            event.stopPropagation();
-            onProofChoice?.("audio");
-          }}
-          tabIndex={accessible ? 0 : -1}
-          type="button"
-        >
-          <span className={styles.missionChoiceContent}>
-            <svg aria-hidden="true" className={styles.missionChoiceIcon} fill="none" viewBox="0 0 64 64">
-              <circle cx="32" cy="32" r="25" />
-              <circle className={styles.missionRecordDot} cx="32" cy="32" r="11" />
-            </svg>
-            <span>RECORD</span>
-          </span>
-        </button>
-        <button
-          aria-label="Type mission completion"
-          className={`${styles.missionChoiceCard} ${styles.missionChoiceText}`}
-          disabled={!onProofChoice}
-          onClick={(event) => {
-            event.stopPropagation();
-            onProofChoice?.("text");
-          }}
-          tabIndex={accessible ? 0 : -1}
-          type="button"
-        >
-          <span className={styles.missionChoiceContent}>
-            <svg aria-hidden="true" className={styles.missionChoiceIcon} fill="none" viewBox="0 0 64 64">
-              <path d="M15 48h34" />
-              <path d="M18 39 42.5 14.5a5 5 0 0 1 7 7L25 46l-10 2 3-9Z" />
-              <path d="m39 18 7 7" />
-            </svg>
-            <span>TYPE</span>
-          </span>
-        </button>
-      </span>
+      ) : null}
     </span>
   );
 }
 
-function GalleryCard({ choiceRevealed, copyIndex, flipped, mission, mode, onProofChoice, proofMode, setRef }: {
+function GalleryCard({ choiceRevealed, copyIndex, eager, flipped, mission, mode, onProofChoice, proofMode, setRef }: {
   choiceRevealed: boolean;
   copyIndex: number;
+  eager: boolean;
   flipped: boolean;
   mission: ExploreMissionArtwork;
   mode: GalleryMode;
@@ -256,10 +266,11 @@ function GalleryCard({ choiceRevealed, copyIndex, flipped, mission, mode, onProo
       data-proof-mode={proofMode}
       ref={setRef}
     >
-      <span className={styles.cardSurface} data-flip-shell={mode === "mission-card" || undefined}>
+      <span className={styles.cardSurface} data-flip-shell={flipped || undefined}>
         <MissionVisual
           accessible={copyIndex === PRIMARY_COPY}
-          eager={copyIndex === PRIMARY_COPY}
+          eager={eager}
+          interactive={flipped}
           mission={mission}
           mode={mode}
           onProofChoice={onProofChoice}
@@ -298,8 +309,12 @@ function DistributionCard({ mission, mode, offset, setRef }: {
 
 export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
   const router = useRouter();
+  const viewport = useDeckViewport();
+  const nativeScrolling = viewport.coarsePointer;
   const supportsTakeTransition = pack.missions.every((mission) => mission.card && mission.previewArtwork);
   const rootRef = useRef<HTMLElement>(null);
+  const scrollViewportRef = useRef<HTMLDivElement>(null);
+  const nativeScrollControllerRef = useRef<NativeScrollController | null>(null);
   const trackRef = useRef<HTMLOListElement>(null);
   const missionBackgroundRef = useRef<HTMLSpanElement>(null);
   const missionBackgroundOpacityRef = useRef(0);
@@ -307,6 +322,9 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
   const galleryCardRefs = useRef<Array<HTMLLIElement | null>>([]);
   const proxyCardRefs = useRef<Array<HTMLLIElement | null>>([]);
   const positionRef = useRef(0);
+  const activeMissionIndexRef = useRef(0);
+  const backgroundMissionIdRef = useRef<string | null>(null);
+  const flippedMissionIdRef = useRef<string | null>(null);
   const originRef = useRef(0);
   const strideRef = useRef(0);
   const cycleWidthRef = useRef(0);
@@ -335,6 +353,9 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
     ? pack.missions.find((mission) => mission.id === flippedMissionId)
     : undefined;
   const lockedCardTheme = lockedMission?.card;
+  useEffect(() => { activeMissionIndexRef.current = activeMissionIndex; }, [activeMissionIndex]);
+  useEffect(() => { backgroundMissionIdRef.current = backgroundMissionId; }, [backgroundMissionId]);
+  useEffect(() => { flippedMissionIdRef.current = flippedMissionId; }, [flippedMissionId]);
   const style: PreviewStyle = {
     "--preview-background": pack.background,
     "--preview-foreground": pack.foreground,
@@ -366,6 +387,7 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
   }, []);
 
   const paint = useCallback(() => {
+    if (nativeScrollControllerRef.current) return;
     if (trackRef.current) {
       trackRef.current.style.transform = `translate3d(${positionRef.current}px, -50%, 0)`;
     }
@@ -411,8 +433,37 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
     const stride = strideRef.current;
     if (stride <= 0 || pack.missions.length < 1) return;
     const steps = Math.round((originRef.current - positionRef.current) / stride);
-    setActiveMissionIndex(wrapIndex(steps, pack.missions.length));
+    const nextIndex = wrapIndex(steps, pack.missions.length);
+    activeMissionIndexRef.current = nextIndex;
+    setActiveMissionIndex(nextIndex);
   }, [pack.missions.length]);
+
+  const syncNativeProgress = useCallback((selection: NativeScrollSelection) => {
+    const count = pack.missions.length;
+    if (count < 1) return;
+    positionRef.current = originRef.current - selection.position * strideRef.current;
+
+    if (selection.index !== activeMissionIndexRef.current) {
+      activeMissionIndexRef.current = selection.index;
+      setActiveMissionIndex(selection.index);
+    }
+
+    const backgroundId = backgroundMissionIdRef.current;
+    if (!backgroundId || flippedMissionIdRef.current) return;
+    const backgroundIndex = pack.missions.findIndex((mission) => mission.id === backgroundId);
+    if (backgroundIndex < 0) return;
+    const nearestBackgroundPosition = backgroundIndex
+      + Math.round((selection.position - backgroundIndex) / count) * count;
+    paintMissionBackground(1 - Math.min(1, Math.abs(selection.position - nearestBackgroundPosition)));
+  }, [pack.missions, paintMissionBackground]);
+
+  const syncNativeSettled = useCallback((selection: NativeScrollSelection) => {
+    positionRef.current = originRef.current - selection.position * strideRef.current;
+    if (selection.index !== activeMissionIndexRef.current) {
+      activeMissionIndexRef.current = selection.index;
+      setActiveMissionIndex(selection.index);
+    }
+  }, []);
 
   const settleAt = useCallback((requestedTarget: number, initialVelocity = 0) => {
     stopMotion();
@@ -463,7 +514,6 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
     if (!root || count < 1) return;
 
     const measure = () => {
-      stopMotion();
       const primaryStart = PRIMARY_COPY * count;
       const first = cards[primaryStart];
       const second = cards[primaryStart + 1];
@@ -473,11 +523,25 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
       const stride = second
         ? second.offsetLeft - first.offsetLeft
         : first.offsetWidth;
+      const previousStride = strideRef.current;
+      const logicalPosition = previousStride > 0
+        ? (originRef.current - positionRef.current) / previousStride
+        : activeMissionIndexRef.current;
+      if (!nativeScrolling) stopMotion();
       strideRef.current = stride;
       cycleWidthRef.current = nextCopyFirst.offsetLeft - first.offsetLeft;
-      originRef.current = root.clientWidth / 2 - first.offsetLeft - first.offsetWidth / 2;
-      positionRef.current = originRef.current;
-      paint();
+      originRef.current = nativeScrolling
+        ? 0
+        : root.clientWidth / 2 - first.offsetLeft - first.offsetWidth / 2;
+      positionRef.current = originRef.current - logicalPosition * stride;
+      if (nativeScrolling) {
+        nativeScrollControllerRef.current?.restore(
+          { count, copies: COPY_COUNT, stride },
+          logicalPosition,
+        );
+      } else {
+        paint();
+      }
       updateProxyPositions();
     };
 
@@ -485,7 +549,35 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
     const observer = new ResizeObserver(measure);
     observer.observe(root);
     return () => observer.disconnect();
-  }, [pack.missions.length, paint, stopMotion, updateProxyPositions]);
+  }, [nativeScrolling, pack.missions.length, paint, stopMotion, updateProxyPositions]);
+
+  useLayoutEffect(() => {
+    const scrollViewport = scrollViewportRef.current;
+    if (!nativeScrolling || !scrollViewport || strideRef.current <= 0 || pack.missions.length < 1) return;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const logicalPosition = (originRef.current - positionRef.current) / strideRef.current;
+    const controller = createNativeScrollController(scrollViewport, {
+      count: pack.missions.length,
+      copies: COPY_COUNT,
+      stride: strideRef.current,
+      position: logicalPosition,
+      disabled: phaseRef.current !== "settled" || Boolean(flippedMissionIdRef.current),
+      reducedMotion,
+      onProgress: syncNativeProgress,
+      onSettled: syncNativeSettled,
+    });
+    nativeScrollControllerRef.current = controller;
+    return () => {
+      controller.destroy();
+      if (nativeScrollControllerRef.current === controller) nativeScrollControllerRef.current = null;
+    };
+  }, [nativeScrolling, pack.missions.length, syncNativeProgress, syncNativeSettled]);
+
+  useEffect(() => {
+    nativeScrollControllerRef.current?.setInteractionLocked(
+      phase !== "settled" || Boolean(flippedMissionId),
+    );
+  }, [flippedMissionId, phase]);
 
   useEffect(() => {
     router.prefetch("/explore");
@@ -602,7 +694,7 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
 
   useEffect(() => {
     const root = rootRef.current;
-    if (!root || phase !== "settled") return;
+    if (!root || nativeScrolling || phase !== "settled") return;
     const handleWheel = (event: WheelEvent) => {
       if (event.ctrlKey || flippedMissionId) return;
       const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
@@ -616,7 +708,7 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
     };
     root.addEventListener("wheel", handleWheel, { passive: false });
     return () => root.removeEventListener("wheel", handleWheel);
-  }, [flippedMissionId, normalizePosition, paint, phase, settleWithMomentum, stopMotion]);
+  }, [flippedMissionId, nativeScrolling, normalizePosition, paint, phase, settleWithMomentum, stopMotion]);
 
   useEffect(() => {
     if (phase !== "closing-ready") return;
@@ -664,6 +756,7 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLElement>) => {
     if (
+      nativeScrolling ||
       phaseRef.current !== "settled" ||
       !event.isPrimary ||
       event.button !== 0 ||
@@ -682,6 +775,7 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
   };
 
   const handlePointerMove = (event: ReactPointerEvent<HTMLElement>) => {
+    if (nativeScrolling) return;
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     const totalX = event.clientX - drag.startX;
@@ -702,6 +796,7 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
   };
 
   const finishPointer = (event: ReactPointerEvent<HTMLElement>) => {
+    if (nativeScrolling) return;
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     dragRef.current = null;
@@ -727,7 +822,14 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
       return;
     }
 
-    stopMotion();
+    const nativeController = nativeScrollControllerRef.current;
+    if (nativeController && !nativeController.canActivate()) return;
+    if (nativeController) {
+      const logicalPosition = nativeController.freeze();
+      positionRef.current = originRef.current - logicalPosition * strideRef.current;
+    } else {
+      stopMotion();
+    }
     const stride = Math.max(1, strideRef.current);
     const steps = Math.round((originRef.current - positionRef.current) / stride);
     const snappedPosition = originRef.current - steps * stride;
@@ -747,7 +849,14 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
       return;
     }
 
-    stopMotion();
+    const nativeController = nativeScrollControllerRef.current;
+    if (nativeController && !nativeController.canActivate()) return;
+    if (nativeController) {
+      const logicalPosition = nativeController.freeze();
+      positionRef.current = originRef.current - logicalPosition * strideRef.current;
+    } else {
+      stopMotion();
+    }
     const stride = Math.max(1, strideRef.current);
     const steps = Math.round((originRef.current - positionRef.current) / stride);
     const mission = pack.missions[wrapIndex(steps, pack.missions.length)];
@@ -825,7 +934,14 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
       return;
     }
 
-    stopMotion();
+    const nativeController = nativeScrollControllerRef.current;
+    if (nativeController && !nativeController.canActivate()) return;
+    if (nativeController) {
+      const logicalPosition = nativeController.freeze();
+      positionRef.current = originRef.current - logicalPosition * strideRef.current;
+    } else {
+      stopMotion();
+    }
     navigationStartedRef.current = false;
     const stride = Math.max(1, strideRef.current);
     const steps = Math.round((originRef.current - positionRef.current) / stride);
@@ -847,6 +963,7 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
       data-mission-completion={missionCompletionPhase}
       data-mission-locked={flippedMissionId ? "true" : undefined}
       data-moving="false"
+      data-native-scroll={nativeScrolling || undefined}
       data-phase={phase}
       onClick={(event) => closePreview(event.target)}
       onKeyDown={(event) => {
@@ -857,8 +974,17 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
           (event.key !== "ArrowLeft" && event.key !== "ArrowRight")
         ) return;
         event.preventDefault();
-        const direction = event.key === "ArrowRight" ? -1 : 1;
-        settleAt(nearestMissionSnap(positionRef.current) + direction * strideRef.current);
+        const nativeController = nativeScrollControllerRef.current;
+        if (nativeController) {
+          const direction = event.key === "ArrowRight" ? 1 : -1;
+          const slot = PRIMARY_COPY * pack.missions.length
+            + Math.round(nativeController.position())
+            + direction;
+          nativeController.selectSlot(slot);
+        } else {
+          const direction = event.key === "ArrowRight" ? -1 : 1;
+          settleAt(nearestMissionSnap(positionRef.current) + direction * strideRef.current);
+        }
       }}
       onPointerCancel={finishPointer}
       onPointerDown={handlePointerDown}
@@ -895,46 +1021,55 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
           />
         </span>
       ) : null}
-      <ol
-        aria-label={galleryMode === "artwork" ? "Mission artwork" : "Mission cards"}
-        className={styles.track}
-        ref={trackRef}
-      >
-        {Array.from({ length: COPY_COUNT }, (_, copyIndex) =>
-          pack.missions.map((mission, slot) => {
-            const refIndex = copyIndex * pack.missions.length + slot;
-            const missionMode = galleryMode === "mission-card" && completedMissionIds.has(mission.id)
-              ? "artwork"
-              : galleryMode;
-            return (
-              <GalleryCard
-                copyIndex={copyIndex}
-                choiceRevealed={
-                  ["choice", "audio", "text"].includes(missionCompletionPhase) &&
-                  flippedMissionId === mission.id
-                }
-                flipped={flippedMissionId === mission.id}
-                key={`${copyIndex}-${mission.id}`}
-                mission={mission}
-                mode={missionMode}
-                onProofChoice={
-                  ["choice", "audio", "text"].includes(missionCompletionPhase) &&
-                  flippedMissionId === mission.id
-                    ? (mode) => {
-                        setSelectedProofMode(mode);
-                        setMissionCompletionPhase(mode);
-                      }
-                    : undefined
-                }
-                proofMode={flippedMissionId === mission.id
-                  ? missionCompletionPhase === "completing" ? "completing" : selectedProofMode ?? undefined
-                  : undefined}
-                setRef={(element) => { galleryCardRefs.current[refIndex] = element; }}
-              />
-            );
-          }),
-        )}
-      </ol>
+      <div className={styles.scrollViewport} ref={scrollViewportRef}>
+        <ol
+          aria-label={galleryMode === "artwork" ? "Mission artwork" : "Mission cards"}
+          className={styles.track}
+          ref={trackRef}
+        >
+          {Array.from({ length: COPY_COUNT }, (_, copyIndex) =>
+            pack.missions.map((mission, slot) => {
+              const refIndex = copyIndex * pack.missions.length + slot;
+              const missionMode = galleryMode === "mission-card" && completedMissionIds.has(mission.id)
+                ? "artwork"
+                : galleryMode;
+              return (
+                <GalleryCard
+                  copyIndex={copyIndex}
+                  choiceRevealed={
+                    ["choice", "audio", "text"].includes(missionCompletionPhase) &&
+                    flippedMissionId === mission.id
+                  }
+                  eager={
+                    copyIndex === PRIMARY_COPY && (
+                      slot === activeMissionIndex ||
+                      slot === wrapIndex(activeMissionIndex - 1, pack.missions.length) ||
+                      slot === wrapIndex(activeMissionIndex + 1, pack.missions.length)
+                    )
+                  }
+                  flipped={flippedMissionId === mission.id}
+                  key={`${copyIndex}-${mission.id}`}
+                  mission={mission}
+                  mode={missionMode}
+                  onProofChoice={
+                    ["choice", "audio", "text"].includes(missionCompletionPhase) &&
+                    flippedMissionId === mission.id
+                      ? (mode) => {
+                          setSelectedProofMode(mode);
+                          setMissionCompletionPhase(mode);
+                        }
+                      : undefined
+                  }
+                  proofMode={flippedMissionId === mission.id
+                    ? missionCompletionPhase === "completing" ? "completing" : selectedProofMode ?? undefined
+                    : undefined}
+                  setRef={(element) => { galleryCardRefs.current[refIndex] = element; }}
+                />
+              );
+            }),
+          )}
+        </ol>
+      </div>
       <ol aria-hidden="true" className={styles.proxyLayer}>
         {PROXY_OFFSETS.map((offset, index) => (
           <DistributionCard

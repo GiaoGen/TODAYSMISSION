@@ -45,6 +45,14 @@
   transition: none;
 }
 
+.scrollViewport {
+  position: absolute;
+  z-index: 10;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
 .track {
   position: absolute;
   z-index: 10;
@@ -68,6 +76,47 @@
   width: var(--preview-card-width);
   aspect-ratio: 2 / 3;
   pointer-events: auto;
+}
+
+.root[data-native-scroll="true"] {
+  touch-action: auto;
+}
+
+.root[data-native-scroll="true"] .scrollViewport {
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  pointer-events: auto;
+  scroll-behavior: auto;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  touch-action: pan-x pinch-zoom;
+  -webkit-overflow-scrolling: touch;
+}
+
+.root[data-native-scroll="true"] .scrollViewport::-webkit-scrollbar {
+  display: none;
+}
+
+.root[data-native-scroll="true"] .track {
+  position: relative;
+  top: auto;
+  left: auto;
+  min-height: 100%;
+  padding-inline: calc((100vw - var(--preview-card-width)) / 2);
+  transform: none;
+}
+
+.root[data-native-scroll="true"] .galleryCard {
+  scroll-snap-align: center;
+  scroll-snap-stop: normal;
+}
+
+.root[data-native-scroll="true"]:not([data-phase="settled"]) .scrollViewport,
+.root[data-native-scroll="true"][data-mission-locked="true"] .scrollViewport,
+.root[data-native-scroll="true"] .scrollViewport[data-native-locked="true"] {
+  overflow-x: hidden;
+  scroll-snap-type: none;
 }
 
 .cardSurface,
@@ -104,6 +153,9 @@
   container-type: inline-size;
   background: transparent;
   color: var(--mission-card-foreground);
+}
+
+.galleryCard[data-flipped="true"] .missionCardVisual {
   transform-style: preserve-3d;
   -webkit-transform-style: preserve-3d;
 }
