@@ -405,7 +405,7 @@
   width: 100%;
   height: var(--tm-height);
   border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--tm-accent) 32%, transparent);
+  border: 0;
   background: var(--tm-track);
   background: color-mix(in srgb, var(--tm-accent) 24%, var(--page-background));
   isolation: isolate;
@@ -531,7 +531,8 @@
   border: 0;
   background: transparent;
 }
-.sliderInput:focus-visible { outline: 2px solid var(--ui-text); outline-offset: 2px; }
+.sliderInput:focus-visible { outline: 0; }
+.slider:focus-within { filter: brightness(.94); }
 .slider[data-dragging="true"] .sliderInput { cursor: grabbing; }
 .slider[data-done="true"] .sliderInput { cursor: default; }
 

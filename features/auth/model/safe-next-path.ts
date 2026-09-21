@@ -1,7 +1,9 @@
-const SAFE_NEXT_PATHS = new Set(["/", "/pack/go-alone"]);
+type SafeNextPath = "/" | "/explore" | "/pack/go-alone";
 
-export function getSafeNextPath(value: string | null | undefined): "/" | "/pack/go-alone" {
+const SAFE_NEXT_PATHS = new Set<string>(["/", "/explore", "/pack/go-alone"]);
+
+export function getSafeNextPath(value: string | null | undefined): SafeNextPath {
   return value && SAFE_NEXT_PATHS.has(value)
-    ? value as "/" | "/pack/go-alone"
+    ? value as SafeNextPath
     : "/";
 }

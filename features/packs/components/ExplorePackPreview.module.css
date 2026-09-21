@@ -15,6 +15,7 @@
 }
 
 .root[data-phase="settled"] { cursor: grab; }
+.root[data-phase="settled"][data-mission-locked="true"] { cursor: default; }
 .root[data-phase="settled"][data-moving="true"],
 .root[data-phase="settled"]:active { cursor: grabbing; }
 .root:focus-visible { outline: 2px solid currentColor; outline-offset: -7px; }
@@ -56,7 +57,230 @@
   transform-origin: center;
 }
 
+.galleryCard[data-flipped="true"] {
+  perspective: 1100px;
+  -webkit-perspective: 1100px;
+}
+
+.cardSurface[data-flip-shell] {
+  overflow: visible;
+  background: transparent;
+  transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
+}
+
 .image { object-fit: cover; user-select: none; }
+
+.missionCardVisual {
+  position: absolute;
+  inset: 0;
+  display: block;
+  overflow: visible;
+  container-type: inline-size;
+  background: transparent;
+  color: var(--mission-card-foreground);
+  transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
+}
+
+.galleryCard[data-flipped="true"] .cardSurface[data-flip-shell] {
+  transform: rotateX(180deg);
+  transition: transform 560ms cubic-bezier(.22, .72, .2, 1);
+}
+
+.missionCardThickness,
+.missionCardFront,
+.missionCardBack {
+  position: absolute;
+  inset: 0;
+  display: block;
+  overflow: hidden;
+  border-radius: clamp(16px, 1.5vw, 24px);
+  background: var(--mission-card-background);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.missionCardThickness {
+  background: var(--mission-card-foreground);
+  opacity: .24;
+  transform: translateZ(0);
+}
+
+.missionCardFront { transform: translateZ(2px); }
+
+.missionCardBack {
+  display: grid;
+  place-items: center;
+  transform: rotateX(-180deg) translateZ(2px);
+}
+
+.missionCardBackTitle {
+  position: absolute;
+  z-index: 2;
+  top: 8cqw;
+  left: 7cqw;
+  width: 86cqw;
+  font-family: "Aptos Display", "Helvetica Neue", Arial, sans-serif;
+  font-size: 10.8cqw;
+  font-weight: 850;
+  line-height: .88;
+  letter-spacing: -.055em;
+  text-transform: uppercase;
+}
+
+.missionCardBackTitle > span { display: block; }
+
+.missionCardDescription {
+  position: absolute;
+  top: 57cqw;
+  right: 12cqw;
+  bottom: 12cqw;
+  left: 12cqw;
+  display: grid;
+  align-items: center;
+  font-family: "Aptos", "Helvetica Neue", Arial, sans-serif;
+  font-size: var(--mission-card-copy-size);
+  font-weight: 580;
+  line-height: 1.27;
+  letter-spacing: -.025em;
+  text-align: center;
+  text-wrap: balance;
+}
+
+.missionChoiceCard {
+  position: absolute;
+  z-index: 5;
+  inset: 0;
+  display: block;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  font-family: "Aptos Display", "Helvetica Neue", Arial, sans-serif;
+  font-size: 11cqw;
+  font-weight: 850;
+  line-height: .9;
+  letter-spacing: -.045em;
+  text-align: center;
+  pointer-events: none;
+  appearance: none;
+  -webkit-appearance: none;
+  transition: transform 460ms cubic-bezier(.22, .72, .2, 1);
+}
+
+.missionChoiceCard:disabled { opacity: 1; }
+.galleryCard[data-completion-choice="true"] .missionChoiceCard:not(:disabled) {
+  pointer-events: auto;
+  cursor: pointer;
+}
+.missionChoiceCard:focus-visible { outline: 0; filter: brightness(.92); }
+
+.missionChoiceRecord {
+  background: #d84f49;
+  color: #fff0df;
+  transform: translate3d(0, var(--mission-record-y, -100%), 0);
+}
+
+.missionChoiceText {
+  background: #ebc94b;
+  color: #30291f;
+  transform: translate3d(0, var(--mission-text-y, 100%), 0);
+}
+
+.missionChoiceContent {
+  position: absolute;
+  left: 50%;
+  display: block;
+  width: 18cqw;
+  height: 18cqw;
+  font-size: 4.4cqw;
+  letter-spacing: .08em;
+  transform: translate(-50%, -50%);
+  transition: top 460ms cubic-bezier(.22, .72, .2, 1);
+}
+
+.missionChoiceContent > span {
+  position: absolute;
+  top: calc(100% + 3.4cqw);
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.missionChoiceRecord .missionChoiceContent { top: 75%; }
+.missionChoiceText .missionChoiceContent { top: 25%; }
+
+.missionChoiceIcon {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  stroke: currentColor;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.missionRecordDot {
+  fill: currentColor;
+  stroke: none;
+}
+
+.galleryCard[data-proof-mode="audio"] .missionChoiceRecord,
+.galleryCard[data-proof-mode="text"] .missionChoiceText { transform: translate3d(0, 0, 0); }
+.galleryCard[data-proof-mode="audio"] .missionChoiceText { transform: translate3d(0, 100%, 0); }
+.galleryCard[data-proof-mode="text"] .missionChoiceRecord { transform: translate3d(0, -100%, 0); }
+.galleryCard[data-proof-mode="audio"] .missionChoiceRecord .missionChoiceContent,
+.galleryCard[data-proof-mode="text"] .missionChoiceText .missionChoiceContent { top: 50%; }
+
+.missionCardCharacter {
+  z-index: 1;
+  object-fit: cover;
+  pointer-events: none;
+  user-select: none;
+}
+
+.missionCardBrand,
+.missionCardPack {
+  position: absolute;
+  z-index: 3;
+  top: 6.5cqw;
+  font-family: "Aptos", "Helvetica Neue", Arial, sans-serif;
+  font-size: 2.75cqw;
+  font-weight: 750;
+  line-height: 1;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+}
+
+.missionCardBrand { left: 7cqw; }
+
+.missionCardPack {
+  right: 7cqw;
+  max-width: 31cqw;
+  text-align: right;
+}
+
+.missionCardTitle {
+  position: absolute;
+  z-index: 2;
+  top: 21cqw;
+  left: 7cqw;
+  width: var(--mission-card-title-width);
+  font-family: "Aptos Display", "Helvetica Neue", Arial, sans-serif;
+  font-size: var(--mission-card-title-size);
+  font-weight: 850;
+  line-height: .86;
+  letter-spacing: -.062em;
+  text-transform: uppercase;
+}
+
+.missionCardTitle > span {
+  display: block;
+  white-space: nowrap;
+}
 
 .proxyLayer {
   position: absolute;
@@ -96,7 +320,8 @@
   transition: opacity 520ms ease, transform 620ms cubic-bezier(.2, .75, .24, 1), box-shadow 620ms ease;
 }
 
-.root[data-phase="distributing"] .proxyCard {
+.root[data-phase="distributing"] .proxyCard,
+.root[data-phase="take-distributing"] .proxyCard {
   opacity: 1;
   transform: translate3d(-50%, -50%, 0) translateX(var(--proxy-x)) scale(1);
   transition: transform 680ms cubic-bezier(.2, .75, .24, 1) var(--proxy-delay), opacity 260ms ease-out var(--proxy-delay);
@@ -109,11 +334,15 @@
 
 .root[data-phase="handoff"] .track,
 .root[data-phase="settled"] .track,
+.root[data-phase="take-collapse-ready"] .track,
+.root[data-phase="take-handoff"] .track,
 .root[data-phase="closing-ready"] .track { opacity: 1; }
 
-.root[data-phase="handoff"] .track { transition: opacity 220ms ease-out; }
+.root[data-phase="handoff"] .track,
+.root[data-phase="take-handoff"] .track { transition: opacity 220ms ease-out; }
 
-.root[data-phase="handoff"] .proxyCard {
+.root[data-phase="handoff"] .proxyCard,
+.root[data-phase="take-handoff"] .proxyCard {
   opacity: 0;
   transform: translate3d(-50%, -50%, 0) translateX(var(--proxy-x)) scale(1);
   transition: opacity 220ms ease-out;
@@ -127,6 +356,11 @@
 .root[data-phase="settled"] .proxyLayer { visibility: hidden; }
 
 .root[data-phase="settled"] .coverHero,
+.root[data-phase="take-collapse-ready"] .coverHero,
+.root[data-phase="take-collapse"] .coverHero,
+.root[data-phase="take-swap-ready"] .coverHero,
+.root[data-phase="take-distributing"] .coverHero,
+.root[data-phase="take-handoff"] .coverHero,
 .root[data-phase="closing-ready"] .coverHero {
   visibility: hidden;
   pointer-events: none;
@@ -134,6 +368,27 @@
 
 .root[data-phase="settled"][data-moving="true"] .track,
 .root[data-phase="settled"][data-dragging="true"] .track { will-change: transform; }
+
+.root[data-phase="take-collapse-ready"] .proxyCard {
+  opacity: 1;
+  transform: translate3d(-50%, -50%, 0) translateX(var(--proxy-x)) scale(1);
+}
+
+.root[data-phase="take-collapse"] .track {
+  opacity: 0;
+  transition: opacity 90ms linear;
+}
+
+.root[data-phase="take-collapse"] .proxyCard {
+  opacity: 1;
+  transform: translate3d(-50%, -50%, 0) translateX(0) scale(.82);
+  transition: transform 620ms cubic-bezier(.32, 0, .22, 1) var(--proxy-delay);
+}
+
+.root[data-phase="take-swap-ready"] .proxyCard {
+  opacity: 1;
+  transform: translate3d(-50%, -50%, 0) translateX(0) scale(.82);
+}
 
 .root[data-phase="closing-ready"] .proxyCard {
   opacity: 1;
@@ -172,8 +427,125 @@
 .root[data-phase="collapsed"] .proxyCard,
 .root[data-phase="distributing"] .coverSurface,
 .root[data-phase="distributing"] .proxyCard,
+.root[data-phase="take-collapse"] .proxyCard,
+.root[data-phase="take-distributing"] .proxyCard,
 .root[data-phase="closing"] .coverSurface,
 .root[data-phase="closing"] .proxyCard { will-change: transform, opacity; }
+
+.takeControl {
+  position: absolute;
+  z-index: 45;
+  top: calc(50% + min(225px, 18vw, 24dvh) + clamp(42px, 5.4vh, 54px));
+  left: 50%;
+  opacity: 0;
+  transform: translateX(-50%);
+  transition: opacity 180ms ease;
+  pointer-events: none;
+}
+
+.root[data-phase="settled"] .takeControl,
+.root[data-phase="take-collapse-ready"] .takeControl,
+.root[data-phase="take-collapse"] .takeControl,
+.root[data-phase="take-swap-ready"] .takeControl,
+.root[data-phase="take-distributing"] .takeControl,
+.root[data-phase="take-handoff"] .takeControl {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.takeButton {
+  width: clamp(188px, 50vw, 224px);
+  height: 56px;
+  padding: 0 26px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  background: var(--take-background);
+  color: var(--take-foreground);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 15px;
+  font-weight: 680;
+  line-height: 1;
+  letter-spacing: -.015em;
+  white-space: nowrap;
+  transform: scaleX(1);
+  transform-origin: center;
+  transition: transform 220ms cubic-bezier(.4, 0, .2, 1), background-color 180ms ease;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.takeButton[data-action-state="pack-closing"],
+.takeButton[data-action-state="mission-opening"],
+.takeButton[data-action-state="mission-closing"] {
+  transform: scaleX(0);
+  pointer-events: none;
+}
+
+.takeButton:focus-visible {
+  outline: 0;
+  filter: brightness(.92);
+}
+
+@media (hover: hover) {
+  .takeButton:hover:not(:disabled) { filter: brightness(.96); }
+}
+
+.completionControl {
+  position: absolute;
+  z-index: 46;
+  top: calc(50% + min(225px, 18vw, 24dvh) + clamp(42px, 5.4vh, 54px));
+  left: 50%;
+  width: min(calc(100vw - 44px), 320px);
+  transform: translateX(-50%);
+  pointer-events: auto;
+}
+
+.completionSliderShell {
+  opacity: 1;
+  transform: scaleX(1);
+  transform-origin: center;
+  transition: opacity 150ms ease, transform 220ms ease;
+}
+
+.completionSliderShell[data-hidden="true"] {
+  opacity: 0;
+  transform: scaleX(.18);
+  pointer-events: none;
+}
+
+.completionUpload {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  width: 100%;
+  height: 58px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  outline: 0;
+  background: var(--tm-replacement);
+  color: var(--tm-on-replacement);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 680;
+  letter-spacing: -.015em;
+  opacity: 0;
+  transform: scaleX(.18);
+  transform-origin: center;
+  transition: opacity 150ms ease 80ms, transform 300ms cubic-bezier(.22, .72, .2, 1) 80ms;
+  pointer-events: none;
+}
+
+.completionUpload:disabled { opacity: 0; }
+
+.completionUpload[data-visible="true"] {
+  opacity: 1;
+  transform: scaleX(1);
+}
+
+.completionUpload[data-visible="true"]:disabled { opacity: 1; }
 
 .title {
   position: absolute;
@@ -216,9 +588,18 @@
     top: calc(50% + min(243px, 60vw, 29.2dvh) + clamp(22px, 3.6vh, 42px));
     font-size: clamp(1.5rem, 7.4vw, 2.15rem);
   }
+
+  .takeControl {
+    top: calc(50% + min(225px, 55.5vw, 27dvh) + clamp(38px, 5vh, 48px));
+  }
+
+  .completionControl {
+    top: calc(50% + min(225px, 55.5vw, 27dvh) + clamp(38px, 5vh, 48px));
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .galleryCard[data-flipped="true"] .cardSurface[data-flip-shell],
   .coverSurface,
   .root[data-phase="distributing"] .proxyCard,
   .root[data-phase="handoff"] .track,
@@ -229,6 +610,14 @@
     transition-delay: 0ms;
   }
 
+  .takeButton { transition-duration: 80ms; }
+  .missionChoiceCard,
+  .missionChoiceContent,
+  .completionSliderShell,
+  .completionUpload {
+    transition-duration: 80ms;
+    transition-delay: 0ms;
+  }
   .root[data-phase="closing"] .coverSurface { transition: opacity 80ms linear; }
   .title { transition-duration: 80ms; }
 }

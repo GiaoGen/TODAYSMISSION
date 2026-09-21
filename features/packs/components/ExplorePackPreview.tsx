@@ -8,6 +8,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, ViewTransiti
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 
+import { MissionCompleteSlider } from "@/features/missions/components/MissionCompleteSlider";
 import type {
   ExploreMissionArtwork,
   ExplorePackPreviewData,
@@ -28,6 +29,19 @@ type ExplorePackPreviewProps = {
 type PreviewStyle = CSSProperties & {
   "--preview-background": string;
   "--preview-foreground": string;
+  "--take-background": string;
+  "--take-foreground": string;
+};
+
+type CompletionControlStyle = CSSProperties & {
+  "--page-background": string;
+  "--tm-accent": string;
+  "--tm-capsule-height": string;
+  "--tm-on-accent": string;
+  "--tm-on-replacement": string;
+  "--tm-replacement": string;
+  "--tm-thumb-size": string;
+  "--ui-text": string;
 };
 
 type ProxyStyle = CSSProperties & {
@@ -35,11 +49,19 @@ type ProxyStyle = CSSProperties & {
   "--proxy-x": string;
 };
 
+type MissionCardStyle = CSSProperties & {
+  "--mission-card-background": string;
+  "--mission-card-copy-size": string;
+  "--mission-card-foreground": string;
+  "--mission-card-title-size": string;
+  "--mission-card-title-width": string;
+};
+
 type DragState = {
   pointerId: number;
+  startX: number;
   lastX: number;
   lastTime: number;
-  travel: number;
   velocity: number;
   captured: boolean;
 };
@@ -49,8 +71,24 @@ type PreviewPhase =
   | "distributing"
   | "handoff"
   | "settled"
+  | "take-collapse-ready"
+  | "take-collapse"
+  | "take-swap-ready"
+  | "take-distributing"
+  | "take-handoff"
   | "closing-ready"
   | "closing";
+
+type GalleryMode = "artwork" | "mission-card";
+type TakeActionPhase =
+  | "pack"
+  | "pack-closing"
+  | "mission-opening"
+  | "mission"
+  | "mission-closing"
+  | "hidden";
+type MissionCompletionPhase = "idle" | "flipping" | "slider" | "choice" | "audio" | "text";
+type MissionProofMode = "audio" | "text";
 
 const COPY_COUNT = 3;
 const PRIMARY_COPY = 1;
@@ -66,31 +104,153 @@ function wrapIndex(value: number, count: number) {
   return ((value % count) + count) % count;
 }
 
-function GalleryCard({ copyIndex, mission, setRef }: {
-  copyIndex: number;
+function MissionVisual({ accessible, eager, mission, mode, onProofChoice }: {
+  accessible: boolean;
+  eager: boolean;
   mission: ExploreMissionArtwork;
+  mode: GalleryMode;
+  onProofChoice?: (mode: MissionProofMode) => void;
+}) {
+  const imageArtwork = mode === "artwork" ? mission.previewArtwork : undefined;
+  if (imageArtwork || !mission.card) {
+    return (
+      <Image
+        alt={accessible ? `${mission.title} Mission artwork` : ""}
+        aria-hidden={!accessible}
+        className={styles.image}
+        draggable={false}
+        fill
+        loading={eager ? "eager" : "lazy"}
+        sizes="(max-width: 640px) 74vw, 300px"
+        src={imageArtwork ?? mission.artwork}
+      />
+    );
+  }
+
+  const style: MissionCardStyle = {
+    "--mission-card-background": mission.card.background,
+    "--mission-card-copy-size": mission.card.description.length > 220
+      ? "6.15cqw"
+      : mission.card.description.length > 175 ? "6.65cqw" : "7.15cqw",
+    "--mission-card-foreground": mission.card.foreground,
+    "--mission-card-title-size": mission.card.titleSize,
+    "--mission-card-title-width": mission.card.titleWidth,
+  };
+
+  return (
+    <span className={styles.missionCardVisual} style={style}>
+      <span aria-hidden="true" className={styles.missionCardThickness} />
+      <span className={styles.missionCardFront}>
+        <Image
+          alt=""
+          aria-hidden="true"
+          className={styles.missionCardCharacter}
+          draggable={false}
+          fill
+          loading={eager ? "eager" : "lazy"}
+          sizes="(max-width: 640px) 74vw, 300px"
+          src={mission.artwork}
+        />
+        <span aria-hidden="true" className={styles.missionCardBrand}>TODAYSMISSION</span>
+        <span aria-hidden="true" className={styles.missionCardPack}>Fear of Rejection</span>
+        <span aria-hidden="true" className={styles.missionCardTitle}>
+          {mission.card.titleLines.map((line, index) => (
+            <span key={`${mission.id}-${index}`}>{line}</span>
+          ))}
+        </span>
+      </span>
+      <span
+        aria-label={accessible ? `${mission.title}. ${mission.card.description}` : undefined}
+        className={styles.missionCardBack}
+        role={accessible ? "img" : undefined}
+      >
+        <span aria-hidden="true" className={styles.missionCardBackTitle}>
+          {mission.card.titleLines.map((line, index) => (
+            <span key={`${mission.id}-back-${index}`}>{line}</span>
+          ))}
+        </span>
+        <span className={styles.missionCardDescription}>{mission.card.description}</span>
+        <button
+          aria-label="Record mission completion"
+          className={`${styles.missionChoiceCard} ${styles.missionChoiceRecord}`}
+          disabled={!onProofChoice}
+          onClick={(event) => {
+            event.stopPropagation();
+            onProofChoice?.("audio");
+          }}
+          tabIndex={accessible ? 0 : -1}
+          type="button"
+        >
+          <span className={styles.missionChoiceContent}>
+            <svg aria-hidden="true" className={styles.missionChoiceIcon} fill="none" viewBox="0 0 64 64">
+              <circle cx="32" cy="32" r="25" />
+              <circle className={styles.missionRecordDot} cx="32" cy="32" r="11" />
+            </svg>
+            <span>RECORD</span>
+          </span>
+        </button>
+        <button
+          aria-label="Type mission completion"
+          className={`${styles.missionChoiceCard} ${styles.missionChoiceText}`}
+          disabled={!onProofChoice}
+          onClick={(event) => {
+            event.stopPropagation();
+            onProofChoice?.("text");
+          }}
+          tabIndex={accessible ? 0 : -1}
+          type="button"
+        >
+          <span className={styles.missionChoiceContent}>
+            <svg aria-hidden="true" className={styles.missionChoiceIcon} fill="none" viewBox="0 0 64 64">
+              <path d="M15 48h34" />
+              <path d="M18 39 42.5 14.5a5 5 0 0 1 7 7L25 46l-10 2 3-9Z" />
+              <path d="m39 18 7 7" />
+            </svg>
+            <span>TYPE</span>
+          </span>
+        </button>
+      </span>
+    </span>
+  );
+}
+
+function GalleryCard({ choiceRevealed, copyIndex, flipped, mission, mode, onProofChoice, proofMode, setRef }: {
+  choiceRevealed: boolean;
+  copyIndex: number;
+  flipped: boolean;
+  mission: ExploreMissionArtwork;
+  mode: GalleryMode;
+  onProofChoice?: (mode: MissionProofMode) => void;
+  proofMode?: MissionProofMode;
   setRef: (element: HTMLLIElement | null) => void;
 }) {
   return (
-    <li className={styles.galleryCard} data-preview-card ref={setRef}>
-      <span className={styles.cardSurface}>
-        <Image
-          alt={copyIndex === PRIMARY_COPY ? `${mission.title} Mission artwork` : ""}
-          aria-hidden={copyIndex !== PRIMARY_COPY}
-          className={styles.image}
-          draggable={false}
-          fill
-          loading={copyIndex === PRIMARY_COPY ? "eager" : "lazy"}
-          sizes="(max-width: 640px) 74vw, 300px"
-          src={mission.artwork}
+    <li
+      aria-hidden={copyIndex !== PRIMARY_COPY}
+      className={styles.galleryCard}
+      data-completion-choice={choiceRevealed || undefined}
+      data-flipped={flipped || undefined}
+      data-mission-card={mode === "mission-card" ? mission.id : undefined}
+      data-preview-card
+      data-proof-mode={proofMode}
+      ref={setRef}
+    >
+      <span className={styles.cardSurface} data-flip-shell={mode === "mission-card" || undefined}>
+        <MissionVisual
+          accessible={copyIndex === PRIMARY_COPY}
+          eager={copyIndex === PRIMARY_COPY}
+          mission={mission}
+          mode={mode}
+          onProofChoice={onProofChoice}
         />
       </span>
     </li>
   );
 }
 
-function DistributionCard({ mission, offset, setRef }: {
+function DistributionCard({ mission, mode, offset, setRef }: {
   mission: ExploreMissionArtwork;
+  mode: GalleryMode;
   offset: number;
   setRef: (element: HTMLLIElement | null) => void;
 }) {
@@ -108,16 +268,7 @@ function DistributionCard({ mission, offset, setRef }: {
       style={style}
     >
       <span className={styles.cardSurface}>
-        <Image
-          alt=""
-          aria-hidden="true"
-          className={styles.image}
-          draggable={false}
-          fill
-          loading="eager"
-          sizes="(max-width: 640px) 74vw, 300px"
-          src={mission.artwork}
-        />
+        <MissionVisual accessible={false} eager mission={mission} mode={mode} />
       </span>
     </li>
   );
@@ -125,6 +276,7 @@ function DistributionCard({ mission, offset, setRef }: {
 
 export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
   const router = useRouter();
+  const supportsTakeTransition = pack.missions.every((mission) => mission.card && mission.previewArtwork);
   const rootRef = useRef<HTMLElement>(null);
   const trackRef = useRef<HTMLOListElement>(null);
   const galleryCardRefs = useRef<Array<HTMLLIElement | null>>([]);
@@ -140,9 +292,36 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
   const navigationStartedRef = useRef(false);
   const [phase, setPhaseState] = useState<PreviewPhase>("collapsed");
   const [proxyCenterIndex, setProxyCenterIndex] = useState(0);
+  const [galleryMode, setGalleryMode] = useState<GalleryMode>(supportsTakeTransition ? "artwork" : "mission-card");
+  const [takeActionPhase, setTakeActionPhase] = useState<TakeActionPhase>("pack");
+  const [activeMissionIndex, setActiveMissionIndex] = useState(0);
+  const [flippedMissionId, setFlippedMissionId] = useState<string | null>(null);
+  const [missionCompletionPhase, setMissionCompletionPhase] = useState<MissionCompletionPhase>("idle");
+  const activeMission = pack.missions[activeMissionIndex] ?? pack.missions[0];
+  const activeCardTheme = activeMission?.card;
+  const lockedMission = flippedMissionId
+    ? pack.missions.find((mission) => mission.id === flippedMissionId)
+    : undefined;
+  const lockedCardTheme = lockedMission?.card;
+  const selectedProofMode: MissionProofMode | undefined =
+    missionCompletionPhase === "audio" || missionCompletionPhase === "text"
+      ? missionCompletionPhase
+      : undefined;
   const style: PreviewStyle = {
     "--preview-background": pack.background,
     "--preview-foreground": pack.foreground,
+    "--take-background": activeCardTheme?.background ?? pack.foreground,
+    "--take-foreground": activeCardTheme?.foreground ?? pack.background,
+  };
+  const completionControlStyle: CompletionControlStyle = {
+    "--page-background": lockedCardTheme?.background ?? pack.background,
+    "--tm-accent": lockedCardTheme?.foreground ?? pack.foreground,
+    "--tm-capsule-height": "58px",
+    "--tm-on-accent": lockedCardTheme?.background ?? pack.background,
+    "--tm-on-replacement": selectedProofMode === "audio" ? "#fff0df" : "#30291f",
+    "--tm-replacement": selectedProofMode === "audio" ? "#d84f49" : "#ebc94b",
+    "--tm-thumb-size": "46px",
+    "--ui-text": lockedCardTheme?.foreground ?? pack.foreground,
   };
 
   const setPhase = useCallback((next: PreviewPhase) => {
@@ -192,6 +371,13 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
     return originRef.current + Math.round((value - originRef.current) / stride) * stride;
   }, []);
 
+  const syncActiveMission = useCallback(() => {
+    const stride = strideRef.current;
+    if (stride <= 0 || pack.missions.length < 1) return;
+    const steps = Math.round((originRef.current - positionRef.current) / stride);
+    setActiveMissionIndex(wrapIndex(steps, pack.missions.length));
+  }, [pack.missions.length]);
+
   const settleAt = useCallback((requestedTarget: number, initialVelocity = 0) => {
     stopMotion();
     let target = requestedTarget;
@@ -200,6 +386,7 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
       positionRef.current = target;
       normalizePosition();
       paint();
+      syncActiveMission();
       return;
     }
 
@@ -220,12 +407,13 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
         normalizePosition();
         paint();
         stopMotion();
+        syncActiveMission();
       } else {
         frameRef.current = window.requestAnimationFrame(tick);
       }
     };
     frameRef.current = window.requestAnimationFrame(tick);
-  }, [normalizePosition, paint, stopMotion]);
+  }, [normalizePosition, paint, stopMotion, syncActiveMission]);
 
   const settleWithMomentum = useCallback((velocity: number) => {
     const predicted = positionRef.current + velocity * .15;
@@ -289,10 +477,70 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
   }, [phase, setPhase]);
 
   useEffect(() => {
+    if (takeActionPhase === "pack-closing") {
+      if (phase !== "settled" || galleryMode !== "mission-card") return;
+      const frame = window.requestAnimationFrame(() => setTakeActionPhase("mission-opening"));
+      return () => window.cancelAnimationFrame(frame);
+    }
+    if (takeActionPhase === "mission-opening") {
+      const frame = window.requestAnimationFrame(() => setTakeActionPhase("mission"));
+      return () => window.cancelAnimationFrame(frame);
+    }
+    if (takeActionPhase !== "mission-closing") return;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const timer = window.setTimeout(
+      () => setTakeActionPhase("hidden"),
+      reducedMotion ? 80 : 220,
+    );
+    return () => window.clearTimeout(timer);
+  }, [galleryMode, phase, takeActionPhase]);
+
+  useEffect(() => {
+    if (missionCompletionPhase !== "flipping") return;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const timer = window.setTimeout(
+      () => setMissionCompletionPhase("slider"),
+      reducedMotion ? 100 : 580,
+    );
+    return () => window.clearTimeout(timer);
+  }, [missionCompletionPhase]);
+
+  useEffect(() => {
+    if (phase !== "take-collapse-ready" && phase !== "take-swap-ready") return;
+    const frame = window.requestAnimationFrame(() => {
+      setPhase(phase === "take-collapse-ready" ? "take-collapse" : "take-distributing");
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [phase, setPhase]);
+
+  useEffect(() => {
+    if (phase !== "take-collapse" && phase !== "take-distributing" && phase !== "take-handoff") return;
+    const root = rootRef.current;
+    if (!root) return;
+    let cancelled = false;
+    const frame = window.requestAnimationFrame(() => {
+      const animations = root.getAnimations({ subtree: true });
+      void Promise.allSettled(animations.map((animation) => animation.finished)).then(() => {
+        if (cancelled) return;
+        if (phase === "take-collapse") {
+          setGalleryMode("mission-card");
+          setPhase("take-swap-ready");
+        } else {
+          setPhase(phase === "take-distributing" ? "take-handoff" : "settled");
+        }
+      });
+    });
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(frame);
+    };
+  }, [phase, setPhase]);
+
+  useEffect(() => {
     const root = rootRef.current;
     if (!root || phase !== "settled") return;
     const handleWheel = (event: WheelEvent) => {
-      if (event.ctrlKey) return;
+      if (event.ctrlKey || flippedMissionId) return;
       const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
       if (Math.abs(delta) < 2 || dragRef.current) return;
       event.preventDefault();
@@ -304,7 +552,7 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
     };
     root.addEventListener("wheel", handleWheel, { passive: false });
     return () => root.removeEventListener("wheel", handleWheel);
-  }, [normalizePosition, paint, phase, settleWithMomentum, stopMotion]);
+  }, [flippedMissionId, normalizePosition, paint, phase, settleWithMomentum, stopMotion]);
 
   useEffect(() => {
     if (phase !== "closing-ready") return;
@@ -351,13 +599,19 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
   }, [stopMotion]);
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLElement>) => {
-    if (phaseRef.current !== "settled" || !event.isPrimary || event.button !== 0 || dragRef.current) return;
+    if (
+      phaseRef.current !== "settled" ||
+      !event.isPrimary ||
+      event.button !== 0 ||
+      dragRef.current ||
+      flippedMissionId !== null
+    ) return;
     stopMotion();
     dragRef.current = {
       pointerId: event.pointerId,
+      startX: event.clientX,
       lastX: event.clientX,
       lastTime: event.timeStamp,
-      travel: 0,
       velocity: 0,
       captured: false,
     };
@@ -366,18 +620,19 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
   const handlePointerMove = (event: ReactPointerEvent<HTMLElement>) => {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
-    const deltaX = event.clientX - drag.lastX;
-    drag.travel += Math.abs(deltaX);
-    if (!drag.captured && drag.travel > POINTER_THRESHOLD) {
+    const totalX = event.clientX - drag.startX;
+    if (!drag.captured && Math.abs(totalX) > POINTER_THRESHOLD) {
       drag.captured = true;
       event.currentTarget.setPointerCapture(event.pointerId);
+      event.currentTarget.dataset.dragging = "true";
     }
+    const deltaX = event.clientX - drag.lastX;
     const elapsed = Math.max(8, event.timeStamp - drag.lastTime) / 1000;
     drag.lastX = event.clientX;
     drag.lastTime = event.timeStamp;
     if (!drag.captured) return;
-    positionRef.current += deltaX;
     drag.velocity = clamp(deltaX / elapsed, -MAX_VELOCITY, MAX_VELOCITY);
+    positionRef.current += deltaX;
     normalizePosition();
     paint();
   };
@@ -389,18 +644,75 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
+    delete event.currentTarget.dataset.dragging;
     if (!drag.captured) return;
     suppressBlankClickRef.current = true;
     window.setTimeout(() => { suppressBlankClickRef.current = false; }, 180);
-    const velocity = event.type === "pointercancel" || event.timeStamp - drag.lastTime > 80 ? 0 : drag.velocity;
+    const stale = event.timeStamp - drag.lastTime > 80;
+    const velocity = event.type === "pointercancel" || stale ? 0 : drag.velocity;
     settleWithMomentum(velocity);
   };
+
+  const takePack = () => {
+    if (
+      !supportsTakeTransition ||
+      galleryMode !== "artwork" ||
+      takeActionPhase !== "pack" ||
+      phaseRef.current !== "settled"
+    ) {
+      return;
+    }
+
+    stopMotion();
+    const stride = Math.max(1, strideRef.current);
+    const steps = Math.round((originRef.current - positionRef.current) / stride);
+    const snappedPosition = originRef.current - steps * stride;
+    const residual = positionRef.current - snappedPosition;
+    setProxyCenterIndex(wrapIndex(steps, pack.missions.length));
+    updateProxyPositions(residual);
+    setTakeActionPhase("pack-closing");
+    setPhase("take-collapse-ready");
+  };
+
+  const takeMission = () => {
+    if (
+      galleryMode !== "mission-card" ||
+      takeActionPhase !== "mission" ||
+      phaseRef.current !== "settled"
+    ) {
+      return;
+    }
+
+    stopMotion();
+    const stride = Math.max(1, strideRef.current);
+    const steps = Math.round((originRef.current - positionRef.current) / stride);
+    const mission = pack.missions[wrapIndex(steps, pack.missions.length)];
+    positionRef.current = originRef.current - steps * stride;
+    normalizePosition();
+    paint();
+    setActiveMissionIndex(wrapIndex(steps, pack.missions.length));
+    setFlippedMissionId(mission.id);
+    setMissionCompletionPhase("flipping");
+    setTakeActionPhase("mission-closing");
+  };
+
+  const paintCompletionChoices = useCallback((progress: number) => {
+    if (!flippedMissionId) return;
+    const bounded = clamp(progress, 0, 1);
+    const recordY = -100 + bounded * 50;
+    const textY = 100 - bounded * 50;
+    galleryCardRefs.current.forEach((card) => {
+      if (!card || card.dataset.missionCard !== flippedMissionId) return;
+      card.style.setProperty("--mission-record-y", `${recordY}%`);
+      card.style.setProperty("--mission-text-y", `${textY}%`);
+    });
+  }, [flippedMissionId]);
 
   const closePreview = (target: EventTarget | null) => {
     if (
       phaseRef.current !== "settled" ||
       suppressBlankClickRef.current ||
-      (target instanceof Element && target.closest("[data-preview-card]"))
+      (target instanceof Element && target.closest("[data-preview-card], [data-preview-control]"))
     ) {
       return;
     }
@@ -424,12 +736,17 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
     <section
       aria-label={`${pack.title} Mission artwork preview`}
       className={styles.root}
+      data-mission-locked={flippedMissionId ? "true" : undefined}
       data-moving="false"
       data-phase={phase}
       onClick={(event) => closePreview(event.target)}
       onKeyDown={(event) => {
         if (event.key === "Escape") closePreview(event.currentTarget);
-        if (phaseRef.current !== "settled" || (event.key !== "ArrowLeft" && event.key !== "ArrowRight")) return;
+        if (
+          flippedMissionId ||
+          phaseRef.current !== "settled" ||
+          (event.key !== "ArrowLeft" && event.key !== "ArrowRight")
+        ) return;
         event.preventDefault();
         const direction = event.key === "ArrowRight" ? -1 : 1;
         settleAt(nearestMissionSnap(positionRef.current) + direction * strideRef.current);
@@ -442,15 +759,30 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
       style={style}
       tabIndex={0}
     >
-      <ol aria-label="Mission artwork" className={styles.track} ref={trackRef}>
+      <ol
+        aria-label={galleryMode === "artwork" ? "Mission artwork" : "Mission cards"}
+        className={styles.track}
+        ref={trackRef}
+      >
         {Array.from({ length: COPY_COUNT }, (_, copyIndex) =>
           pack.missions.map((mission, slot) => {
             const refIndex = copyIndex * pack.missions.length + slot;
             return (
               <GalleryCard
                 copyIndex={copyIndex}
+                choiceRevealed={
+                  missionCompletionPhase === "choice" && flippedMissionId === mission.id
+                }
+                flipped={flippedMissionId === mission.id}
                 key={`${copyIndex}-${mission.id}`}
                 mission={mission}
+                mode={galleryMode}
+                onProofChoice={
+                  missionCompletionPhase === "choice" && flippedMissionId === mission.id
+                    ? (mode) => setMissionCompletionPhase(mode)
+                    : undefined
+                }
+                proofMode={flippedMissionId === mission.id ? selectedProofMode : undefined}
                 setRef={(element) => { galleryCardRefs.current[refIndex] = element; }}
               />
             );
@@ -462,11 +794,71 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
           <DistributionCard
             key={offset}
             mission={proxyMissions[index]}
+            mode={galleryMode}
             offset={offset}
             setRef={(element) => { proxyCardRefs.current[index] = element; }}
           />
         ))}
       </ol>
+      {supportsTakeTransition && takeActionPhase !== "hidden" ? (
+        <div
+          className={styles.takeControl}
+          data-preview-control
+          onClick={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <button
+            className={styles.takeButton}
+            data-action-state={takeActionPhase}
+            disabled={
+              takeActionPhase === "pack-closing" ||
+              takeActionPhase === "mission-opening" ||
+              takeActionPhase === "mission-closing"
+            }
+            onClick={takeActionPhase === "pack" ? takePack : takeMission}
+            type="button"
+          >
+            {takeActionPhase === "pack" || takeActionPhase === "pack-closing"
+              ? "take this pack"
+              : "take this mission"}
+          </button>
+        </div>
+      ) : null}
+      {[
+        "slider",
+        "choice",
+        "audio",
+        "text",
+      ].includes(missionCompletionPhase) && lockedCardTheme ? (
+        <div
+          className={styles.completionControl}
+          data-preview-control
+          onPointerDown={(event) => event.stopPropagation()}
+          style={completionControlStyle}
+        >
+          <div
+            className={styles.completionSliderShell}
+            data-hidden={Boolean(selectedProofMode)}
+          >
+            <MissionCompleteSlider
+              onCompletionRequested={() => {
+                paintCompletionChoices(1);
+                setMissionCompletionPhase("choice");
+              }}
+              onProgressChange={paintCompletionChoices}
+            />
+          </div>
+          <button
+            aria-disabled="true"
+            className={styles.completionUpload}
+            data-visible={Boolean(selectedProofMode)}
+            disabled
+            type="button"
+          >
+            upload
+          </button>
+        </div>
+      ) : null}
       <div className={styles.coverHero} data-preview-card>
         <ViewTransition
           default="none"

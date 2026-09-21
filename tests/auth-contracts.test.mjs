@@ -12,6 +12,7 @@ const loginForm = readFileSync(new URL("../app/login/LoginForm.tsx", import.meta
 
 test("safe next paths accept the current site routes only", () => {
   assert.equal(getSafeNextPath("/"), "/");
+  assert.equal(getSafeNextPath("/explore"), "/explore");
   assert.equal(getSafeNextPath("/pack/go-alone"), "/pack/go-alone");
   for (const value of ["https://evil.example", "//evil.example", "pack/go-alone", "/pack/talk-first", ""]) {
     assert.equal(getSafeNextPath(value), "/");
