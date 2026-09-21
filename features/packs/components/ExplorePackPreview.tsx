@@ -8,8 +8,10 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, ViewTransiti
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 
+import type { MissionExperience } from "@/data/contracts/mission-experience";
 import { MissionCompleteSlider } from "@/features/missions/components/MissionCompleteSlider";
 import { MissionCompletionConfetti } from "@/features/missions/components/MissionCompletionConfetti";
+import { SplitMissionExperienceReveal } from "@/features/missions/components/SplitMissionExperienceReveal";
 import type {
   ExploreMissionArtwork,
   ExplorePackPreviewData,
@@ -30,6 +32,10 @@ import { useDeckViewport } from "@/features/packs/model/use-deck-viewport";
 import styles from "./ExplorePackPreview.module.css";
 
 type ExplorePackPreviewProps = {
+  loadMissionExperiences: (missionId: string) => Promise<
+    | { ok: true; experiences: readonly MissionExperience[] }
+    | { ok: false; error: string }
+  >;
   pack: ExplorePackPreviewData;
 };
 
@@ -38,6 +44,7 @@ type PreviewStyle = CSSProperties & {
   "--preview-foreground": string;
   "--take-background": string;
   "--take-foreground": string;
+  "--experience-card-width": string;
 };
 
 type CompletionControlStyle = CSSProperties & {
@@ -111,6 +118,7 @@ const PRIMARY_COPY = 1;
 const PROXY_OFFSETS = [-3, -2, -1, 0, 1, 2, 3] as const;
 const POINTER_THRESHOLD = 5;
 const MAX_VELOCITY = 2600;
+const COMMUNITY_EXPERIENCE_SCOPE = { kind: "community" } as const;
 
 function clamp(value: number, minimum: number, maximum: number) {
   return Math.max(minimum, Math.min(maximum, value));
@@ -272,6 +280,7 @@ function GalleryCard({ backVisible, choiceRevealed, copyIndex, eager, flipStage,
       data-3d-prepared={prepared || undefined}
       data-back-visible={backVisible || undefined}
       data-flip-stage={flipStage}
+      data-experience-mission-id={mode === "mission-card" ? mission.id : undefined}
       data-mission-card={mode === "mission-card" ? mission.id : undefined}
       data-preview-card
       data-proof-mode={proofMode}
@@ -320,7 +329,7 @@ function DistributionCard({ mission, mode, offset, setRef }: {
   );
 }
 
-export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
+export function ExplorePackPreview({ loadMissionExperiences, pack }: ExplorePackPreviewProps) {
   const router = useRouter();
   const viewport = useDeckViewport();
   const nativeScrolling = viewport.coarsePointer;
@@ -376,6 +385,7 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
     "--preview-foreground": pack.foreground,
     "--take-background": activeCardTheme?.background ?? pack.foreground,
     "--take-foreground": activeCardTheme?.foreground ?? pack.background,
+    "--experience-card-width": "var(--preview-card-width)",
   };
   const completionControlStyle: CompletionControlStyle = {
     "--page-background": lockedCardTheme?.background ?? pack.background,
@@ -793,8 +803,11 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
   }, [stopMotion]);
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLElement>) => {
+    const experienceGesture = rootRef.current?.dataset.experienceGesture;
     if (
       nativeScrolling ||
+      experienceGesture === "pending" ||
+      experienceGesture === "vertical" ||
       phaseRef.current !== "settled" ||
       !event.isPrimary ||
       event.button !== 0 ||
@@ -814,6 +827,8 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
 
   const handlePointerMove = (event: ReactPointerEvent<HTMLElement>) => {
     if (nativeScrolling) return;
+    const experienceGesture = rootRef.current?.dataset.experienceGesture;
+    if (experienceGesture === "pending" || experienceGesture === "vertical") return;
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     const totalX = event.clientX - drag.startX;
@@ -835,6 +850,11 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
 
   const finishPointer = (event: ReactPointerEvent<HTMLElement>) => {
     if (nativeScrolling) return;
+    const experienceGesture = rootRef.current?.dataset.experienceGesture;
+    if (experienceGesture === "pending" || experienceGesture === "vertical") {
+      dragRef.current = null;
+      return;
+    }
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     dragRef.current = null;
@@ -964,6 +984,13 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
   }, [flippedMissionId, missionCompletionPhase]);
 
   const closePreview = (target: EventTarget | null) => {
+    const root = rootRef.current;
+    const revealSuppressUntil = Number(root?.dataset.experienceSuppressClickUntil ?? 0);
+    if (performance.now() < revealSuppressUntil) return;
+    if (root?.dataset.experienceReveal && root.dataset.experienceReveal !== "closed") {
+      root.dispatchEvent(new Event("mission-experience-reveal-close", { cancelable: true }));
+      return;
+    }
     if (
       phaseRef.current !== "settled" ||
       suppressBlankClickRef.current ||
@@ -1000,6 +1027,7 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
       className={styles.root}
       data-mission-completion={missionCompletionPhase}
       data-mission-locked={flippedMissionId ? "true" : undefined}
+      data-experience-reveal="closed"
       data-moving="false"
       data-native-scroll={nativeScrolling || undefined}
       data-phase={phase}
@@ -1058,6 +1086,15 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
             src={backgroundMission.previewArtwork ?? backgroundMission.artwork}
           />
         </span>
+      ) : null}
+      {flippedMissionId && missionCompletionPhase === "slider" ? (
+        <SplitMissionExperienceReveal
+          activeMissionId={flippedMissionId}
+          enabled
+          experienceScope={COMMUNITY_EXPERIENCE_SCOPE}
+          loadExperiences={loadMissionExperiences}
+          rootRef={rootRef}
+        />
       ) : null}
       <div className={styles.scrollViewport} ref={scrollViewportRef}>
         <ol

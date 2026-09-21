@@ -78,6 +78,15 @@
   pointer-events: auto;
 }
 
+.root[data-phase="settled"] .galleryCard[data-experience-reveal] {
+  z-index: 11;
+  transform: translate3d(0, var(--experience-card-y, 0), 0);
+}
+
+.root[data-phase="settled"] .galleryCard[data-experience-snapping="true"] {
+  transition: transform 260ms cubic-bezier(.2, .72, .24, 1);
+}
+
 .root[data-native-scroll="true"] {
   touch-action: auto;
 }
@@ -782,6 +791,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .root[data-phase="settled"] .galleryCard[data-experience-snapping="true"] {
+    transition-duration: 90ms;
+  }
+
   .galleryCard[data-flip-stage="out"] .cardSurface[data-flip-shell],
   .galleryCard[data-flip-stage="in"] .cardSurface[data-flip-shell],
   .coverSurface,

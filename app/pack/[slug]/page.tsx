@@ -31,7 +31,12 @@ export default async function PackDetailPage({ params }: PackDetailPageProps) {
   const previewPack = getExplorePackPreview(slug);
 
   if (previewPack) {
-    return <ExplorePackPreview pack={previewPack} />;
+    return (
+      <ExplorePackPreview
+        loadMissionExperiences={getMissionExperiencesAction}
+        pack={previewPack}
+      />
+    );
   }
 
   const pack = await getPackBySlug(slug);

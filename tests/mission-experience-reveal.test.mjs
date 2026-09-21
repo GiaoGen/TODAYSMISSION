@@ -175,3 +175,25 @@ test("track transparency exposes active Reveal content without changing card own
   assert.match(revealCss, /\.underlay \{[\s\S]*z-index: 9;[\s\S]*\}/);
   assert.match(reveal, /data-reveal-active=\{sessionActive\}/);
 });
+
+test("preview Mission backs reveal audio downward in red and text upward in yellow", () => {
+  const preview = read("features/packs/components/ExplorePackPreview.tsx");
+  const reveal = read("features/missions/components/SplitMissionExperienceReveal.tsx");
+  const revealCss = read("features/missions/components/SplitMissionExperienceReveal.module.css");
+  const previewCss = read("features/packs/components/ExplorePackPreview.module.css");
+
+  assert.match(preview, /<SplitMissionExperienceReveal/);
+  assert.match(preview, /data-experience-mission-id=/);
+  assert.match(preview, /missionCompletionPhase === "slider"/);
+  assert.match(preview, /dispatchEvent\(new Event\("mission-experience-reveal-close", \{ cancelable: true \}\)\)/);
+  assert.match(reveal, /deltaY > 0 \? "audio" : "text"/);
+  assert.match(reveal, /experience\.kind === kind/);
+  assert.match(reveal, /kind === "audio" \? 1 : -1/);
+  assert.match(reveal, /passedOpenThreshold = true/);
+  assert.match(reveal, /passedOpenThreshold[\s\S]*progress >= OPEN_PROGRESS_THRESHOLD/);
+  assert.match(reveal, /else applyCardTravel\(0\)/);
+  assert.match(reveal, /--experience-progress", "0"/);
+  assert.match(revealCss, /data-reveal-kind="audio"[\s\S]*background:\s*#d84f49/);
+  assert.match(revealCss, /data-reveal-kind="text"[\s\S]*background:\s*#ebc94b/);
+  assert.match(previewCss, /galleryCard\[data-experience-reveal\][\s\S]*--experience-card-y/);
+});
