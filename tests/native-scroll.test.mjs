@@ -305,6 +305,17 @@ test("a stationary tap recovers when Chromium omits a supported scrollend event"
   h.controller.destroy();
 });
 
+test("Pack preview clears the SSR transform and keeps Safari scroll compositing stable while locked", () => {
+  const component = read("features/packs/components/ExplorePackPreview.tsx");
+  const css = read("features/packs/components/ExplorePackPreview.module.css");
+  assert.match(component, /if \(nativeScrolling\) \{\s*trackRef\.current\?\.style\.removeProperty\("transform"\)/);
+  assert.match(component, /data-3d-prepared=\{prepared \|\| undefined\}/);
+  assert.match(css, /\.galleryCard\[data-3d-prepared="true"\]/);
+  const lockedRule = css.match(/\.root\[data-native-scroll="true"\]:not\(\[data-phase="settled"\]\)[\s\S]*?\{([\s\S]*?)\}/)?.[1] ?? "";
+  assert.match(lockedRule, /touch-action:\s*none/);
+  assert.doesNotMatch(lockedRule, /overflow-x:\s*hidden/);
+});
+
 test("finite lists clamp, reduced motion uses one instant action, and empty/single lists stay valid", () => {
   for (const count of [0, 1, 2, 5]) {
     const h = controllerHarness({ count, copies: 1, reducedMotion: true });

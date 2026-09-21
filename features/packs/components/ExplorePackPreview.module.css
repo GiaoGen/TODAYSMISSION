@@ -115,8 +115,8 @@
 .root[data-native-scroll="true"]:not([data-phase="settled"]) .scrollViewport,
 .root[data-native-scroll="true"][data-mission-locked="true"] .scrollViewport,
 .root[data-native-scroll="true"] .scrollViewport[data-native-locked="true"] {
-  overflow-x: hidden;
   scroll-snap-type: none;
+  touch-action: none;
 }
 
 .cardSurface,
@@ -131,7 +131,7 @@
   transform-origin: center;
 }
 
-.galleryCard[data-flipped="true"] {
+.galleryCard[data-3d-prepared="true"] {
   perspective: 1100px;
   -webkit-perspective: 1100px;
 }
@@ -141,6 +141,7 @@
   background: transparent;
   transform-style: preserve-3d;
   -webkit-transform-style: preserve-3d;
+  will-change: transform;
 }
 
 .image { object-fit: cover; user-select: none; }

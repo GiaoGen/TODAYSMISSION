@@ -261,6 +261,7 @@ function GalleryCard({ choiceRevealed, copyIndex, eager, flipped, mission, mode,
       className={styles.galleryCard}
       data-completion-choice={choiceRevealed || undefined}
       data-completing={proofMode === "completing" || undefined}
+      data-3d-prepared={prepared || undefined}
       data-flipped={flipped || undefined}
       data-mission-card={mode === "mission-card" ? mission.id : undefined}
       data-preview-card
@@ -536,6 +537,7 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
         : root.clientWidth / 2 - first.offsetLeft - first.offsetWidth / 2;
       positionRef.current = originRef.current - logicalPosition * stride;
       if (nativeScrolling) {
+        trackRef.current?.style.removeProperty("transform");
         nativeScrollControllerRef.current?.restore(
           { count, copies: COPY_COUNT, stride },
           logicalPosition,
