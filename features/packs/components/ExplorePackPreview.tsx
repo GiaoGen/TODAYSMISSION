@@ -9,6 +9,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 
 import { MissionCompleteSlider } from "@/features/missions/components/MissionCompleteSlider";
+import { MissionCompletionConfetti } from "@/features/missions/components/MissionCompletionConfetti";
 import type {
   ExploreMissionArtwork,
   ExplorePackPreviewData,
@@ -345,6 +346,7 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
   const phaseRef = useRef<PreviewPhase>("collapsed");
   const suppressBlankClickRef = useRef(false);
   const navigationStartedRef = useRef(false);
+  const completionEventSequenceRef = useRef(0);
   const [phase, setPhaseState] = useState<PreviewPhase>("collapsed");
   const [proxyCenterIndex, setProxyCenterIndex] = useState(0);
   const [galleryMode, setGalleryMode] = useState<GalleryMode>(supportsTakeTransition ? "artwork" : "mission-card");
@@ -355,6 +357,7 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
   const [flippedMissionId, setFlippedMissionId] = useState<string | null>(null);
   const [missionCompletionPhase, setMissionCompletionPhase] = useState<MissionCompletionPhase>("idle");
   const [selectedProofMode, setSelectedProofMode] = useState<MissionProofMode | null>(null);
+  const [completionEventId, setCompletionEventId] = useState<string | null>(null);
   const activeMission = pack.missions[activeMissionIndex] ?? pack.missions[0];
   const activeMissionCompleted = activeMission ? completedMissionIds.has(activeMission.id) : false;
   const backgroundMission = backgroundMissionId
@@ -926,6 +929,8 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
       !selectedProofMode ||
       (missionCompletionPhase !== "audio" && missionCompletionPhase !== "text")
     ) return;
+    completionEventSequenceRef.current += 1;
+    setCompletionEventId(`${flippedMissionId}:${completionEventSequenceRef.current}`);
     setMissionCompletionPhase("completing");
   };
 
@@ -1193,6 +1198,12 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
           </button>
         </div>
       ) : null}
+      <MissionCompletionConfetti
+        eventId={completionEventId}
+        onFinished={(eventId) => {
+          setCompletionEventId((current) => current === eventId ? null : current);
+        }}
+      />
       <div className={styles.coverHero} data-preview-card>
         <ViewTransition
           default="none"

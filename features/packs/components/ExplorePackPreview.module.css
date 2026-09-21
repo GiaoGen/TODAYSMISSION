@@ -145,7 +145,11 @@
   will-change: transform;
 }
 
-.image { object-fit: cover; user-select: none; }
+.image {
+  border-radius: inherit;
+  object-fit: cover;
+  user-select: none;
+}
 
 .missionCardVisual {
   position: absolute;

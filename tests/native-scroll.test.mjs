@@ -315,11 +315,14 @@ test("Pack preview clears the SSR transform and keeps Safari scroll compositing 
   assert.match(component, /setMissionCompletionPhase\("flipping-in"\)/);
   assert.match(component, /mission\.id === activeMission\?\.id \|\| mission\.id === flippedMissionId/);
   assert.match(component, /renderBack=\{prepared\}/);
+  assert.match(component, /setCompletionEventId\(`\$\{flippedMissionId\}:\$\{completionEventSequenceRef\.current\}`\);\s*setMissionCompletionPhase\("completing"\)/);
+  assert.match(component, /<MissionCompletionConfetti\s+eventId=\{completionEventId\}/);
   assert.match(css, /\.galleryCard\[data-3d-prepared="true"\]/);
   assert.match(css, /data-flip-stage="out"[\s\S]*?rotateX\(90deg\)/);
   assert.match(css, /data-flip-stage="swap"[\s\S]*?rotateX\(-90deg\)/);
   assert.match(css, /data-back-visible="true"[\s\S]*?missionCardBack/);
   assert.doesNotMatch(css, /rotateX\(-?180deg\)/);
+  assert.match(css.match(/\.image\s*\{([^}]+)\}/)?.[1] ?? "", /border-radius:\s*inherit/);
   const settledProxyRule = css.match(/\.root\[data-phase="settled"\] \.proxyLayer\s*\{([^}]+)\}/)?.[1] ?? "";
   assert.match(settledProxyRule, /visibility:\s*hidden/);
   assert.match(settledProxyRule, /opacity:\s*0/);
