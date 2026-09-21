@@ -78,6 +78,8 @@ export type ExplorePackDetailData = Omit<ExplorePackPreviewData, "id" | "joined"
   authenticated: boolean;
   activeMissionId: string | null;
   completedMissionIds: readonly string[];
+  completedMissionCount: number;
+  visibleMissionCount: number;
 };
 
 export const EXPLORE_PACKS = [

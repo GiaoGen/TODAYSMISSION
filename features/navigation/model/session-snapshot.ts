@@ -186,6 +186,19 @@ export function setActiveMission(packId: string, missionId: string, userId: stri
   });
 }
 
+export function clearActiveMission(packId: string, userId: string, missionId?: string) {
+  if (!packId) return;
+  const current = ensureUser(userId);
+  const activeMissionId = current.activeMissionByPack[packId];
+  if (!activeMissionId || (missionId && activeMissionId !== missionId)) return;
+  const activeMissionByPack = { ...current.activeMissionByPack };
+  delete activeMissionByPack[packId];
+  notify({
+    ...current,
+    activeMissionByPack: Object.freeze(activeMissionByPack),
+  });
+}
+
 export function setUnlockedFinalMission(packId: string, mission: MissionSummary, userId: string) {
   if (!packId || !mission.id || mission.slug !== "stop-waiting") return;
   const current = ensureUser(userId);

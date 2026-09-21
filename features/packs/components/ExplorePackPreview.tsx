@@ -31,6 +31,13 @@ import {
 } from "@/features/packs/model/pack-transition";
 import { setExplorePackReturnSlug } from "@/features/packs/model/explore-pack-transition-state";
 import { useDeckViewport } from "@/features/packs/model/use-deck-viewport";
+import {
+  addJoinedPack,
+  addMissionCompletion,
+  clearActiveMission,
+  getSessionSnapshot,
+  setActiveMission,
+} from "@/features/navigation/model/session-snapshot";
 
 import styles from "./ExplorePackPreview.module.css";
 
@@ -945,6 +952,8 @@ export function ExplorePackPreview({ loadMissionExperiences, pack }: ExplorePack
       return;
     }
     setHasJoined(true);
+    const userId = getSessionSnapshot().currentUser?.id;
+    if (userId) addJoinedPack(pack.id, userId);
     setTakePending(false);
 
     const nativeController = nativeScrollControllerRef.current;
@@ -1013,6 +1022,8 @@ export function ExplorePackPreview({ loadMissionExperiences, pack }: ExplorePack
       return;
     }
     setTakePending(false);
+    const userId = getSessionSnapshot().currentUser?.id;
+    if (userId) setActiveMission(pack.id, result.activeMissionId, userId);
     positionRef.current = originRef.current - steps * stride;
     normalizePosition();
     paint();
@@ -1039,12 +1050,22 @@ export function ExplorePackPreview({ loadMissionExperiences, pack }: ExplorePack
     });
   }, [flippedMissionId, paintMissionBackground]);
 
-  const handleMissionCompleted = useCallback(() => {
-    if (!flippedMissionId) return;
+  const handleMissionCompleted = useCallback((completedLocalDate: string) => {
+    if (!flippedMissionId || !pack.id) return;
+    const userId = getSessionSnapshot().currentUser?.id;
+    if (userId) {
+      addMissionCompletion({
+        userId,
+        missionId: flippedMissionId,
+        packId: pack.id,
+        completedLocalDate,
+      });
+      clearActiveMission(pack.id, userId, flippedMissionId);
+    }
     completionEventSequenceRef.current += 1;
     setCompletionEventId(`${flippedMissionId}:${completionEventSequenceRef.current}`);
     setMissionCompletionPhase("completing");
-  }, [flippedMissionId]);
+  }, [flippedMissionId, pack.id]);
 
   useEffect(() => {
     if (missionCompletionPhase !== "completing" || !flippedMissionId) return;
@@ -1293,6 +1314,14 @@ export function ExplorePackPreview({ loadMissionExperiences, pack }: ExplorePack
           </button>
           {takeError ? <p className={styles.error} role="alert">{takeError}</p> : null}
         </div>
+      ) : null}
+      {"visibleMissionCount" in pack && hasJoined ? (
+        <p
+          aria-label={`${completedMissionIds.size} of ${pack.visibleMissionCount} missions completed`}
+          className={styles.packProgress}
+        >
+          {completedMissionIds.size}/{pack.visibleMissionCount}
+        </p>
       ) : null}
       {[
         "slider",

@@ -10,6 +10,7 @@ import {
   EXPLORE_PACK_SUMMARIES,
 } from "@/features/packs/model/explore-pack-content";
 import { getInitialMissionCompletionStatuses } from "@/features/missions/model/mission-action-state";
+import { SessionSnapshotHydrator } from "@/features/navigation/components/SessionSnapshotHydrator";
 import { RoutePrefetch } from "./RoutePrefetch";
 import { PackUserState } from "./PackUserState";
 
@@ -28,14 +29,18 @@ export async function generateStaticParams() {
 
 export default async function PackDetailPage({ params }: PackDetailPageProps) {
   const { slug } = await params;
-  const previewPack = await getExplorePackBySlug(slug);
+  const previewPackData = await getExplorePackBySlug(slug);
 
-  if (previewPack) {
+  if (previewPackData) {
+    const { navigationState, ...previewPack } = previewPackData;
     return (
-      <ExplorePackPreview
-        loadMissionExperiences={getMissionExperiencesAction}
-        pack={previewPack}
-      />
+      <>
+        <ExplorePackPreview
+          loadMissionExperiences={getMissionExperiencesAction}
+          pack={previewPack}
+        />
+        <SessionSnapshotHydrator state={navigationState} />
+      </>
     );
   }
 

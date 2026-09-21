@@ -4,9 +4,14 @@ import type { ExplorePackDetailData } from "@/features/packs/model/explore-pack-
 import { getExplorePackPreview } from "@/features/packs/model/explore-pack-content";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "./get-current-user";
+import type { NavigationUserState } from "./get-navigation-user-state";
 import { getPackBySlug } from "./get-packs";
 
-export async function getExplorePackBySlug(slug: string): Promise<ExplorePackDetailData | null> {
+export type ExplorePackPageData = ExplorePackDetailData & {
+  navigationState: NavigationUserState;
+};
+
+export async function getExplorePackBySlug(slug: string): Promise<ExplorePackPageData | null> {
   const preview = getExplorePackPreview(slug);
   if (!preview) return null;
 
@@ -36,29 +41,58 @@ export async function getExplorePackBySlug(slug: string): Promise<ExplorePackDet
   let joined = false;
   let activeMissionId: string | null = null;
   let completedMissionIds: readonly string[] = [];
+  let navigationState: NavigationUserState = {
+    currentUser: null,
+    joinedPackIds: [],
+    completedMissionIds: [],
+    completedDates: [],
+    completionCountsByPack: {},
+    activeMissionByPack: {},
+    unlockedFinalMissionsByPack: {},
+    registeredOn: null,
+  };
 
   if (currentUser) {
     const supabase = await createClient();
     const [membershipResult, completionResult] = await Promise.all([
       supabase
         .from("pack_memberships")
-        .select("active_mission_id")
-        .eq("user_id", currentUser.id)
-        .eq("pack_id", pack.id)
-        .maybeSingle(),
+        .select("active_mission_id,pack_id,joined_at")
+        .eq("user_id", currentUser.id),
       supabase
         .from("mission_completions")
-        .select("mission_id")
-        .eq("user_id", currentUser.id)
-        .in("mission_id", missions.map((mission) => mission.id)),
+        .select("mission_id,completed_local_date")
+        .eq("user_id", currentUser.id),
     ]);
 
     if (membershipResult.error) throw new Error("Failed to read Explore Pack membership.");
     if (completionResult.error) throw new Error("Failed to read Explore Mission completions.");
 
-    joined = Boolean(membershipResult.data);
-    activeMissionId = membershipResult.data?.active_mission_id ?? null;
-    completedMissionIds = completionResult.data.map((completion) => completion.mission_id);
+    const joinedPackIds = membershipResult.data.map((membership) => membership.pack_id);
+    const activeMissionByPack = Object.fromEntries(
+      membershipResult.data.map((membership) => [membership.pack_id, membership.active_mission_id]),
+    );
+    const visibleMissionIds = new Set(missions.map((mission) => mission.id));
+    const allCompletedMissionIds = [...new Set(
+      completionResult.data.map((completion) => completion.mission_id),
+    )];
+    completedMissionIds = allCompletedMissionIds.filter((missionId) => visibleMissionIds.has(missionId));
+    const completedDates = [...new Set(
+      completionResult.data.map((completion) => completion.completed_local_date),
+    )].sort();
+
+    joined = joinedPackIds.includes(pack.id);
+    activeMissionId = activeMissionByPack[pack.id] ?? null;
+    navigationState = {
+      currentUser,
+      joinedPackIds,
+      completedMissionIds: allCompletedMissionIds,
+      completedDates,
+      completionCountsByPack: { [pack.id]: completedMissionIds.length },
+      activeMissionByPack,
+      unlockedFinalMissionsByPack: {},
+      registeredOn: currentUser.createdAt.slice(0, 10),
+    };
   }
 
   return {
@@ -70,6 +104,9 @@ export async function getExplorePackBySlug(slug: string): Promise<ExplorePackDet
     joined,
     activeMissionId,
     completedMissionIds,
+    completedMissionCount: completedMissionIds.length,
+    visibleMissionCount: missions.length,
     missions,
+    navigationState,
   };
 }

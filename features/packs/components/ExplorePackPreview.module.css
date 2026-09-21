@@ -758,6 +758,35 @@
   pointer-events: none;
 }
 
+.packProgress {
+  position: absolute;
+  z-index: 40;
+  top: max(20px, env(safe-area-inset-top));
+  right: max(24px, env(safe-area-inset-right));
+  margin: 0;
+  color: currentColor;
+  font-size: clamp(14px, 1.2vw, 18px);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: .04em;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease-out;
+}
+
+.root[data-phase="settled"] .packProgress,
+.root[data-phase="take-collapse-ready"] .packProgress,
+.root[data-phase="take-collapse"] .packProgress,
+.root[data-phase="take-swap-ready"] .packProgress,
+.root[data-phase="take-distributing"] .packProgress,
+.root[data-phase="take-handoff"] .packProgress {
+  opacity: 1;
+}
+
+.root[data-phase="closing"] .packProgress {
+  opacity: 0;
+}
+
 .root:not([data-phase="collapsed"]) .title {
   opacity: 0;
   transform: translate3d(-50%, 10px, 0);
