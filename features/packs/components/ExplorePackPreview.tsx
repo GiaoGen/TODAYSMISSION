@@ -279,6 +279,7 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
   const supportsTakeTransition = pack.missions.every((mission) => mission.card && mission.previewArtwork);
   const rootRef = useRef<HTMLElement>(null);
   const trackRef = useRef<HTMLOListElement>(null);
+  const missionBackgroundRef = useRef<HTMLSpanElement>(null);
   const galleryCardRefs = useRef<Array<HTMLLIElement | null>>([]);
   const proxyCardRefs = useRef<Array<HTMLLIElement | null>>([]);
   const positionRef = useRef(0);
@@ -701,6 +702,9 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
     const bounded = clamp(progress, 0, 1);
     const recordY = -100 + bounded * 50;
     const textY = 100 - bounded * 50;
+    if (missionBackgroundRef.current) {
+      missionBackgroundRef.current.style.opacity = String(bounded);
+    }
     galleryCardRefs.current.forEach((card) => {
       if (!card || card.dataset.missionCard !== flippedMissionId) return;
       card.style.setProperty("--mission-record-y", `${recordY}%`);
@@ -759,6 +763,18 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
       style={style}
       tabIndex={0}
     >
+      {lockedMission ? (
+        <span aria-hidden="true" className={styles.missionArtworkBackground} ref={missionBackgroundRef}>
+          <Image
+            alt=""
+            className={styles.missionArtworkBackgroundImage}
+            draggable={false}
+            fill
+            sizes="60vw"
+            src={lockedMission.previewArtwork ?? lockedMission.artwork}
+          />
+        </span>
+      ) : null}
       <ol
         aria-label={galleryMode === "artwork" ? "Mission artwork" : "Mission cards"}
         className={styles.track}
@@ -771,14 +787,16 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
               <GalleryCard
                 copyIndex={copyIndex}
                 choiceRevealed={
-                  missionCompletionPhase === "choice" && flippedMissionId === mission.id
+                  ["choice", "audio", "text"].includes(missionCompletionPhase) &&
+                  flippedMissionId === mission.id
                 }
                 flipped={flippedMissionId === mission.id}
                 key={`${copyIndex}-${mission.id}`}
                 mission={mission}
                 mode={galleryMode}
                 onProofChoice={
-                  missionCompletionPhase === "choice" && flippedMissionId === mission.id
+                  ["choice", "audio", "text"].includes(missionCompletionPhase) &&
+                  flippedMissionId === mission.id
                     ? (mode) => setMissionCompletionPhase(mode)
                     : undefined
                 }

@@ -5,6 +5,7 @@ import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import {
   getCompletionOutcome,
   getMissionSliderTravel,
+  MISSION_SLIDER_INSET,
   MISSION_SLIDER_THUMB_SIZE,
 } from "@/features/missions/model/mission-action-state";
 import styles from "./MissionActionLayer.module.css";
@@ -37,11 +38,12 @@ export function MissionCompleteSlider({ onCompletionRequested, onProgressChange 
   const completionRequestedRef = useRef(false);
   const onProgressChangeRef = useRef(onProgressChange);
   const [trackWidth, setTrackWidth] = useState(0);
+  const [thumbSize, setThumbSize] = useState(MISSION_SLIDER_THUMB_SIZE);
   const [progress, setProgress] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [isDone, setIsDone] = useState(false);
   const [announcement, setAnnouncement] = useState("");
-  const travel = getMissionSliderTravel(trackWidth);
+  const travel = getMissionSliderTravel(trackWidth, thumbSize);
 
   useLayoutEffect(() => {
     onProgressChangeRef.current = onProgressChange;
@@ -51,7 +53,14 @@ export function MissionCompleteSlider({ onCompletionRequested, onProgressChange 
     const rail = railRef.current;
     if (!rail) return;
 
-    const measure = () => setTrackWidth(rail.getBoundingClientRect().width);
+    const measure = () => {
+      const bounds = rail.getBoundingClientRect();
+      const measuredThumbSize = Number.parseFloat(
+        window.getComputedStyle(rail).getPropertyValue("--tm-knob"),
+      );
+      setTrackWidth(bounds.width);
+      setThumbSize(Number.isFinite(measuredThumbSize) ? measuredThumbSize : MISSION_SLIDER_THUMB_SIZE);
+    };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(rail);
@@ -119,8 +128,8 @@ export function MissionCompleteSlider({ onCompletionRequested, onProgressChange 
     const rail = railRef.current;
     if (!rail) return;
     const bounds = rail.getBoundingClientRect();
-    const center = bounds.left + 6 + MISSION_SLIDER_THUMB_SIZE / 2 + travel * progressRef.current;
-    if (Math.abs(event.clientX - center) > MISSION_SLIDER_THUMB_SIZE / 2 + 3) return;
+    const center = bounds.left + MISSION_SLIDER_INSET + thumbSize / 2 + travel * progressRef.current;
+    if (Math.abs(event.clientX - center) > thumbSize / 2 + 3) return;
 
     cancelAnimationFrame(animationFrameRef.current);
     animationFrameRef.current = 0;
@@ -189,7 +198,7 @@ export function MissionCompleteSlider({ onCompletionRequested, onProgressChange 
   const x = travel * progress;
   const sliderStyle: SliderStyle = {
     "--tm-knob-x": `${x}px`,
-    "--tm-fill-width": `${MISSION_SLIDER_THUMB_SIZE + x}px`,
+    "--tm-fill-width": `${thumbSize + x}px`,
     "--tm-unfilled": `${Math.max(0, travel - x)}px`,
     "--tm-idle-opacity": clampProgress(1 - progress * 3),
     "--tm-label-x": `${progress * 9}px`,

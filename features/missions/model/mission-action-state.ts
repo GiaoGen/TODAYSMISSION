@@ -6,8 +6,11 @@ export const MISSION_COMPLETION_THRESHOLD = 0.94;
 export const MISSION_SLIDER_THUMB_SIZE = 56;
 export const MISSION_SLIDER_INSET = 6;
 
-export function getMissionSliderTravel(trackWidth: number): number {
-  return Math.max(0, trackWidth - MISSION_SLIDER_INSET * 2 - MISSION_SLIDER_THUMB_SIZE);
+export function getMissionSliderTravel(
+  trackWidth: number,
+  thumbSize = MISSION_SLIDER_THUMB_SIZE,
+): number {
+  return Math.max(0, trackWidth - MISSION_SLIDER_INSET * 2 - thumbSize);
 }
 
 export function getInitialMissionCompletionStatuses(

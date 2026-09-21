@@ -20,6 +20,25 @@
 .root[data-phase="settled"]:active { cursor: grabbing; }
 .root:focus-visible { outline: 2px solid currentColor; outline-offset: -7px; }
 
+.missionArtworkBackground {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  display: block;
+  overflow: hidden;
+  contain: paint;
+  opacity: 0;
+  pointer-events: none;
+  will-change: opacity;
+}
+
+.missionArtworkBackgroundImage {
+  object-fit: cover;
+  filter: blur(22px);
+  transform: scale(1.09);
+  user-select: none;
+}
+
 .track {
   position: absolute;
   z-index: 10;
@@ -149,6 +168,7 @@
 }
 
 .missionChoiceCard {
+  --mission-choice-peek: clamp(44px, 16cqw, 52px);
   position: absolute;
   z-index: 5;
   inset: 0;
@@ -198,7 +218,10 @@
   font-size: 4.4cqw;
   letter-spacing: .08em;
   transform: translate(-50%, -50%);
-  transition: top 460ms cubic-bezier(.22, .72, .2, 1);
+  transition:
+    top 460ms cubic-bezier(.22, .72, .2, 1),
+    width 460ms cubic-bezier(.22, .72, .2, 1),
+    height 460ms cubic-bezier(.22, .72, .2, 1);
 }
 
 .missionChoiceContent > span {
@@ -206,6 +229,7 @@
   top: calc(100% + 3.4cqw);
   left: 50%;
   transform: translateX(-50%);
+  transition: opacity 180ms ease;
   white-space: nowrap;
 }
 
@@ -229,11 +253,47 @@
 }
 
 .galleryCard[data-proof-mode="audio"] .missionChoiceRecord,
-.galleryCard[data-proof-mode="text"] .missionChoiceText { transform: translate3d(0, 0, 0); }
-.galleryCard[data-proof-mode="audio"] .missionChoiceText { transform: translate3d(0, 100%, 0); }
-.galleryCard[data-proof-mode="text"] .missionChoiceRecord { transform: translate3d(0, -100%, 0); }
-.galleryCard[data-proof-mode="audio"] .missionChoiceRecord .missionChoiceContent,
-.galleryCard[data-proof-mode="text"] .missionChoiceText .missionChoiceContent { top: 50%; }
+.galleryCard[data-proof-mode="text"] .missionChoiceText {
+  z-index: 6;
+  transform: translate3d(0, 0, 0);
+}
+
+.galleryCard[data-proof-mode="audio"] .missionChoiceText {
+  z-index: 7;
+  transform: translate3d(0, calc(100% - var(--mission-choice-peek)), 0);
+}
+
+.galleryCard[data-proof-mode="text"] .missionChoiceRecord {
+  z-index: 7;
+  transform: translate3d(0, calc(-100% + var(--mission-choice-peek)), 0);
+}
+
+.galleryCard[data-proof-mode="audio"] .missionChoiceRecord .missionChoiceContent {
+  top: calc(50% - var(--mission-choice-peek) / 2);
+}
+
+.galleryCard[data-proof-mode="text"] .missionChoiceText .missionChoiceContent {
+  top: calc(50% + var(--mission-choice-peek) / 2);
+}
+
+.galleryCard[data-proof-mode="audio"] .missionChoiceText .missionChoiceContent,
+.galleryCard[data-proof-mode="text"] .missionChoiceRecord .missionChoiceContent {
+  width: 8cqw;
+  height: 8cqw;
+}
+
+.galleryCard[data-proof-mode="audio"] .missionChoiceText .missionChoiceContent {
+  top: calc(100% - var(--mission-choice-peek) / 2);
+}
+
+.galleryCard[data-proof-mode="text"] .missionChoiceRecord .missionChoiceContent {
+  top: calc(var(--mission-choice-peek) / 2);
+}
+
+.galleryCard[data-proof-mode="audio"] .missionChoiceText .missionChoiceContent > span,
+.galleryCard[data-proof-mode="text"] .missionChoiceRecord .missionChoiceContent > span {
+  opacity: 0;
+}
 
 .missionCardCharacter {
   z-index: 1;
