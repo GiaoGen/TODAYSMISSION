@@ -32,12 +32,21 @@ import strangersTake from "@/docs/design/packs/talking-to-strangers/talking_to_t
 import strangersMoment from "@/docs/design/packs/talking-to-strangers/talking_to_trangers_mission_artwork/04-name-the-moment-repaired.png";
 import strangersShare from "@/docs/design/packs/talking-to-strangers/talking_to_trangers_mission_artwork/05-share-something-small.png";
 import strangersCuriosity from "@/docs/design/packs/talking-to-strangers/talking_to_trangers_mission_artwork/06-follow-your-curiosity.png";
+import strangersNotice from "@/docs/design/packs/talking-to-strangers/talking_to_trangers_mission_artwork/07-say-what-you-noticed.png";
+import strangersIntroduce from "@/docs/design/packs/talking-to-strangers/talking_to_trangers_mission_artwork/08-introduce-yourself-first.png";
+import strangersNoExcuse from "@/docs/design/packs/talking-to-strangers/talking_to_trangers_mission_artwork/09-no-practical-excuse.png";
+import strangersOpening from "@/docs/design/packs/talking-to-strangers/talking_to_trangers_mission_artwork/10-take-the-opening.png";
+import strangersDontHandOff from "@/docs/design/packs/talking-to-strangers/talking_to_trangers_mission_artwork/11-dont-hand-it-off.png";
+import strangersOpen from "@/docs/design/packs/talking-to-strangers/talking_to_trangers_mission_artwork/12-open-in-the-open.png";
+import strangersWalkOver from "@/docs/design/packs/talking-to-strangers/talking_to_trangers_mission_artwork/13-walk-over-and-begin.png";
+import strangersFamiliarSilence from "@/docs/design/packs/talking-to-strangers/talking_to_trangers_mission_artwork/14-break-the-familiar-silence.png";
+import strangersWhatMatters from "@/docs/design/packs/talking-to-strangers/talking_to_trangers_mission_artwork/15-ask-about-what-matters.png";
 
 export type ExploreMissionArtwork = {
   id: string;
   title: string;
-  artwork: StaticImageData;
-  previewArtwork?: StaticImageData;
+  artwork: StaticImageData | string;
+  previewArtwork?: StaticImageData | string;
   card?: {
     background: string;
     description: string;
@@ -49,15 +58,26 @@ export type ExploreMissionArtwork = {
 };
 
 export type ExplorePackSummary = {
+  /** The database Pack UUID. Static preview data does not have this value. */
+  id?: string;
   slug: string;
   title: string;
   cover: StaticImageData;
   background: string;
   foreground: string;
+  joined?: boolean;
 };
 
 export type ExplorePackPreviewData = ExplorePackSummary & {
   missions: readonly ExploreMissionArtwork[];
+};
+
+export type ExplorePackDetailData = Omit<ExplorePackPreviewData, "id" | "joined"> & {
+  id: string;
+  joined: boolean;
+  authenticated: boolean;
+  activeMissionId: string | null;
+  completedMissionIds: readonly string[];
 };
 
 export const EXPLORE_PACKS = [
@@ -70,10 +90,20 @@ export const EXPLORE_PACKS = [
     missions: [
       { id: "stay-awhile", title: "Stay Awhile", artwork: doingStayAwhile },
       { id: "eat-outside-alone", title: "Eat Outside Alone", artwork: doingEatOutside },
+      { id: "lunch-for-one", title: "Lunch for One", artwork: "/packs/doing-things-alone/missions/lunch-for-one.webp" },
       { id: "browse-alone", title: "Browse Alone", artwork: doingBrowseAlone },
       { id: "go-somewhere-new", title: "Go Somewhere New", artwork: doingGoSomewhere },
+      { id: "sit-in-the-crowd", title: "Sit in the Crowd", artwork: "/packs/doing-things-alone/missions/sit-in-the-crowd.webp" },
       { id: "coffee-for-one", title: "Coffee for One", artwork: doingCoffee },
+      { id: "table-for-one", title: "Table for One", artwork: "/packs/doing-things-alone/missions/table-for-one.webp" },
       { id: "movie-for-one", title: "Movie for One", artwork: doingMovie },
+      { id: "see-it-for-yourself", title: "See It for Yourself", artwork: "/packs/doing-things-alone/missions/see-it-for-yourself.webp" },
+      { id: "play-alone", title: "Play Alone", artwork: "/packs/doing-things-alone/missions/play-alone.webp" },
+      { id: "go-to-something", title: "Go to Something", artwork: "/packs/doing-things-alone/missions/go-to-something.webp" },
+      { id: "show-up-alone", title: "Show Up Alone", artwork: "/packs/doing-things-alone/missions/show-up-alone.webp" },
+      { id: "be-the-only-one", title: "Be the Only One", artwork: "/packs/doing-things-alone/missions/be-the-only-one.webp" },
+      { id: "one-hour-out", title: "One Hour Out", artwork: "/packs/doing-things-alone/missions/one-hour-out.webp" },
+      { id: "spend-the-day-your-way", title: "Spend the Day Your Way", artwork: "/packs/doing-things-alone/missions/spend-the-day-your-way.webp" },
     ],
   },
   {
@@ -189,6 +219,15 @@ export const EXPLORE_PACKS = [
       { id: "name-the-moment", title: "Name the Moment", artwork: strangersMoment },
       { id: "share-something-small", title: "Share Something Small", artwork: strangersShare },
       { id: "follow-your-curiosity", title: "Follow Your Curiosity", artwork: strangersCuriosity },
+      { id: "say-what-you-noticed", title: "Say What You Noticed", artwork: strangersNotice },
+      { id: "introduce-yourself-first", title: "Introduce Yourself First", artwork: strangersIntroduce },
+      { id: "no-practical-excuse", title: "No Practical Excuse", artwork: strangersNoExcuse },
+      { id: "take-the-opening", title: "Take the Opening", artwork: strangersOpening },
+      { id: "dont-hand-it-off", title: "Don’t Hand It Off", artwork: strangersDontHandOff },
+      { id: "open-in-the-open", title: "Open in the Open", artwork: strangersOpen },
+      { id: "walk-over-and-begin", title: "Walk Over and Begin", artwork: strangersWalkOver },
+      { id: "break-the-familiar-silence", title: "Break the Familiar Silence", artwork: strangersFamiliarSilence },
+      { id: "ask-about-what-matters", title: "Ask About What Matters", artwork: strangersWhatMatters },
     ],
   },
 ] as const satisfies readonly ExplorePackPreviewData[];

@@ -4,6 +4,7 @@ export type CurrentUserRecord = {
   id: unknown;
   email?: unknown;
   created_at: unknown;
+  is_anonymous?: unknown;
 };
 
 export function mapCurrentUser(user: CurrentUserRecord): CurrentUser {

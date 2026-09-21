@@ -1,13 +1,15 @@
 import { Suspense } from "react";
 
+import { getExplorePacks } from "@/data/repositories/get-explore-packs";
 import { ExploreAccountControl } from "@/features/packs/components/ExploreAccountControl";
 import { ExplorePackCarousel } from "@/features/packs/components/ExplorePackCarousel";
-import { EXPLORE_PACK_SUMMARIES } from "@/features/packs/model/explore-pack-content";
 import { ExploreAccountState } from "./ExploreAccountState";
 
-export default function ExplorePage() {
+export default async function ExplorePage() {
+  const packs = await getExplorePacks();
+
   return <>
-    <ExplorePackCarousel packs={EXPLORE_PACK_SUMMARIES} />
+    <ExplorePackCarousel packs={packs} />
     <Suspense fallback={<ExploreAccountControl authenticated={null} />}>
       <ExploreAccountState />
     </Suspense>

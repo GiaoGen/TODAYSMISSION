@@ -11,9 +11,12 @@ import { useRouter } from "next/navigation";
 import type { MissionExperience } from "@/data/contracts/mission-experience";
 import { MissionCompleteSlider } from "@/features/missions/components/MissionCompleteSlider";
 import { MissionCompletionConfetti } from "@/features/missions/components/MissionCompletionConfetti";
+import { MissionCompletionProofChooser } from "@/features/missions/components/MissionCompletionProofChooser";
 import { SplitMissionExperienceReveal } from "@/features/missions/components/SplitMissionExperienceReveal";
+import { takeMissionAction, takePackAction } from "@/features/packs/actions";
 import type {
   ExploreMissionArtwork,
+  ExplorePackDetailData,
   ExplorePackPreviewData,
 } from "@/features/packs/model/explore-pack-content";
 import { advanceCarouselSpring } from "@/features/packs/model/carousel-spring";
@@ -36,7 +39,7 @@ type ExplorePackPreviewProps = {
     | { ok: true; experiences: readonly MissionExperience[] }
     | { ok: false; error: string }
   >;
-  pack: ExplorePackPreviewData;
+  pack: ExplorePackPreviewData | ExplorePackDetailData;
 };
 
 type PreviewStyle = CSSProperties & {
@@ -334,6 +337,18 @@ export function ExplorePackPreview({ loadMissionExperiences, pack }: ExplorePack
   const viewport = useDeckViewport();
   const nativeScrolling = viewport.coarsePointer;
   const supportsTakeTransition = pack.missions.every((mission) => mission.card && mission.previewArtwork);
+  const initialJoined = pack.joined === true;
+  const initialActiveMissionId = "activeMissionId" in pack ? pack.activeMissionId : null;
+  const initialActiveMissionIndex = initialActiveMissionId
+    ? Math.max(0, pack.missions.findIndex((mission) => mission.id === initialActiveMissionId))
+    : 0;
+  const initialCompletedMissionIds = new Set(
+    "completedMissionIds" in pack ? pack.completedMissionIds : [],
+  );
+  const initialLockedMissionId = initialJoined && initialActiveMissionId
+    && !initialCompletedMissionIds.has(initialActiveMissionId)
+    ? initialActiveMissionId
+    : null;
   const rootRef = useRef<HTMLElement>(null);
   const scrollViewportRef = useRef<HTMLDivElement>(null);
   const nativeScrollControllerRef = useRef<NativeScrollController | null>(null);
@@ -355,14 +370,24 @@ export function ExplorePackPreview({ loadMissionExperiences, pack }: ExplorePack
   const phaseRef = useRef<PreviewPhase>("collapsed");
   const suppressBlankClickRef = useRef(false);
   const navigationStartedRef = useRef(false);
+  const restoredActiveMissionRef = useRef(false);
   const completionEventSequenceRef = useRef(0);
   const [phase, setPhaseState] = useState<PreviewPhase>("collapsed");
   const [proxyCenterIndex, setProxyCenterIndex] = useState(0);
-  const [galleryMode, setGalleryMode] = useState<GalleryMode>(supportsTakeTransition ? "artwork" : "mission-card");
-  const [takeActionPhase, setTakeActionPhase] = useState<TakeActionPhase>("pack");
-  const [activeMissionIndex, setActiveMissionIndex] = useState(0);
+  const [galleryMode, setGalleryMode] = useState<GalleryMode>(
+    supportsTakeTransition && !initialJoined ? "artwork" : "mission-card",
+  );
+  const [takeActionPhase, setTakeActionPhase] = useState<TakeActionPhase>(
+    initialJoined ? "mission" : "pack",
+  );
+  const [hasJoined, setHasJoined] = useState(initialJoined);
+  const [takePending, setTakePending] = useState(false);
+  const [takeError, setTakeError] = useState<string | null>(null);
+  const [activeMissionIndex, setActiveMissionIndex] = useState(initialActiveMissionIndex);
   const [backgroundMissionId, setBackgroundMissionId] = useState<string | null>(null);
-  const [completedMissionIds, setCompletedMissionIds] = useState<ReadonlySet<string>>(() => new Set());
+  const [completedMissionIds, setCompletedMissionIds] = useState<ReadonlySet<string>>(
+    () => initialCompletedMissionIds,
+  );
   const [flippedMissionId, setFlippedMissionId] = useState<string | null>(null);
   const [missionCompletionPhase, setMissionCompletionPhase] = useState<MissionCompletionPhase>("idle");
   const [selectedProofMode, setSelectedProofMode] = useState<MissionProofMode | null>(null);
@@ -377,9 +402,25 @@ export function ExplorePackPreview({ loadMissionExperiences, pack }: ExplorePack
     ? pack.missions.find((mission) => mission.id === flippedMissionId)
     : undefined;
   const lockedCardTheme = lockedMission?.card;
+  const handleProofInteractionLockChange = useCallback((locked: boolean) => {
+    if (rootRef.current) {
+      rootRef.current.dataset.proofInteractionLocked = String(locked);
+    }
+  }, []);
   useEffect(() => { activeMissionIndexRef.current = activeMissionIndex; }, [activeMissionIndex]);
   useEffect(() => { backgroundMissionIdRef.current = backgroundMissionId; }, [backgroundMissionId]);
   useEffect(() => { flippedMissionIdRef.current = flippedMissionId; }, [flippedMissionId]);
+  useEffect(() => {
+    if (
+      phase !== "settled" ||
+      !initialLockedMissionId ||
+      restoredActiveMissionRef.current
+    ) return;
+    restoredActiveMissionRef.current = true;
+    setBackgroundMissionId(initialLockedMissionId);
+    setFlippedMissionId(initialLockedMissionId);
+    setMissionCompletionPhase("slider");
+  }, [initialLockedMissionId, phase]);
   const style: PreviewStyle = {
     "--preview-background": pack.background,
     "--preview-foreground": pack.foreground,
@@ -808,6 +849,7 @@ export function ExplorePackPreview({ loadMissionExperiences, pack }: ExplorePack
       nativeScrolling ||
       experienceGesture === "pending" ||
       experienceGesture === "vertical" ||
+      rootRef.current?.dataset.proofInteractionLocked === "true" ||
       phaseRef.current !== "settled" ||
       !event.isPrimary ||
       event.button !== 0 ||
@@ -870,15 +912,40 @@ export function ExplorePackPreview({ loadMissionExperiences, pack }: ExplorePack
     settleWithMomentum(velocity);
   };
 
-  const takePack = () => {
+  const takePack = async () => {
     if (
       !supportsTakeTransition ||
       galleryMode !== "artwork" ||
       takeActionPhase !== "pack" ||
-      phaseRef.current !== "settled"
+      phaseRef.current !== "settled" ||
+      takePending ||
+      hasJoined
     ) {
       return;
     }
+
+    if (!pack.id || ("authenticated" in pack && !pack.authenticated)) {
+      router.push(`/login?next=${encodeURIComponent(`/pack/${pack.slug}`)}`);
+      return;
+    }
+
+    setTakePending(true);
+    setTakeError(null);
+    let result;
+    try {
+      result = await takePackAction(pack.id);
+    } catch {
+      setTakePending(false);
+      setTakeError("We couldn't take this Pack right now. Please try again.");
+      return;
+    }
+    if (!result.ok) {
+      setTakePending(false);
+      setTakeError(result.error);
+      return;
+    }
+    setHasJoined(true);
+    setTakePending(false);
 
     const nativeController = nativeScrollControllerRef.current;
     if (nativeController) {
@@ -897,11 +964,13 @@ export function ExplorePackPreview({ loadMissionExperiences, pack }: ExplorePack
     setPhase("take-collapse-ready");
   };
 
-  const takeMission = () => {
+  const takeMission = async () => {
     if (
       galleryMode !== "mission-card" ||
       takeActionPhase !== "mission" ||
-      phaseRef.current !== "settled"
+      phaseRef.current !== "settled" ||
+      takePending ||
+      !hasJoined
     ) {
       return;
     }
@@ -916,7 +985,34 @@ export function ExplorePackPreview({ loadMissionExperiences, pack }: ExplorePack
     const stride = Math.max(1, strideRef.current);
     const steps = Math.round((originRef.current - positionRef.current) / stride);
     const mission = pack.missions[wrapIndex(steps, pack.missions.length)];
-    if (completedMissionIds.has(mission.id)) return;
+    if (completedMissionIds.has(mission.id) || !pack.id) return;
+
+    if ("authenticated" in pack && !pack.authenticated) {
+      router.push(`/login?next=${encodeURIComponent(`/pack/${pack.slug}`)}`);
+      return;
+    }
+
+    setTakePending(true);
+    setTakeError(null);
+    let result;
+    try {
+      result = await takeMissionAction(pack.id, mission.id);
+    } catch {
+      setTakePending(false);
+      setTakeError("We couldn't take this Mission right now. Please try again.");
+      return;
+    }
+    if (!result.ok) {
+      setTakePending(false);
+      setTakeError(result.error);
+      return;
+    }
+    if (result.activeMissionId !== mission.id) {
+      setTakePending(false);
+      setTakeError("Another Mission is already active for this Pack.");
+      return;
+    }
+    setTakePending(false);
     positionRef.current = originRef.current - steps * stride;
     normalizePosition();
     paint();
@@ -943,16 +1039,12 @@ export function ExplorePackPreview({ loadMissionExperiences, pack }: ExplorePack
     });
   }, [flippedMissionId, paintMissionBackground]);
 
-  const completeMission = () => {
-    if (
-      !flippedMissionId ||
-      !selectedProofMode ||
-      (missionCompletionPhase !== "audio" && missionCompletionPhase !== "text")
-    ) return;
+  const handleMissionCompleted = useCallback(() => {
+    if (!flippedMissionId) return;
     completionEventSequenceRef.current += 1;
     setCompletionEventId(`${flippedMissionId}:${completionEventSequenceRef.current}`);
     setMissionCompletionPhase("completing");
-  };
+  }, [flippedMissionId]);
 
   useEffect(() => {
     if (missionCompletionPhase !== "completing" || !flippedMissionId) return;
@@ -1027,6 +1119,7 @@ export function ExplorePackPreview({ loadMissionExperiences, pack }: ExplorePack
       className={styles.root}
       data-mission-completion={missionCompletionPhase}
       data-mission-locked={flippedMissionId ? "true" : undefined}
+      data-pack-joined={hasJoined || undefined}
       data-experience-reveal="closed"
       data-moving="false"
       data-native-scroll={nativeScrolling || undefined}
@@ -1174,7 +1267,7 @@ export function ExplorePackPreview({ loadMissionExperiences, pack }: ExplorePack
       </ol>
       {supportsTakeTransition &&
       takeActionPhase !== "hidden" &&
-      !(takeActionPhase === "mission" && activeMissionCompleted) ? (
+      !(takeActionPhase === "mission" && (activeMissionCompleted || Boolean(flippedMissionId))) ? (
         <div
           className={styles.takeControl}
           data-preview-control
@@ -1184,7 +1277,9 @@ export function ExplorePackPreview({ loadMissionExperiences, pack }: ExplorePack
           <button
             className={styles.takeButton}
             data-action-state={takeActionPhase}
+            aria-busy={takePending || undefined}
             disabled={
+              takePending ||
               takeActionPhase === "pack-closing" ||
               takeActionPhase === "mission-opening" ||
               takeActionPhase === "mission-closing"
@@ -1196,6 +1291,7 @@ export function ExplorePackPreview({ loadMissionExperiences, pack }: ExplorePack
               ? "take this pack"
               : "take this mission"}
           </button>
+          {takeError ? <p className={styles.error} role="alert">{takeError}</p> : null}
         </div>
       ) : null}
       {[
@@ -1223,16 +1319,15 @@ export function ExplorePackPreview({ loadMissionExperiences, pack }: ExplorePack
               onProgressChange={paintCompletionChoices}
             />
           </div>
-          <button
-            className={styles.completionUpload}
-            data-exiting={missionCompletionPhase === "completing"}
-            data-visible={Boolean(selectedProofMode)}
-            disabled={!selectedProofMode || missionCompletionPhase === "completing"}
-            onClick={completeMission}
-            type="button"
-          >
-            upload
-          </button>
+          {selectedProofMode && flippedMissionId && missionCompletionPhase !== "completing" ? (
+            <MissionCompletionProofChooser
+              initialMode={selectedProofMode}
+              key={`${flippedMissionId}:${selectedProofMode}`}
+              missionId={flippedMissionId}
+              onCompleted={handleMissionCompleted}
+              onInteractionLockChange={handleProofInteractionLockChange}
+            />
+          ) : null}
         </div>
       ) : null}
       <MissionCompletionConfetti

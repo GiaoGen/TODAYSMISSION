@@ -11,6 +11,7 @@ import styles from "./MissionActionLayer.module.css";
 import { MissionProofRecorder } from "./MissionProofRecorder";
 
 type MissionCompletionProofChooserProps = {
+  initialMode?: Exclude<ProofMode, "chooser">;
   missionId: string;
   onCompleted: (completedLocalDate: string) => void;
   onInteractionLockChange: (locked: boolean) => void;
@@ -54,12 +55,13 @@ export function MissionTextProofCard({
 }
 
 export function MissionCompletionProofChooser({
+  initialMode,
   missionId,
   onCompleted,
   onInteractionLockChange,
 }: MissionCompletionProofChooserProps) {
   const router = useRouter();
-  const [mode, setMode] = useState<ProofMode>("chooser");
+  const [mode, setMode] = useState<ProofMode>(initialMode ?? "chooser");
   const [textDraft, setTextDraft] = useState("");
   const [textError, setTextError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);

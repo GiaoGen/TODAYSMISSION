@@ -1,13 +1,13 @@
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
+import { getExplorePackBySlug } from "@/data/repositories/get-explore-pack-detail";
 import { getPackBySlug, getPacks } from "@/data/repositories/get-packs";
 import { getMissionExperiencesAction, getMyMissionExperienceAction } from "@/features/missions/actions";
 import { ExplorePackPreview } from "@/features/packs/components/ExplorePackPreview";
 import { MissionPackDetail } from "@/features/packs/components/MissionPackDetail";
 import {
   EXPLORE_PACK_SUMMARIES,
-  getExplorePackPreview,
 } from "@/features/packs/model/explore-pack-content";
 import { getInitialMissionCompletionStatuses } from "@/features/missions/model/mission-action-state";
 import { RoutePrefetch } from "./RoutePrefetch";
@@ -28,7 +28,7 @@ export async function generateStaticParams() {
 
 export default async function PackDetailPage({ params }: PackDetailPageProps) {
   const { slug } = await params;
-  const previewPack = getExplorePackPreview(slug);
+  const previewPack = await getExplorePackBySlug(slug);
 
   if (previewPack) {
     return (

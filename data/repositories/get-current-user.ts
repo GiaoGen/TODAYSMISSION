@@ -13,5 +13,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     throw new Error("Failed to read the current Auth user.");
   }
 
-  return data.user ? mapCurrentUser(data.user) : null;
+  if (!data.user || data.user.is_anonymous) return null;
+
+  return mapCurrentUser(data.user);
 }
