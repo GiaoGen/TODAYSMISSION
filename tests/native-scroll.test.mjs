@@ -310,6 +310,10 @@ test("Pack preview clears the SSR transform and keeps Safari scroll compositing 
   const css = read("features/packs/components/ExplorePackPreview.module.css");
   assert.match(component, /if \(nativeScrolling\) \{\s*trackRef\.current\?\.style\.removeProperty\("transform"\)/);
   assert.match(component, /data-3d-prepared=\{prepared \|\| undefined\}/);
+  assert.match(component, /setMissionCompletionPhase\("preparing"\)/);
+  assert.match(component, /missionCompletionPhase !== "preparing"/);
+  assert.match(component, /mission\.id === activeMission\?\.id \|\| mission\.id === flippedMissionId/);
+  assert.match(component, /card\?\.dataset\.missionCard === flippedMissionId[\s\S]*?card\.offsetWidth/);
   assert.match(css, /\.galleryCard\[data-3d-prepared="true"\]/);
   const lockedRule = css.match(/\.root\[data-native-scroll="true"\]:not\(\[data-phase="settled"\]\)[\s\S]*?\{([\s\S]*?)\}/)?.[1] ?? "";
   assert.match(lockedRule, /touch-action:\s*none/);

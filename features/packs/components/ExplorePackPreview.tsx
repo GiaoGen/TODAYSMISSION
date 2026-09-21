@@ -95,6 +95,7 @@ type TakeActionPhase =
   | "hidden";
 type MissionCompletionPhase =
   | "idle"
+  | "preparing"
   | "flipping"
   | "slider"
   | "choice"
@@ -627,6 +628,21 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
   }, [galleryMode, phase, takeActionPhase]);
 
   useEffect(() => {
+    if (missionCompletionPhase !== "preparing" || !flippedMissionId) return;
+    let flipFrame = 0;
+    const prepareFrame = window.requestAnimationFrame(() => {
+      galleryCardRefs.current.forEach((card) => {
+        if (card?.dataset.missionCard === flippedMissionId) void card.offsetWidth;
+      });
+      flipFrame = window.requestAnimationFrame(() => setMissionCompletionPhase("flipping"));
+    });
+    return () => {
+      window.cancelAnimationFrame(prepareFrame);
+      window.cancelAnimationFrame(flipFrame);
+    };
+  }, [flippedMissionId, missionCompletionPhase]);
+
+  useEffect(() => {
     if (missionCompletionPhase !== "flipping") return;
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const timer = window.setTimeout(
@@ -871,7 +887,7 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
     setBackgroundMissionId(mission.id);
     setFlippedMissionId(mission.id);
     setSelectedProofMode(null);
-    setMissionCompletionPhase("flipping");
+    setMissionCompletionPhase("preparing");
     setTakeActionPhase("mission-closing");
   };
 
@@ -1048,7 +1064,9 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
                       slot === wrapIndex(activeMissionIndex + 1, pack.missions.length)
                     )
                   }
-                  flipped={flippedMissionId === mission.id}
+                  flipped={
+                    flippedMissionId === mission.id && missionCompletionPhase !== "preparing"
+                  }
                   key={`${copyIndex}-${mission.id}`}
                   mission={mission}
                   mode={missionMode}
@@ -1061,7 +1079,11 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
                         }
                       : undefined
                   }
-                  prepared={galleryMode === "mission-card" && mission.id === activeMission?.id}
+                  prepared={
+                    galleryMode === "mission-card" && (
+                      mission.id === activeMission?.id || mission.id === flippedMissionId
+                    )
+                  }
                   proofMode={flippedMissionId === mission.id
                     ? missionCompletionPhase === "completing" ? "completing" : selectedProofMode ?? undefined
                     : undefined}
