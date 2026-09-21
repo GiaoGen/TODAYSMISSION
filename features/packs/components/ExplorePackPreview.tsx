@@ -95,8 +95,9 @@ type TakeActionPhase =
   | "hidden";
 type MissionCompletionPhase =
   | "idle"
-  | "preparing"
-  | "flipping"
+  | "flipping-out"
+  | "flip-swap"
+  | "flipping-in"
   | "slider"
   | "choice"
   | "audio"
@@ -118,14 +119,18 @@ function wrapIndex(value: number, count: number) {
   return ((value % count) + count) % count;
 }
 
-function MissionVisual({ accessible, eager, interactive, mission, mode, onProofChoice, prepareCompletionArtwork }: {
+type CardFlipStage = "out" | "swap" | "in";
+
+function MissionVisual({ accessible, backVisible, eager, interactive, mission, mode, onProofChoice, prepareCompletionArtwork, renderBack }: {
   accessible: boolean;
+  backVisible?: boolean;
   eager: boolean;
   interactive?: boolean;
   mission: ExploreMissionArtwork;
   mode: GalleryMode;
   onProofChoice?: (mode: MissionProofMode) => void;
   prepareCompletionArtwork?: boolean;
+  renderBack?: boolean;
 }) {
   const imageArtwork = mode === "artwork" ? mission.previewArtwork : undefined;
   if (imageArtwork || !mission.card) {
@@ -175,11 +180,11 @@ function MissionVisual({ accessible, eager, interactive, mission, mode, onProofC
           ))}
         </span>
       </span>
-      {interactive ? (
+      {renderBack ? (
         <span
-          aria-label={accessible ? `${mission.title}. ${mission.card.description}` : undefined}
+          aria-label={accessible && backVisible ? `${mission.title}. ${mission.card.description}` : undefined}
           className={styles.missionCardBack}
-          role={accessible ? "img" : undefined}
+          role={accessible && backVisible ? "img" : undefined}
         >
           {prepareCompletionArtwork && mission.previewArtwork ? (
             <Image
@@ -207,7 +212,7 @@ function MissionVisual({ accessible, eager, interactive, mission, mode, onProofC
               event.stopPropagation();
               onProofChoice?.("audio");
             }}
-            tabIndex={accessible ? 0 : -1}
+            tabIndex={accessible && backVisible ? 0 : -1}
             type="button"
           >
             <span className={styles.missionChoiceContent}>
@@ -226,7 +231,7 @@ function MissionVisual({ accessible, eager, interactive, mission, mode, onProofC
               event.stopPropagation();
               onProofChoice?.("text");
             }}
-            tabIndex={accessible ? 0 : -1}
+            tabIndex={accessible && backVisible ? 0 : -1}
             type="button"
           >
             <span className={styles.missionChoiceContent}>
@@ -244,11 +249,12 @@ function MissionVisual({ accessible, eager, interactive, mission, mode, onProofC
   );
 }
 
-function GalleryCard({ choiceRevealed, copyIndex, eager, flipped, mission, mode, onProofChoice, prepared, proofMode, setRef }: {
+function GalleryCard({ backVisible, choiceRevealed, copyIndex, eager, flipStage, mission, mode, onProofChoice, prepared, proofMode, setRef }: {
+  backVisible: boolean;
   choiceRevealed: boolean;
   copyIndex: number;
   eager: boolean;
-  flipped: boolean;
+  flipStage?: CardFlipStage;
   mission: ExploreMissionArtwork;
   mode: GalleryMode;
   onProofChoice?: (mode: MissionProofMode) => void;
@@ -263,7 +269,8 @@ function GalleryCard({ choiceRevealed, copyIndex, eager, flipped, mission, mode,
       data-completion-choice={choiceRevealed || undefined}
       data-completing={proofMode === "completing" || undefined}
       data-3d-prepared={prepared || undefined}
-      data-flipped={flipped || undefined}
+      data-back-visible={backVisible || undefined}
+      data-flip-stage={flipStage}
       data-mission-card={mode === "mission-card" ? mission.id : undefined}
       data-preview-card
       data-proof-mode={proofMode}
@@ -272,12 +279,14 @@ function GalleryCard({ choiceRevealed, copyIndex, eager, flipped, mission, mode,
       <span className={styles.cardSurface} data-flip-shell={prepared || undefined}>
         <MissionVisual
           accessible={copyIndex === PRIMARY_COPY}
+          backVisible={backVisible}
           eager={eager}
           interactive={prepared}
           mission={mission}
           mode={mode}
           onProofChoice={onProofChoice}
-          prepareCompletionArtwork={flipped}
+          prepareCompletionArtwork={backVisible}
+          renderBack={prepared}
         />
       </span>
     </li>
@@ -628,26 +637,33 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
   }, [galleryMode, phase, takeActionPhase]);
 
   useEffect(() => {
-    if (missionCompletionPhase !== "preparing" || !flippedMissionId) return;
-    let flipFrame = 0;
-    const prepareFrame = window.requestAnimationFrame(() => {
-      galleryCardRefs.current.forEach((card) => {
-        if (card?.dataset.missionCard === flippedMissionId) void card.offsetWidth;
-      });
-      flipFrame = window.requestAnimationFrame(() => setMissionCompletionPhase("flipping"));
-    });
-    return () => {
-      window.cancelAnimationFrame(prepareFrame);
-      window.cancelAnimationFrame(flipFrame);
-    };
-  }, [flippedMissionId, missionCompletionPhase]);
+    if (missionCompletionPhase !== "flipping-out") return;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const timer = window.setTimeout(
+      () => setMissionCompletionPhase("flip-swap"),
+      reducedMotion ? 80 : 280,
+    );
+    return () => window.clearTimeout(timer);
+  }, [missionCompletionPhase]);
 
   useEffect(() => {
-    if (missionCompletionPhase !== "flipping") return;
+    if (missionCompletionPhase !== "flip-swap") return;
+    let enterFrame = 0;
+    const swapFrame = window.requestAnimationFrame(() => {
+      enterFrame = window.requestAnimationFrame(() => setMissionCompletionPhase("flipping-in"));
+    });
+    return () => {
+      window.cancelAnimationFrame(swapFrame);
+      window.cancelAnimationFrame(enterFrame);
+    };
+  }, [missionCompletionPhase]);
+
+  useEffect(() => {
+    if (missionCompletionPhase !== "flipping-in") return;
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const timer = window.setTimeout(
       () => setMissionCompletionPhase("slider"),
-      reducedMotion ? 100 : 580,
+      reducedMotion ? 80 : 300,
     );
     return () => window.clearTimeout(timer);
   }, [missionCompletionPhase]);
@@ -887,7 +903,7 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
     setBackgroundMissionId(mission.id);
     setFlippedMissionId(mission.id);
     setSelectedProofMode(null);
-    setMissionCompletionPhase("preparing");
+    setMissionCompletionPhase("flipping-out");
     setTakeActionPhase("mission-closing");
   };
 
@@ -1050,8 +1066,17 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
               const missionMode = galleryMode === "mission-card" && completedMissionIds.has(mission.id)
                 ? "artwork"
                 : galleryMode;
+              const missionLocked = flippedMissionId === mission.id;
+              const backVisible = missionLocked && missionCompletionPhase !== "flipping-out";
+              const flipStage = missionLocked
+                ? missionCompletionPhase === "flipping-out" ? "out"
+                  : missionCompletionPhase === "flip-swap" ? "swap"
+                    : missionCompletionPhase === "flipping-in" ? "in"
+                      : undefined
+                : undefined;
               return (
                 <GalleryCard
+                  backVisible={backVisible}
                   copyIndex={copyIndex}
                   choiceRevealed={
                     ["choice", "audio", "text"].includes(missionCompletionPhase) &&
@@ -1064,9 +1089,7 @@ export function ExplorePackPreview({ pack }: ExplorePackPreviewProps) {
                       slot === wrapIndex(activeMissionIndex + 1, pack.missions.length)
                     )
                   }
-                  flipped={
-                    flippedMissionId === mission.id && missionCompletionPhase !== "preparing"
-                  }
+                  flipStage={flipStage}
                   key={`${copyIndex}-${mission.id}`}
                   mission={mission}
                   mode={missionMode}

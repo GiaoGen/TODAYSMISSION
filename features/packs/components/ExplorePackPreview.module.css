@@ -139,6 +139,7 @@
 .cardSurface[data-flip-shell] {
   overflow: visible;
   background: transparent;
+  transform: rotateX(0deg);
   transform-style: preserve-3d;
   -webkit-transform-style: preserve-3d;
   will-change: transform;
@@ -161,9 +162,19 @@
   -webkit-transform-style: preserve-3d;
 }
 
-.galleryCard[data-flipped="true"] .cardSurface[data-flip-shell] {
-  transform: rotateX(180deg);
-  transition: transform 560ms cubic-bezier(.22, .72, .2, 1);
+.galleryCard[data-flip-stage="out"] .cardSurface[data-flip-shell] {
+  transform: rotateX(90deg);
+  transition: transform 280ms cubic-bezier(.4, 0, .7, .2);
+}
+
+.galleryCard[data-flip-stage="swap"] .cardSurface[data-flip-shell] {
+  transform: rotateX(-90deg);
+  transition: none;
+}
+
+.galleryCard[data-flip-stage="in"] .cardSurface[data-flip-shell] {
+  transform: rotateX(0deg);
+  transition: transform 300ms cubic-bezier(.2, .7, .2, 1);
 }
 
 .missionCardThickness,
@@ -185,13 +196,21 @@
   transform: translateZ(0);
 }
 
-.missionCardFront { transform: translateZ(2px); }
+.missionCardFront { visibility: visible; }
 
 .missionCardBack {
   display: grid;
   place-items: center;
-  transform: rotateX(-180deg) translateZ(2px);
+  visibility: hidden;
 }
+
+.cardSurface[data-flip-shell] .missionCardFront,
+.cardSurface[data-flip-shell] .missionCardBack {
+  transform: translateZ(2px);
+}
+
+.galleryCard[data-back-visible="true"] .missionCardFront { visibility: hidden; }
+.galleryCard[data-back-visible="true"] .missionCardBack { visibility: visible; }
 
 .missionCompletionArtwork {
   z-index: 1;
@@ -756,7 +775,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .galleryCard[data-flipped="true"] .cardSurface[data-flip-shell],
+  .galleryCard[data-flip-stage="out"] .cardSurface[data-flip-shell],
+  .galleryCard[data-flip-stage="in"] .cardSurface[data-flip-shell],
   .coverSurface,
   .root[data-phase="distributing"] .proxyCard,
   .root[data-phase="handoff"] .track,
