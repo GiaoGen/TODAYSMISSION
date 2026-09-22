@@ -299,6 +299,26 @@
 }
 .missionChoiceCard:focus-visible { outline: 0; filter: brightness(.92); }
 
+.missionChoiceTrigger {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.missionChoiceTrigger:disabled { cursor: default; }
+.missionChoiceTrigger:focus-visible { outline: 0; filter: brightness(.92); }
+
 .missionChoiceRecord {
   background: #d84f49;
   color: #fff0df;

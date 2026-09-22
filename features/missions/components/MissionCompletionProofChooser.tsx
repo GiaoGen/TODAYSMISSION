@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 
 import { localDateKey } from "@/features/calendar/model/calendar-month";
@@ -11,10 +12,14 @@ import styles from "./MissionActionLayer.module.css";
 import { MissionProofRecorder } from "./MissionProofRecorder";
 
 type MissionCompletionProofChooserProps = {
+  audioPresentation?: "capsule" | "mission-card";
+  audioTarget?: HTMLElement | null;
   initialMode?: Exclude<ProofMode, "chooser">;
   missionId: string;
   onCompleted: (completedLocalDate: string) => void;
   onInteractionLockChange: (locked: boolean) => void;
+  onModeChange?: (mode: Exclude<ProofMode, "chooser">) => void;
+  textTarget?: HTMLElement | null;
 };
 
 type ProofMode = "chooser" | "text" | "audio";
@@ -54,11 +59,55 @@ export function MissionTextProofCard({
   );
 }
 
+function MissionTextProofEditor({
+  disabled,
+  error,
+  onChange,
+  target,
+  value,
+}: {
+  disabled: boolean;
+  error?: string | null;
+  onChange: (value: string) => void;
+  target: HTMLElement;
+  value: string;
+}) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useLayoutEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea || disabled) return;
+    textarea.focus({ preventScroll: true });
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+  }, [disabled]);
+
+  return createPortal(
+    <div className={styles.textProofInline} data-gallery-action onPointerDown={(event) => event.stopPropagation()}>
+      <textarea
+        aria-describedby={error ? "mission-text-proof-inline-error" : undefined}
+        aria-label="What happened?"
+        className={styles.textProofInlineInput}
+        disabled={disabled}
+        maxLength={1000}
+        onChange={(event) => onChange(event.target.value)}
+        ref={textareaRef}
+        value={value}
+      />
+      {error ? <p className={styles.textProofInlineError} id="mission-text-proof-inline-error">{error}</p> : null}
+    </div>,
+    target,
+  );
+}
+
 export function MissionCompletionProofChooser({
+  audioPresentation = "capsule",
+  audioTarget = null,
   initialMode,
   missionId,
   onCompleted,
   onInteractionLockChange,
+  onModeChange,
+  textTarget = null,
 }: MissionCompletionProofChooserProps) {
   const router = useRouter();
   const [mode, setMode] = useState<ProofMode>(initialMode ?? "chooser");
@@ -97,10 +146,39 @@ export function MissionCompletionProofChooser({
   if (mode === "audio") {
     return (
       <MissionProofRecorder
+        cardTarget={audioTarget}
         missionId={missionId}
         onCompleted={onCompleted}
         onInteractionLockChange={onInteractionLockChange}
+        presentation={audioPresentation}
       />
+    );
+  }
+
+  if (mode === "text" && textTarget) {
+    const hasText = normalizeMissionTextProof(textDraft) !== null;
+    return (
+      <div aria-live="polite" className={styles.proof} onPointerDown={(event) => event.stopPropagation()}>
+        <MissionTextProofEditor
+          disabled={submitting}
+          error={textError}
+          onChange={(value) => {
+            setTextDraft(value);
+            if (textError) setTextError(null);
+          }}
+          target={textTarget}
+          value={textDraft}
+        />
+        <button
+          aria-label="Upload text experience"
+          className={styles.textProofUpload}
+          disabled={submitting || !hasText}
+          onClick={() => void submitText()}
+          type="button"
+        >
+          {submitting ? "uploading…" : "upload"}
+        </button>
+      </div>
     );
   }
 
@@ -124,7 +202,10 @@ export function MissionCompletionProofChooser({
           disabled={submitting || (mode === "text" && normalizeMissionTextProof(textDraft) === null)}
           onClick={() => {
             if (mode === "text") void submitText();
-            else setMode("text");
+            else {
+              setMode("text");
+              onModeChange?.("text");
+            }
           }}
           type="button"
         >
@@ -137,6 +218,7 @@ export function MissionCompletionProofChooser({
           onClick={() => {
             setTextError(null);
             setMode("audio");
+            onModeChange?.("audio");
           }}
           type="button"
         >

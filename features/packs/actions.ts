@@ -118,6 +118,8 @@ export async function takeMissionAction(packId: string, missionId: string): Prom
     return failedTakeMission("We couldn't take this Mission right now. Please try again.");
   }
 
+  revalidatePath("/pack/[slug]", "page");
+
   return {
     ok: true,
     status: result.status,

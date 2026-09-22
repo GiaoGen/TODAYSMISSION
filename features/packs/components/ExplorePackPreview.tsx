@@ -140,8 +140,9 @@ function wrapIndex(value: number, count: number) {
 
 type CardFlipStage = "out" | "swap" | "in";
 
-function MissionVisual({ accessible, backVisible, eager, interactive, mission, mode, onProofChoice, prepareCompletionArtwork, renderBack }: {
+function MissionVisual({ accessible, audioTargetRef, backVisible, eager, interactive, mission, mode, onProofChoice, prepareCompletionArtwork, proofMode, renderBack, textTargetRef }: {
   accessible: boolean;
+  audioTargetRef?: (element: HTMLDivElement | null) => void;
   backVisible?: boolean;
   eager: boolean;
   interactive?: boolean;
@@ -149,7 +150,9 @@ function MissionVisual({ accessible, backVisible, eager, interactive, mission, m
   mode: GalleryMode;
   onProofChoice?: (mode: MissionProofMode) => void;
   prepareCompletionArtwork?: boolean;
+  proofMode?: MissionProofMode | "completing";
   renderBack?: boolean;
+  textTargetRef?: (element: HTMLDivElement | null) => void;
 }) {
   const imageArtwork = mode === "artwork" ? mission.previewArtwork : undefined;
   if (imageArtwork || !mission.card) {
@@ -223,52 +226,67 @@ function MissionVisual({ accessible, backVisible, eager, interactive, mission, m
             ))}
           </span>
           <span className={styles.missionCardDescription}>{mission.card.description}</span>
-          <button
-            aria-label="Record mission completion"
+          <div
             className={`${styles.missionChoiceCard} ${styles.missionChoiceRecord}`}
-            disabled={!onProofChoice}
-            onClick={(event) => {
-              event.stopPropagation();
-              onProofChoice?.("audio");
-            }}
-            tabIndex={accessible && backVisible ? 0 : -1}
-            type="button"
+            ref={audioTargetRef}
           >
-            <span className={styles.missionChoiceContent}>
-              <svg aria-hidden="true" className={styles.missionChoiceIcon} fill="none" viewBox="0 0 64 64">
-                <circle cx="32" cy="32" r="25" />
-                <circle className={styles.missionRecordDot} cx="32" cy="32" r="11" />
-              </svg>
-              <span>RECORD</span>
-            </span>
-          </button>
-          <button
-            aria-label="Type mission completion"
+            {proofMode !== "audio" ? (
+              <button
+                aria-label="Record mission completion"
+                className={styles.missionChoiceTrigger}
+                disabled={!onProofChoice}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onProofChoice?.("audio");
+                }}
+                tabIndex={accessible && backVisible ? 0 : -1}
+                type="button"
+              >
+                <span className={styles.missionChoiceContent}>
+                  <svg aria-hidden="true" className={styles.missionChoiceIcon} fill="none" viewBox="0 0 64 64">
+                    <circle cx="32" cy="32" r="25" />
+                    <circle className={styles.missionRecordDot} cx="32" cy="32" r="11" />
+                  </svg>
+                  <span>RECORD</span>
+                </span>
+              </button>
+            ) : null}
+          </div>
+          <div
             className={`${styles.missionChoiceCard} ${styles.missionChoiceText}`}
-            disabled={!onProofChoice}
-            onClick={(event) => {
-              event.stopPropagation();
-              onProofChoice?.("text");
-            }}
-            tabIndex={accessible && backVisible ? 0 : -1}
-            type="button"
+            ref={textTargetRef}
           >
-            <span className={styles.missionChoiceContent}>
-              <svg aria-hidden="true" className={styles.missionChoiceIcon} fill="none" viewBox="0 0 64 64">
-                <path d="M15 48h34" />
-                <path d="M18 39 42.5 14.5a5 5 0 0 1 7 7L25 46l-10 2 3-9Z" />
-                <path d="m39 18 7 7" />
-              </svg>
-              <span>TYPE</span>
-            </span>
-          </button>
+            {proofMode !== "text" ? (
+              <button
+                aria-label="Type mission completion"
+                className={styles.missionChoiceTrigger}
+                disabled={!onProofChoice}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onProofChoice?.("text");
+                }}
+                tabIndex={accessible && backVisible ? 0 : -1}
+                type="button"
+              >
+                <span className={styles.missionChoiceContent}>
+                  <svg aria-hidden="true" className={styles.missionChoiceIcon} fill="none" viewBox="0 0 64 64">
+                    <path d="M15 48h34" />
+                    <path d="M18 39 42.5 14.5a5 5 0 0 1 7 7L25 46l-10 2 3-9Z" />
+                    <path d="m39 18 7 7" />
+                  </svg>
+                  <span>TYPE</span>
+                </span>
+              </button>
+            ) : null}
+          </div>
         </span>
       ) : null}
     </span>
   );
 }
 
-function GalleryCard({ backVisible, choiceRevealed, copyIndex, eager, flipStage, mission, mode, onProofChoice, prepared, proofMode, setRef }: {
+function GalleryCard({ audioTargetRef, backVisible, choiceRevealed, copyIndex, eager, flipStage, mission, mode, onProofChoice, prepared, proofMode, setRef, textTargetRef }: {
+  audioTargetRef?: (element: HTMLDivElement | null) => void;
   backVisible: boolean;
   choiceRevealed: boolean;
   copyIndex: number;
@@ -280,6 +298,7 @@ function GalleryCard({ backVisible, choiceRevealed, copyIndex, eager, flipStage,
   prepared: boolean;
   proofMode?: MissionProofMode | "completing";
   setRef: (element: HTMLLIElement | null) => void;
+  textTargetRef?: (element: HTMLDivElement | null) => void;
 }) {
   return (
     <li
@@ -299,6 +318,7 @@ function GalleryCard({ backVisible, choiceRevealed, copyIndex, eager, flipStage,
       <span className={styles.cardSurface} data-flip-shell={prepared || undefined}>
         <MissionVisual
           accessible={copyIndex === PRIMARY_COPY}
+          audioTargetRef={audioTargetRef}
           backVisible={backVisible}
           eager={eager}
           interactive={prepared}
@@ -306,7 +326,9 @@ function GalleryCard({ backVisible, choiceRevealed, copyIndex, eager, flipStage,
           mode={mode}
           onProofChoice={onProofChoice}
           prepareCompletionArtwork={backVisible}
+          proofMode={proofMode}
           renderBack={prepared}
+          textTargetRef={textTargetRef}
         />
       </span>
     </li>
@@ -366,7 +388,7 @@ export function ExplorePackPreview({ loadMissionExperiences, pack }: ExplorePack
   const galleryCardRefs = useRef<Array<HTMLLIElement | null>>([]);
   const proxyCardRefs = useRef<Array<HTMLLIElement | null>>([]);
   const positionRef = useRef(0);
-  const activeMissionIndexRef = useRef(0);
+  const activeMissionIndexRef = useRef(initialActiveMissionIndex);
   const backgroundMissionIdRef = useRef<string | null>(null);
   const flippedMissionIdRef = useRef<string | null>(null);
   const originRef = useRef(0);
@@ -398,6 +420,8 @@ export function ExplorePackPreview({ loadMissionExperiences, pack }: ExplorePack
   const [flippedMissionId, setFlippedMissionId] = useState<string | null>(null);
   const [missionCompletionPhase, setMissionCompletionPhase] = useState<MissionCompletionPhase>("idle");
   const [selectedProofMode, setSelectedProofMode] = useState<MissionProofMode | null>(null);
+  const [audioCardTarget, setAudioCardTarget] = useState<HTMLDivElement | null>(null);
+  const [textCardTarget, setTextCardTarget] = useState<HTMLDivElement | null>(null);
   const [completionEventId, setCompletionEventId] = useState<string | null>(null);
   const activeMission = pack.missions[activeMissionIndex] ?? pack.missions[0];
   const activeMissionCompleted = activeMission ? completedMissionIds.has(activeMission.id) : false;
@@ -1232,6 +1256,11 @@ export function ExplorePackPreview({ loadMissionExperiences, pack }: ExplorePack
                 : undefined;
               return (
                 <GalleryCard
+                  audioTargetRef={
+                    copyIndex === PRIMARY_COPY && missionLocked && selectedProofMode === "audio"
+                      ? setAudioCardTarget
+                      : undefined
+                  }
                   backVisible={backVisible}
                   copyIndex={copyIndex}
                   choiceRevealed={
@@ -1267,6 +1296,11 @@ export function ExplorePackPreview({ loadMissionExperiences, pack }: ExplorePack
                     ? missionCompletionPhase === "completing" ? "completing" : selectedProofMode ?? undefined
                     : undefined}
                   setRef={(element) => { galleryCardRefs.current[refIndex] = element; }}
+                  textTargetRef={
+                    copyIndex === PRIMARY_COPY && missionLocked && selectedProofMode === "text"
+                      ? setTextCardTarget
+                      : undefined
+                  }
                 />
               );
             }),
@@ -1350,11 +1384,18 @@ export function ExplorePackPreview({ loadMissionExperiences, pack }: ExplorePack
           </div>
           {selectedProofMode && flippedMissionId && missionCompletionPhase !== "completing" ? (
             <MissionCompletionProofChooser
+              audioPresentation="mission-card"
+              audioTarget={audioCardTarget}
               initialMode={selectedProofMode}
               key={`${flippedMissionId}:${selectedProofMode}`}
               missionId={flippedMissionId}
               onCompleted={handleMissionCompleted}
               onInteractionLockChange={handleProofInteractionLockChange}
+              onModeChange={(mode) => {
+                setSelectedProofMode(mode);
+                setMissionCompletionPhase(mode);
+              }}
+              textTarget={textCardTarget}
             />
           ) : null}
         </div>

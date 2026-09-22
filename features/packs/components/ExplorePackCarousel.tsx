@@ -22,6 +22,7 @@ import {
 import styles from "./ExplorePackCarousel.module.css";
 
 type ExplorePackCarouselProps = {
+  clearReturnSlug?: boolean;
   packs: readonly ExplorePackSummary[];
 };
 
@@ -63,7 +64,7 @@ function mixColors(from: string, to: string, amount: number) {
   return `rgb(${mix(start.red, end.red)}, ${mix(start.green, end.green)}, ${mix(start.blue, end.blue)})`;
 }
 
-export function ExplorePackCarousel({ packs }: ExplorePackCarouselProps) {
+export function ExplorePackCarousel({ clearReturnSlug = true, packs }: ExplorePackCarouselProps) {
   const router = useRouter();
   const [initialIndex] = useState(() => {
     const returnSlug = getExplorePackReturnSlug();
@@ -141,14 +142,14 @@ export function ExplorePackCarousel({ packs }: ExplorePackCarouselProps) {
     suppressClickRef.current = false;
     dragRef.current = null;
     paint();
-    clearExplorePackReturnSlug();
+    if (clearReturnSlug) clearExplorePackReturnSlug();
     const handleResize = () => {
       stopMotion();
       paint(Math.round(positionRef.current));
     };
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, [paint, stopMotion]);
+  }, [clearReturnSlug, paint, stopMotion]);
 
   useEffect(() => {
     const viewport = viewportRef.current;

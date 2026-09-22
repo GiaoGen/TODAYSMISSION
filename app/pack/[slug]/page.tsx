@@ -5,9 +5,11 @@ import { getExplorePackBySlug } from "@/data/repositories/get-explore-pack-detai
 import { getPackBySlug, getPacks } from "@/data/repositories/get-packs";
 import { getMissionExperiencesAction, getMyMissionExperienceAction } from "@/features/missions/actions";
 import { ExplorePackPreview } from "@/features/packs/components/ExplorePackPreview";
+import { ExplorePackTransitionFallback } from "@/features/packs/components/ExplorePackTransitionFallback";
 import { MissionPackDetail } from "@/features/packs/components/MissionPackDetail";
 import {
   EXPLORE_PACK_SUMMARIES,
+  getExplorePackPreview,
 } from "@/features/packs/model/explore-pack-content";
 import { getInitialMissionCompletionStatuses } from "@/features/missions/model/mission-action-state";
 import { SessionSnapshotHydrator } from "@/features/navigation/components/SessionSnapshotHydrator";
@@ -29,18 +31,13 @@ export async function generateStaticParams() {
 
 export default async function PackDetailPage({ params }: PackDetailPageProps) {
   const { slug } = await params;
-  const previewPackData = await getExplorePackBySlug(slug);
+  const previewPack = getExplorePackPreview(slug);
 
-  if (previewPackData) {
-    const { navigationState, ...previewPack } = previewPackData;
+  if (previewPack) {
     return (
-      <>
-        <ExplorePackPreview
-          loadMissionExperiences={getMissionExperiencesAction}
-          pack={previewPack}
-        />
-        <SessionSnapshotHydrator state={navigationState} />
-      </>
+      <Suspense fallback={<ExplorePackTransitionFallback pack={previewPack} />}>
+        <LiveExplorePack slug={slug} />
+      </Suspense>
     );
   }
 
@@ -66,5 +63,19 @@ export default async function PackDetailPage({ params }: PackDetailPageProps) {
       <PackUserState pack={pack} />
     </Suspense>
     <RoutePrefetch href="/" />
+  </>;
+}
+
+async function LiveExplorePack({ slug }: { slug: string }) {
+  const previewPackData = await getExplorePackBySlug(slug);
+  if (!previewPackData) notFound();
+
+  const { navigationState, ...previewPack } = previewPackData;
+  return <>
+    <ExplorePackPreview
+      loadMissionExperiences={getMissionExperiencesAction}
+      pack={previewPack}
+    />
+    <SessionSnapshotHydrator state={navigationState} />
   </>;
 }

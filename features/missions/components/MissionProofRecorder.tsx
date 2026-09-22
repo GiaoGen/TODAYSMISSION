@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 
 import {
@@ -21,14 +22,25 @@ import { prefetchNavigationRoute, getCompletedDayRoute } from "@/features/naviga
 import styles from "./MissionActionLayer.module.css";
 
 type MissionProofRecorderProps = {
+  cardTarget?: HTMLElement | null;
   missionId: string;
   onCompleted: (completedLocalDate: string) => void;
   onInteractionLockChange: (locked: boolean) => void;
+  presentation?: "capsule" | "mission-card";
 };
 
-type RecorderState = "idle" | "requesting" | "recording" | "recorded" | "submitting";
+type RecorderState = "idle" | "requesting" | "recording" | "recorded" | "submitting" | "completed";
 
-const WAVEFORM_BAR_COUNT = 34;
+const CAPSULE_WAVEFORM_BAR_COUNT = 34;
+const CARD_WAVEFORM_BAR_COUNT = 12;
+const COMPLETION_EXIT_MS = 280;
+
+function formatElapsedTime(elapsedMs: number) {
+  const totalSeconds = Math.floor(elapsedMs / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
 
 function recordingError(error: unknown): string {
   if (error instanceof DOMException) {
@@ -45,11 +57,19 @@ function stopStream(stream: MediaStream | null) {
   stream?.getTracks().forEach((track) => track.stop());
 }
 
-export function MissionProofRecorder({ missionId, onCompleted, onInteractionLockChange }: MissionProofRecorderProps) {
+export function MissionProofRecorder({
+  cardTarget = null,
+  missionId,
+  onCompleted,
+  onInteractionLockChange,
+  presentation = "capsule",
+}: MissionProofRecorderProps) {
   const router = useRouter();
+  const waveformBarCount = presentation === "mission-card" ? CARD_WAVEFORM_BAR_COUNT : CAPSULE_WAVEFORM_BAR_COUNT;
   const [state, setState] = useState<RecorderState>("idle");
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
+  const [elapsedMs, setElapsedMs] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -58,12 +78,15 @@ export function MissionProofRecorder({ missionId, onCompleted, onInteractionLock
   const analyserRef = useRef<AnalyserNode | null>(null);
   const waveformRef = useRef<HTMLCanvasElement>(null);
   const waveformFrameRef = useRef(0);
-  const waveformSamplesRef = useRef<number[]>(Array(WAVEFORM_BAR_COUNT).fill(0.16));
+  const playbackWaveformFrameRef = useRef(0);
+  const waveformSamplesRef = useRef<number[]>(Array(waveformBarCount).fill(0.16));
+  const waveformHistoryRef = useRef<number[][]>([]);
   const audioUrlRef = useRef<string | null>(null);
   const blobRef = useRef<Blob | null>(null);
   const selectedFormatRef = useRef<MissionProofFormat | null>(null);
   const startedAtRef = useRef<number | null>(null);
   const stopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const elapsedTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const generationRef = useRef(0);
   const missionIdRef = useRef(missionId);
   const startLockRef = useRef(false);
@@ -73,6 +96,13 @@ export function MissionProofRecorder({ missionId, onCompleted, onInteractionLock
     if (stopTimerRef.current !== null) {
       clearTimeout(stopTimerRef.current);
       stopTimerRef.current = null;
+    }
+  }, []);
+
+  const clearElapsedTimer = useCallback(() => {
+    if (elapsedTimerRef.current !== null) {
+      clearInterval(elapsedTimerRef.current);
+      elapsedTimerRef.current = null;
     }
   }, []);
 
@@ -97,8 +127,9 @@ export function MissionProofRecorder({ missionId, onCompleted, onInteractionLock
     context.clearRect(0, 0, width, height);
     context.fillStyle = "rgba(255, 255, 255, .9)";
     const samples = waveformSamplesRef.current;
-    const gap = 3 * ratio;
-    const barWidth = Math.max(1.5 * ratio, (width - gap * (samples.length - 1)) / samples.length);
+    const gap = (presentation === "mission-card" ? 7 : 3) * ratio;
+    const minimumBarWidth = (presentation === "mission-card" ? 5 : 1.5) * ratio;
+    const barWidth = Math.max(minimumBarWidth, (width - gap * (samples.length - 1)) / samples.length);
     samples.forEach((sample, index) => {
       const barHeight = Math.max(3 * ratio, sample * height * 0.9);
       const x = index * (barWidth + gap);
@@ -107,7 +138,7 @@ export function MissionProofRecorder({ missionId, onCompleted, onInteractionLock
       context.roundRect(x, y, barWidth, barHeight, barWidth / 2);
       context.fill();
     });
-  }, []);
+  }, [presentation]);
 
   const stopVisualiser = useCallback(() => {
     cancelAnimationFrame(waveformFrameRef.current);
@@ -119,6 +150,27 @@ export function MissionProofRecorder({ missionId, onCompleted, onInteractionLock
     if (audioContext && audioContext.state !== "closed") void audioContext.close();
   }, []);
 
+  const stopPlaybackVisualiser = useCallback(() => {
+    cancelAnimationFrame(playbackWaveformFrameRef.current);
+    playbackWaveformFrameRef.current = 0;
+  }, []);
+
+  const startPlaybackVisualiser = useCallback((audio: HTMLAudioElement) => {
+    stopPlaybackVisualiser();
+    const update = () => {
+      if (audio.paused || audio.ended || audioRef.current !== audio) return;
+      const history = waveformHistoryRef.current;
+      if (history.length > 0 && Number.isFinite(audio.duration) && audio.duration > 0) {
+        const progress = Math.min(1, Math.max(0, audio.currentTime / audio.duration));
+        const frameIndex = Math.min(history.length - 1, Math.floor(progress * history.length));
+        waveformSamplesRef.current = history[frameIndex];
+        drawWaveform();
+      }
+      playbackWaveformFrameRef.current = requestAnimationFrame(update);
+    };
+    playbackWaveformFrameRef.current = requestAnimationFrame(update);
+  }, [drawWaveform, stopPlaybackVisualiser]);
+
   const startVisualiser = useCallback((stream: MediaStream) => {
     if (typeof AudioContext === "undefined") return;
     let audioContext: AudioContext;
@@ -129,25 +181,31 @@ export function MissionProofRecorder({ missionId, onCompleted, onInteractionLock
     }
     const analyser = audioContext.createAnalyser();
     analyser.fftSize = 256;
-    analyser.smoothingTimeConstant = 0.72;
+    analyser.smoothingTimeConstant = 0.88;
     audioContext.createMediaStreamSource(stream).connect(analyser);
     audioContextRef.current = audioContext;
     analyserRef.current = analyser;
     if (audioContext.state === "suspended") void audioContext.resume();
     const data = new Uint8Array(analyser.frequencyBinCount);
+    let lastSampleAt = -Infinity;
 
-    const update = () => {
+    const update = (timestamp: number) => {
       if (analyserRef.current !== analyser) return;
-      analyser.getByteFrequencyData(data);
-      waveformSamplesRef.current = Array.from({ length: WAVEFORM_BAR_COUNT }, (_, index) => {
-        const dataIndex = Math.min(data.length - 1, Math.floor(index * data.length / WAVEFORM_BAR_COUNT));
-        return Math.max(0.12, data[dataIndex] / 255);
-      });
-      drawWaveform();
+      if (timestamp - lastSampleAt >= 72) {
+        analyser.getByteFrequencyData(data);
+        const nextSamples = Array.from({ length: waveformBarCount }, (_, index) => {
+          const dataIndex = Math.min(data.length - 1, Math.floor(index * data.length / waveformBarCount));
+          return Math.max(0.12, Math.min(0.62, 0.1 + (data[dataIndex] / 255) * 0.52));
+        });
+        waveformSamplesRef.current = nextSamples;
+        waveformHistoryRef.current.push(nextSamples);
+        drawWaveform();
+        lastSampleAt = timestamp;
+      }
       waveformFrameRef.current = requestAnimationFrame(update);
     };
-    update();
-  }, [drawWaveform]);
+    waveformFrameRef.current = requestAnimationFrame(update);
+  }, [drawWaveform, waveformBarCount]);
 
   const revokePreview = useCallback(() => {
     const audio = audioRef.current;
@@ -175,6 +233,8 @@ export function MissionProofRecorder({ missionId, onCompleted, onInteractionLock
       startLockRef.current = false;
       submitLockRef.current = false;
       clearStopTimer();
+      clearElapsedTimer();
+      stopPlaybackVisualiser();
       const recorder = recorderRef.current;
       recorderRef.current = null;
       if (recorder && recorder.state !== "inactive") recorder.stop();
@@ -183,7 +243,7 @@ export function MissionProofRecorder({ missionId, onCompleted, onInteractionLock
       startedAtRef.current = null;
       revokePreview();
     };
-  }, [clearStopTimer, missionId, revokePreview, stopCurrentStream, stopVisualiser]);
+  }, [clearElapsedTimer, clearStopTimer, missionId, revokePreview, stopCurrentStream, stopPlaybackVisualiser, stopVisualiser]);
 
   useEffect(() => {
     if (state !== "recorded") return;
@@ -208,14 +268,18 @@ export function MissionProofRecorder({ missionId, onCompleted, onInteractionLock
     const recordingMissionId = missionId;
 
     clearStopTimer();
+    clearElapsedTimer();
     const previousRecorder = recorderRef.current;
     recorderRef.current = null;
     if (previousRecorder && previousRecorder.state !== "inactive") previousRecorder.stop();
     stopVisualiser();
+    stopPlaybackVisualiser();
     stopCurrentStream();
     startedAtRef.current = null;
     clearPreview();
-    waveformSamplesRef.current = Array(WAVEFORM_BAR_COUNT).fill(0.16);
+    waveformSamplesRef.current = Array(waveformBarCount).fill(0.16);
+    waveformHistoryRef.current = [];
+    setElapsedMs(0);
     setError(null);
     setState("requesting");
 
@@ -258,10 +322,12 @@ export function MissionProofRecorder({ missionId, onCompleted, onInteractionLock
         stopStream(stream);
         if (recorderFailed || generationRef.current !== generation || missionIdRef.current !== recordingMissionId) return;
         clearStopTimer();
+        clearElapsedTimer();
         stopVisualiser();
         if (streamRef.current === stream) streamRef.current = null;
         if (recorderRef.current === recorder) recorderRef.current = null;
         const elapsed = performance.now() - (startedAtRef.current ?? performance.now());
+        setElapsedMs(elapsed);
         startedAtRef.current = null;
 
         const mimeType = recorder.mimeType || format.mimeType;
@@ -288,6 +354,7 @@ export function MissionProofRecorder({ missionId, onCompleted, onInteractionLock
         stopStream(stream);
         if (generationRef.current !== generation || missionIdRef.current !== recordingMissionId) return;
         clearStopTimer();
+        clearElapsedTimer();
         stopVisualiser();
         if (streamRef.current === stream) streamRef.current = null;
         if (recorderRef.current === recorder) recorderRef.current = null;
@@ -300,6 +367,10 @@ export function MissionProofRecorder({ missionId, onCompleted, onInteractionLock
       recorder.start();
       setState("recording");
       startVisualiser(stream);
+      elapsedTimerRef.current = setInterval(() => {
+        const startedAt = startedAtRef.current;
+        if (startedAt !== null) setElapsedMs(performance.now() - startedAt);
+      }, 200);
       stopTimerRef.current = setTimeout(() => {
         if (recorderRef.current === recorder && recorder.state !== "inactive") recorder.stop();
       }, MISSION_PROOF_MAX_DURATION_MS);
@@ -307,6 +378,7 @@ export function MissionProofRecorder({ missionId, onCompleted, onInteractionLock
       stopStream(stream);
       if (generationRef.current === generation && missionIdRef.current === recordingMissionId) {
         stopVisualiser();
+        clearElapsedTimer();
         if (streamRef.current === stream) streamRef.current = null;
         recorderRef.current = null;
         startedAtRef.current = null;
@@ -322,6 +394,7 @@ export function MissionProofRecorder({ missionId, onCompleted, onInteractionLock
   const stopRecording = () => {
     if (state !== "recording") return;
     clearStopTimer();
+    clearElapsedTimer();
     const recorder = recorderRef.current;
     if (recorder && recorder.state !== "inactive") recorder.stop();
   };
@@ -334,6 +407,7 @@ export function MissionProofRecorder({ missionId, onCompleted, onInteractionLock
     setError(null);
     if (!audio.paused) {
       audio.pause();
+      stopPlaybackVisualiser();
       setPlaying(false);
       return;
     }
@@ -344,6 +418,7 @@ export function MissionProofRecorder({ missionId, onCompleted, onInteractionLock
         return;
       }
       setPlaying(true);
+      startPlaybackVisualiser(audio);
     } catch {
       if (generationRef.current !== generation) return;
       setPlaying(false);
@@ -359,6 +434,7 @@ export function MissionProofRecorder({ missionId, onCompleted, onInteractionLock
     const generation = generationRef.current;
     const submissionMissionId = missionId;
     audioRef.current?.pause();
+    stopPlaybackVisualiser();
     setPlaying(false);
     setState("submitting");
     setError(null);
@@ -394,7 +470,16 @@ export function MissionProofRecorder({ missionId, onCompleted, onInteractionLock
       clearPreview();
       const completedRoute = getCompletedDayRoute(completion.completedLocalDate);
       if (completedRoute) prefetchNavigationRoute(router, completedRoute);
-      onCompleted(completion.completedLocalDate);
+      if (presentation === "mission-card") {
+        setState("completed");
+        window.setTimeout(() => {
+          if (generationRef.current === generation && missionIdRef.current === submissionMissionId) {
+            onCompleted(completion.completedLocalDate);
+          }
+        }, COMPLETION_EXIT_MS);
+      } else {
+        onCompleted(completion.completedLocalDate);
+      }
     } catch {
       if (generationRef.current !== generation || missionIdRef.current !== submissionMissionId) return;
       setState("recorded");
@@ -403,6 +488,90 @@ export function MissionProofRecorder({ missionId, onCompleted, onInteractionLock
       if (generationRef.current === generation) submitLockRef.current = false;
     }
   };
+
+  const cardRecorder = presentation === "mission-card" && cardTarget ? createPortal(
+      <section
+        aria-label="Audio experience"
+        aria-live="polite"
+        className={styles.cardRecorderControls}
+        data-gallery-action
+        data-state={state}
+        onPointerDown={(event) => event.stopPropagation()}
+      >
+        <time className={styles.cardRecorderTime} dateTime={`PT${Math.floor(elapsedMs / 1000)}S`}>
+          {state === "recording" || state === "recorded" || state === "submitting" || state === "completed"
+            ? formatElapsedTime(elapsedMs)
+            : "RECORD EXPERIENCE"}
+        </time>
+
+        <button
+          aria-label={state === "recording" ? "Stop recording" : state === "recorded" ? "Record again" : "Start recording"}
+          className={styles.cardRecorderButton}
+          disabled={state === "requesting" || state === "submitting" || state === "completed"}
+          onClick={state === "recording" ? stopRecording : () => void beginRecording()}
+          type="button"
+        >
+          <span aria-hidden="true" className={styles.cardRecorderButtonRing}>
+            <span className={styles.cardRecorderButtonMark} data-recording={state === "recording" || undefined} />
+          </span>
+        </button>
+
+        <div className={styles.cardRecorderWaveformSlot}>
+          {state === "requesting" ? (
+            <span className={styles.cardRecorderStatus}>Starting…</span>
+          ) : state === "recording" || state === "recorded" || state === "submitting" || state === "completed" ? (
+            <button
+              aria-label={state === "recording" ? "Live recording waveform" : playing ? "Pause recording" : "Play recording"}
+              className={styles.cardRecorderWaveformButton}
+              disabled={state !== "recorded"}
+              onClick={togglePlayback}
+              type="button"
+            >
+              <canvas aria-hidden="true" className={styles.cardRecorderWaveform} ref={waveformRef} />
+              <span className={styles.screenReader}>{playing ? "Pause" : "Play"}</span>
+            </button>
+          ) : null}
+        </div>
+
+        {error ? <p className={styles.cardRecorderError} role="alert">{error}</p> : null}
+      </section>,
+      cardTarget,
+    ) : null;
+
+  if (presentation === "mission-card") {
+    return (
+      <div className={styles.cardRecorderRoot} onPointerDown={(event) => event.stopPropagation()}>
+        {cardRecorder}
+        {state === "recorded" || state === "submitting" || state === "completed" ? (
+          <button
+            aria-label="Upload recording"
+            className={styles.cardRecorderUpload}
+            data-state={state}
+            disabled={state !== "recorded"}
+            onClick={submit}
+            type="button"
+          >
+            {state === "submitting" ? "uploading…" : "upload"}
+          </button>
+        ) : null}
+        {audioUrl ? (
+          <audio
+            className={styles.proofAudioHidden}
+            onEnded={() => {
+              stopPlaybackVisualiser();
+              setPlaying(false);
+            }}
+            onPause={() => {
+              stopPlaybackVisualiser();
+              setPlaying(false);
+            }}
+            ref={audioRef}
+            src={audioUrl}
+          />
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div aria-live="polite" className={styles.proof} onPointerDown={(event) => event.stopPropagation()}>
@@ -455,8 +624,14 @@ export function MissionProofRecorder({ missionId, onCompleted, onInteractionLock
       {audioUrl ? (
         <audio
           className={styles.proofAudioHidden}
-          onEnded={() => setPlaying(false)}
-          onPause={() => setPlaying(false)}
+          onEnded={() => {
+            stopPlaybackVisualiser();
+            setPlaying(false);
+          }}
+          onPause={() => {
+            stopPlaybackVisualiser();
+            setPlaying(false);
+          }}
           ref={audioRef}
           src={audioUrl}
         />
