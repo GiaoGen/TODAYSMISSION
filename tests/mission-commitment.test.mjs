@@ -7,6 +7,7 @@ import test from "node:test";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = file => readFileSync(path.join(root, file), "utf8");
 const packDetail = read("features/packs/components/MissionPackDetail.tsx");
+const packPreview = read("features/packs/components/ExplorePackPreview.tsx");
 const packActions = read("features/packs/actions.ts");
 const actionLayer = read("features/missions/components/MissionActionLayer.tsx");
 const gallery = read("features/packs/components/MissionGallery.tsx");
@@ -43,6 +44,8 @@ test("Take persists one membership commitment and restores it on re-entry", () =
   assert.match(navigationState, /activeMissionByPack/);
   assert.match(packUserState, /getNavigationUserState/);
   assert.match(packDetail, /initialActiveMissionId/);
+  assert.match(packPreview, /setFlippedMissionId\(initialLockedMissionId\);\s*setMissionCompletionPhase\("flipping-out"\)/);
+  assert.match(packPreview, /const \[proxyCenterIndex, setProxyCenterIndex\] = useState\(initialActiveMissionIndex\)/);
   assert.doesNotMatch(packDetail, /missionTaken|localStorage|sessionStorage/);
 });
 

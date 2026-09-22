@@ -402,7 +402,7 @@ export function ExplorePackPreview({ loadMissionExperiences, pack }: ExplorePack
   const restoredActiveMissionRef = useRef(false);
   const completionEventSequenceRef = useRef(0);
   const [phase, setPhaseState] = useState<PreviewPhase>("collapsed");
-  const [proxyCenterIndex, setProxyCenterIndex] = useState(0);
+  const [proxyCenterIndex, setProxyCenterIndex] = useState(initialActiveMissionIndex);
   const [galleryMode, setGalleryMode] = useState<GalleryMode>(
     supportsTakeTransition && !initialJoined ? "artwork" : "mission-card",
   );
@@ -450,7 +450,7 @@ export function ExplorePackPreview({ loadMissionExperiences, pack }: ExplorePack
     restoredActiveMissionRef.current = true;
     setBackgroundMissionId(initialLockedMissionId);
     setFlippedMissionId(initialLockedMissionId);
-    setMissionCompletionPhase("slider");
+    setMissionCompletionPhase("flipping-out");
   }, [initialLockedMissionId, phase]);
   const style: PreviewStyle = {
     "--preview-background": pack.background,
