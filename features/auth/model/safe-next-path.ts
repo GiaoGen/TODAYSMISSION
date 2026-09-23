@@ -1,15 +1,11 @@
 type SafeNextPath =
   | "/"
-  | "/explore"
-  | "/pack/go-alone"
   | "/pack/doing-things-alone"
   | "/pack/fear-of-rejection"
   | "/pack/talking-to-strangers";
 
 const SAFE_NEXT_PATHS = new Set<string>([
   "/",
-  "/explore",
-  "/pack/go-alone",
   "/pack/doing-things-alone",
   "/pack/fear-of-rejection",
   "/pack/talking-to-strangers",

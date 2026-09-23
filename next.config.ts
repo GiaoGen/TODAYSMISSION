@@ -14,6 +14,11 @@ const nextConfig: NextConfig = {
     "/assets/characters/*": [
       "./design-prototypes/landing-static/assets/characters/*.png",
     ],
+    "/assets/showcase/*": [
+      "./docs/design/packs/doing-things-alone/packcover/pack-cover.png",
+      "./docs/design/packs/fear-of-rejection/packcover/00-pack-cover.png",
+      "./docs/design/packs/talking-to-strangers/packcover/00-pack-cover-talking-to-strangers.png",
+    ],
   },
   images: {
     remotePatterns: [

@@ -58,28 +58,15 @@ export type ExploreMissionArtwork = {
 };
 
 export type ExplorePackSummary = {
-  /** The database Pack UUID. Static preview data does not have this value. */
-  id?: string;
   slug: string;
   title: string;
   cover: StaticImageData;
   background: string;
   foreground: string;
-  joined?: boolean;
 };
 
 export type ExplorePackPreviewData = ExplorePackSummary & {
   missions: readonly ExploreMissionArtwork[];
-};
-
-export type ExplorePackDetailData = Omit<ExplorePackPreviewData, "id" | "joined"> & {
-  id: string;
-  joined: boolean;
-  authenticated: boolean;
-  activeMissionId: string | null;
-  completedMissionIds: readonly string[];
-  completedMissionCount: number;
-  visibleMissionCount: number;
 };
 
 export const EXPLORE_PACKS = [

@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+@view-transition {
+  navigation: auto;
+}
+
 :root {
   --card-ratio: 3 / 4;
   --page-background: #f2f2f2;
